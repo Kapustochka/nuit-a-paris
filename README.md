@@ -29,6 +29,8 @@ Windows may ask about the firewall — allow access on private networks.
 
 The plan for the next walk and the list of models to look for in Meshy are in [NEXT-STEPS.md](NEXT-STEPS.md).
 
+Some mansards have wider triangular or rounded pediments, and continuous balconies have flower boxes. The additions use the existing painted materials and chunk geometry. Add `?no-street-details` to compare the same camera without these additions. The OSM footprint and existing roof height remain unchanged. `tests/roof-accents.html` checks deterministic placement, bounds and geometry cost in a browser.
+
 ## Tuning the heroine
 Open `http://localhost:8080/?debug` to get sliders for the arms, legs and walking pace.
 Copy the values you like into `TUNING` in `src/heroine.js`.
