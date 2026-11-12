@@ -4,6 +4,8 @@ A 3D game for learning French: night-time Paris in an anime style, built with Th
 
 **Play online:** https://kapustochka.github.io/nuit-a-paris/
 
+**Pull request previews:** every open PR is published at `https://kapustochka.github.io/nuit-a-paris/previews/pr-<number>/` (list: https://kapustochka.github.io/nuit-a-paris/previews/). The site is rebuilt on every push to main and every PR update.
+
 ## Running locally
 Double-click `start.bat` (Windows) — a browser opens at http://localhost:8080.
 (Opening `index.html` directly does not work: browsers block loading 3D models from disk.)
