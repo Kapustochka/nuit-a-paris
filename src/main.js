@@ -43,10 +43,8 @@ addEventListener('resize', () => {
 });
 
 const streetProps = loadStreetProps();
-const passerbyAssets = Promise.all([
-  loadPasserby('sporty-walking.glb', 'Walking'),
-  loadPasserby('athletic-walk-in-circle.glb', 'Walk In Circle'),
-]);
+// Героиня загружается одновременно с картой и реквизитом, а не после сборки всего города.
+const heroineLoad = loadHeroine(scene).then((heroine) => ({ heroine }), (error) => ({ error }));
 const terrainLoad = loadTerrain();
 const mapData = await loadMapData((t) => { loading.textContent = t; }).catch(fail);
 const world = buildParis(scene, renderer, mapData, { terrain: await terrainLoad }, await streetProps);
@@ -55,18 +53,18 @@ controls.state.camDist = 3.6;
 const minimap = createMinimap(document.getElementById('minimap'), mapData);
 
 loading.textContent = 'Bonsoir…';
-const heroine = await loadHeroine(scene).catch(fail);
+const loadedHeroine = await heroineLoad;
+if (loadedHeroine.error) fail(loadedHeroine.error);
+const heroine = loadedHeroine.heroine;
 const [sx, sz] = world.freeSpot(0, 6);
 heroine.root.position.set(sx, world.heightAt(sx, sz), sz);
-const [walkingAsset, circleAsset] = await passerbyAssets;
 const player = heroine.root.position;
 const near = (actor, x, z) => actor && Math.hypot(x - actor.position.x, z - actor.position.z) < 0.75;
 // Две прохожие гуляют в разных местах: одна у площади Тертр, другая на смотровой площадке перед Сакре-Кёр.
 // (Возможно, потом станут альтернативными героинями.)
 const [sacreX, sacreZ] = toXZ(48.88672, 2.34306);
-const walkingPasserby = placePasserby(scene, walkingAsset, world, player, (x, z) => near(circularPasserby, x, z), [-6, -4]);
-const circularPasserby = placeCircularPasserby(scene, circleAsset, world, player, (x, z) => near(walkingPasserby, x, z), [sacreX, sacreZ + 60]);
-const passersby = [walkingPasserby, circularPasserby].filter(Boolean);
+let walkingPasserby = null, circularPasserby = null, distantRequested = false;
+const passersby = [];
 // Героиня чуть реалистичнее мира вокруг: обычный свет вместо живописного и без мазков (только тонкий контур)
 heroine.root.traverse((o) => { o.userData.noPaint = true; o.userData.realistic = true; });
 world.lightHeroine(heroine.root);
@@ -79,6 +77,7 @@ const inspector = installWordInspector(renderer.domElement, scene, camera, world
 const stars = createFallingStars(scene, camera, world, inspector, lesson.review);
 installStarToggle(stars);
 loading.remove();
+performance.mark('paris-ready');
 
 const debug = new URLSearchParams(location.search).has('debug');
 if (debug) addDebugPanel();
@@ -147,6 +146,10 @@ renderer.setAnimationLoop(() => {
   camera.lookAt(camTarget);
 
   world.update(dt, p.x, p.z, camera);
+  if (!distantRequested && Math.hypot(p.x - sacreX, p.z - sacreZ - 60) < 100) {
+    distantRequested = true;
+    afterFrame(() => addPasserby(true));
+  }
   for (const actor of passersby) actor.update(dt);
   stars.update(dt, p.x, p.z, facing);
   cityAudio.update(dt, p.x, p.z, yaw, heroine.busy !== 'jump');
@@ -177,6 +180,27 @@ renderer.setAnimationLoop(() => {
   }
   if (painter) painter.render(scene, camera); else renderer.render(scene, camera);
 });
+
+// 38 МБ второстепенных моделей не задерживают вход. Дальняя прохожая нужна только у базилики.
+function afterFrame(task) {
+  requestAnimationFrame(() => {
+    if ('requestIdleCallback' in window) requestIdleCallback(task, { timeout: 2000 });
+    else setTimeout(task, 0);
+  });
+}
+async function addPasserby(distant) {
+  const asset = await loadPasserby(distant ? 'athletic-walk-in-circle.glb' : 'sporty-walking.glb', distant ? 'Walk In Circle' : 'Walking');
+  if (!asset) return;
+  const actor = distant
+    ? placeCircularPasserby(scene, asset, world, player, (x, z) => near(walkingPasserby, x, z), [sacreX, sacreZ + 60])
+    : placePasserby(scene, asset, world, player, (x, z) => near(circularPasserby, x, z), [-6, -4]);
+  if (!actor) return;
+  if (distant) circularPasserby = actor; else walkingPasserby = actor;
+  world.paint(asset.model);
+  asset.model.traverse((o) => { if (o.userData.word) inspector.addTarget(o); });
+  passersby.push(actor);
+}
+afterFrame(() => addPasserby(false));
 
 // Галочка «Падающие звёзды»: выбор запоминается в браузере
 function installStarToggle(stars) {

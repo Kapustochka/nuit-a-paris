@@ -143,7 +143,7 @@ export function buildParis(scene, renderer, data, city, props = {}) {
   buildShops(scene, data.pois, polys, inside, rnd, props, propRandom, shopFronts, terraces);
   for (const s of shopFronts) night.shopSpill(s.x, s.z, s.nx, s.nz, s.w);
   night.done();
-  const facades = buildFacades(scene, look, plan, shopFronts);
+  const facades = buildFacades(scene, look, plan, shopFronts, { progressive: city.progressive !== false });
   if (props['chair-rattan']) solids.push(...terraces);     // за столики со стульями не заходим
 
   // ── Мелочи улицы из моделей Meshy ──────────────────────────
@@ -172,7 +172,7 @@ export function buildParis(scene, renderer, data, city, props = {}) {
   }
   // Все готовые материалы (модели Meshy, фонари, лестницы, столики) — в тот же «живописный» свет
   for (const object of scene.children.slice(firstChild)) paintObject(object, look);
-  facades.update(0, 0, Infinity);
+  facades.warmStart(0, 0);
 
   // Названия улиц
   const named = data.roads.filter((r) => r.n);

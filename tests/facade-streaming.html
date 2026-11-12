@@ -1,0 +1,85 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Facade streaming checks</title>
+<pre id="results">Running…</pre>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"}}</script>
+<script type="module">
+import * as THREE from 'three';
+import { Builder, K } from '../src/paint/builder.js';
+import { streamGeometry } from '../src/paint/stream-geometry.js';
+import { planFacades, buildFacades } from '../src/paint/facades.js';
+const results = [];
+const assert = (value, message) => { if (!value) throw Error(message); };
+function equalGeometry(a, b) {
+  assert(Object.keys(a.attributes).sort().join() === Object.keys(b.attributes).sort().join(), 'attribute names');
+  for (const key of Object.keys(a.attributes)) {
+    const aa = a.attributes[key].array, bb = b.attributes[key].array;
+    assert(aa.length === bb.length, `${key}: length`);
+    for (let i = 0; i < aa.length; i++) assert(Object.is(aa[i], bb[i]), `${key}[${i}]`);
+  }
+}
+function drain(work) { let step; do { step = work.next(); } while (!step.done); return step.value; }
+function check(name, fn) { fn(); results.push(name); }
+try {
+  const B = new Builder();
+  for (let i = 0; i < 80; i++) B.box(i % 8, 0, i / 8 | 0, (i % 8) + 1, 2, (i / 8 | 0) + 1, [0.8, 0.7, 0.6], K.WALL);
+  check('streamed crease normals match Three.js exactly', () => equalGeometry(B.geometry(0, Math.PI / 4), drain(streamGeometry(B, true, Math.PI / 4))));
+  check('streamed flat normals match original geometry exactly', () => {
+    const original = B.geometry(0, 0); original.computeVertexNormals();
+    equalGeometry(original, drain(streamGeometry(B, true)));
+  });
+  check('partial geometry is disposed when cancelled', () => {
+    let disposed = 0; const old = THREE.BufferGeometry.prototype.dispose;
+    THREE.BufferGeometry.prototype.dispose = function () { disposed++; old.call(this); };
+    try { const work = streamGeometry(B, true); work.next(); work.return(); assert(disposed === 1, 'partial disposal'); }
+    finally { THREE.BufferGeometry.prototype.dispose = old; }
+  });
+  const pending = Array.from({ length: 25 }, (_, i) => {
+    const x = i % 5 * 10, z = (i / 5 | 0) * 10;
+    return { p: [x, z, x, z + 8, x + 8, z + 8, x + 8, z], n: 4, H: 16, tint: [1, 1, 1] };
+  });
+  const make = (progressive = false, plan = pending) => {
+    const scene = new THREE.Scene();
+    const facades = buildFacades(scene, {}, planFacades(plan, () => 0, () => false, true), [], { progressive });
+    return { scene, facades };
+  };
+  const first = make(), eager = make();
+  check('cancelled near chunk leaves its far facade visible', () => {
+    let clock = 0; Object.defineProperty(performance, 'now', { configurable: true, value: () => clock += 4 });
+    try {
+      const count = first.scene.children.length;
+      first.facades.update(20, 20);
+      assert(first.facades.stats().pending === 1 && first.facades.stats().near === 0, 'must remain partial');
+      assert(first.scene.children.length === count && first.scene.children.every(o => o.visible), 'no partial chunk in scene');
+      first.facades.update(1000, 1000, 0);
+      assert(first.facades.stats().pending === 0 && first.facades.stats().near === 0, 'cancelled');
+    } finally { delete performance.now; }
+  });
+  check('incremental and urgent builds have identical final geometry', () => {
+    let clock = 0; Object.defineProperty(performance, 'now', { configurable: true, value: () => clock += 4 });
+    try { for (let i = 0; i < 2000 && first.facades.stats().near === 0; i++) first.facades.update(20, 20); }
+    finally { delete performance.now; }
+    eager.facades.update(20, 20, Infinity);
+    assert(first.facades.stats().near === 1, 'incremental completion');
+    assert(first.scene.children.length === eager.scene.children.length, 'same meshes');
+    first.scene.children.forEach((o, i) => {
+      if (o.isMesh) equalGeometry(o.geometry, eager.scene.children[i].geometry);
+      else o.children.forEach((m, j) => equalGeometry(m.geometry, eager.scene.children[i].children[j].geometry));
+    });
+    first.facades.update(1000, 1000, 0);
+    assert(first.facades.stats().near === 0, 'far travel drops near detail');
+  });
+  check('distant base chunks wait until after warm start; empty maps remain valid', () => {
+    const distant = { ...pending[0], p: [300, 0, 300, 8, 308, 8, 308, 0] };
+    const { facades } = make(true, [pending[0], distant]); facades.warmStart(0, 0);
+    assert(facades.stats().base === 1 && facades.stats().chunks === 2, 'distant chunk deferred');
+    facades.update(0, 0, Infinity); assert(facades.stats().base === 2, 'eventual completion');
+    make(true, []).facades.warmStart(0, 0);
+  });
+  window.__testResults = { passed: results.length, results };
+  document.querySelector('#results').textContent = JSON.stringify(window.__testResults, null, 2);
+} catch (error) {
+  window.__testResults = { error: error.stack, results };
+  document.querySelector('#results').textContent = error.stack;
+}
+</script>
