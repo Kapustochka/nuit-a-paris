@@ -52,8 +52,8 @@ const LOOK_GLSL = /* glsl */ `
   ${NOISE}
   // свет и тень «кистью»: base — цвет поверхности, h — высота над землёй
   vec3 paintShade(vec3 base, vec3 n, vec3 wp, float strokes, float h) {
-    float t = dot(n, uKeyDir) + (strokes - 0.5) * 0.5;
-    float lit = smoothstep(0.02, 0.2, t);
+    float t = dot(n, uKeyDir) + (strokes - 0.5) * 0.3;
+    float lit = smoothstep(0.0, 0.25, t);
     float glint = smoothstep(0.62, 0.8, t) * 0.1;
     float ao = mix(0.62, 1.0, smoothstep(0.0, 2.8, h));
     vec3 shade = mix(base * uShadeCol, uShadeCol * 0.55, 0.3);
@@ -61,8 +61,9 @@ const LOOK_GLSL = /* glsl */ `
     col = mix(col * uShadeCol * 1.25, col, ao);
     col += uSkyCol * base * smoothstep(0.2, 1.0, n.y) * 0.18;
     float g = nightSample(wp.xz).r * exp(-max(h - 1.5, 0.0) * 0.28);
-    g = floor(g * 4.0 + 0.3 + (strokes - 0.5) * 0.6) / 4.0;
-    col += base * uLampColor * g * 1.35 + uLampColor * g * 0.05;
+    float gb = g * 4.0 + 0.3 + (strokes - 0.5) * 0.18;          // ступени света, но с мягким краем
+    g = (floor(gb) + smoothstep(0.3, 0.7, fract(gb))) / 4.0;
+    col += base * uLampColor * g * 1.15 + uLampColor * g * 0.03;
     return col;
   }
   vec3 paintFog(vec3 col, vec3 wp, float k) {
@@ -123,9 +124,9 @@ const FRAG = /* glsl */ `
     float h = vWorld.y - groundAt(vWorld.xz);
 
     if (is(0.0)) {                                       // штукатурка: пятна, тёплые разводы, потёки
-      base *= 0.9 + blotch * 0.2;
-      base = mix(base, base * vec3(1.04, 0.95, 0.88), smoothstep(0.55, 0.8, fbm(sp * 0.9 + 3.0)) * 0.7);
-      base *= 1.0 - smoothstep(0.6, 0.95, vnoise(vec2(sp.x * 2.6, sp.y * 0.22 + vRand * 5.0))) * 0.13;
+      base *= 0.94 + blotch * 0.12;
+      base = mix(base, base * vec3(1.03, 0.96, 0.9), smoothstep(0.55, 0.8, fbm(sp * 0.9 + 3.0)) * 0.5);
+      base *= 1.0 - smoothstep(0.7, 0.95, vnoise(vec2(sp.x * 2.6, sp.y * 0.22 + vRand * 5.0))) * 0.06;
     } else if (is(1.0)) {                                // шифер рядами со сдвигом
       vec2 t = vec2(vUv.x * 2.6, vUv.y * 3.2);
       float row = floor(t.y), fx = fract(t.x + row * 0.5);
@@ -225,10 +226,10 @@ const GROUND_FRAG = /* glsl */ `
       vec2 dl = vWorld.xz - uLightPos[i].xz, vd = normalize(cameraPosition.xz - uLightPos[i].xz + 0.001);
       float along = dot(dl, vd), across = dot(dl, vec2(-vd.y, vd.x));
       float s = exp(-across * across / max(0.18 + along * 0.05, 0.12)) * smoothstep(-0.6, 1.0, along) * exp(-max(along, 0.0) / 7.0);
-      col += uLightCol[i] * s * (0.55 + 0.45 * vnoise(vec2(along * 3.0, across * 6.0))) * 0.5;
+      col += uLightCol[i] * s * (0.75 + 0.25 * vnoise(vec2(along * 3.0, across * 6.0))) * 0.22;
     }
     float puddle = smoothstep(0.58, 0.7, fbm(vWorld.xz * 0.18 + 2.0)) * (1.0 - walk);
-    col = mix(col, uSkyCol * 0.75 + col * 0.35, puddle * 0.45);
+    col = mix(col, uSkyCol * 0.75 + col * 0.35, puddle * 0.2);
     gl_FragColor = vec4(toLinear(paintFog(col, vWorld, 1.0)), 1.0);
   }
 `;
