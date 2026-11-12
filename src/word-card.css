@@ -201,6 +201,8 @@
 }
 .paper-toggle input:focus-visible + .tick { outline: 2px solid var(--ink-rose); outline-offset: 2px; }
 .paper-toggle:has(input:not(:checked)) { opacity: .78; }
+/* «Дождь» — второй ярлычок под звёздами (rain.js) */
+#rain-toggle { top: max(152px, calc(env(safe-area-inset-top) + 147px)); }
 
 #notebook {
   box-sizing: border-box;
@@ -258,6 +260,7 @@
 @media (max-width: 490px) {
   #open-notebook { top: max(88px, calc(env(safe-area-inset-top) + 78px)); }
   .paper-toggle { top: max(132px, calc(env(safe-area-inset-top) + 122px)); }
+  #rain-toggle { top: max(174px, calc(env(safe-area-inset-top) + 164px)); }
   #notebook { top: max(174px, calc(env(safe-area-inset-top) + 164px)); }
 }
 

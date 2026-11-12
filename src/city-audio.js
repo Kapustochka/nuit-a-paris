@@ -5,7 +5,7 @@ const WALTZ = [64, 67, 72, 71, 67, 62, 65, 69, 74, 72, 69, 65, 64, 67, 71, 69, 6
 
 export function createCityAudio(cafes = [], square = { x: 0, z: 0 }) {
   const button = document.querySelector('#city-sound');
-  let ctx, master, wind, noise, reed, enabled = true, ducked = false, disposed = false;
+  let ctx, master, wind, noise, reed, rain, rainLevel = 0, nextDrip = 0, enabled = true, ducked = false, disposed = false;
   let lastX, lastZ, walked = 0, elapsed = 0, nextGlass = 5, nextNote = 0, note = 0;
   let cafeLevel = 0, musicLevel = 0, steps = 0, glasses = 0;
   const sources = new Set();
@@ -39,6 +39,13 @@ export function createCityAudio(cafes = [], square = { x: 0, z: 0 }) {
         wind = ctx.createGain(); wind.gain.value = 0.12;
         const air = track(ctx.createBufferSource(), filter, wind);
         air.buffer = noise; air.loop = true; air.connect(filter).connect(wind).connect(master); air.start();
+        // Дождь: тот же шум, только шипящий; громкость задаёт rain.js через setRain()
+        const hiss = ctx.createBiquadFilter(), soft = ctx.createBiquadFilter();
+        hiss.type = 'highpass'; hiss.frequency.value = 1100; soft.type = 'lowpass'; soft.frequency.value = 5200;
+        rain = ctx.createGain(); rain.gain.value = 0;
+        const shower = track(ctx.createBufferSource(), hiss, soft, rain);
+        shower.buffer = noise; shower.loop = true; shower.playbackRate.value = 0.93;
+        shower.connect(hiss).connect(soft).connect(rain).connect(master); shower.start(0, 0.7);
         // Мягкий язычковый тембр. Мелодия вальса — собственная короткая последовательность.
         reed = ctx.createPeriodicWave(new Float32Array(7), new Float32Array([0, 1, 0.35, 0.22, 0.12, 0.08, 0.04]));
       }
@@ -101,6 +108,11 @@ export function createCityAudio(cafes = [], square = { x: 0, z: 0 }) {
         tone(3650, 0.025 * cafeLevel, 0.25, nearest.pan);
       }
     }
+    rain.gain.setTargetAtTime(rainLevel * 0.32, ctx.currentTime, 0.8);
+    if (rainLevel > 0.05 && elapsed >= nextDrip) {                // капли по навесам и подоконникам
+      nextDrip = elapsed + (0.08 + Math.random() * 0.5) / rainLevel;
+      burst(0.05 * rainLevel, 2600 + Math.random() * 2400, 0.04, Math.random() * 1.6 - 0.8);
+    }
     const at = spatial(square, x, z, yaw, 42);
     musicLevel = at.level;
     if (elapsed >= nextNote) {
@@ -134,7 +146,7 @@ export function createCityAudio(cafes = [], square = { x: 0, z: 0 }) {
     for (const source of sources) { try { source.stop(); } catch { /* уже остановлен */ } }
     ctx?.close().catch(() => {});
   }
-  return { update, setEnabled, dispose, setDucked(on) { ducked = Boolean(on); mix(); },
+  return { update, setEnabled, dispose, setDucked(on) { ducked = Boolean(on); mix(); }, setRain(level) { rainLevel = level; },
     get status() { return { enabled, ducked, state: ctx?.state || 'locked', sources: sources.size,
       cafeLevel, musicLevel, steps, glasses, bufferBytes: noise ? noise.length * 4 : 0 }; } };
 }

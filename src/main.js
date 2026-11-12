@@ -15,6 +15,7 @@ import { createCityAudio } from './city-audio.js';
 import { loadPasserby, placePasserby, placeCircularPasserby, passerbyBlocksStep } from './passerby.js';
 import { createPainter } from './paint/post.js';
 import { createPeople } from './people.js';
+import { createRain } from './rain.js';
 
 const loading = document.getElementById('loading');
 const streetEl = document.getElementById('street');
@@ -74,6 +75,7 @@ world.paint(scene);                 // прохожие и всё остальн
 let people = null;
 const blocked = (x, z) => world.blocked(x, z) || passersby.some((actor) => passerbyBlocksStep(actor, player, x, z)) || !!people?.blocksStep(x, z);
 const cityAudio = createCityAudio(world.soundSpots);
+const rain = createRain(renderer, world, { phone, cityAudio });
 const audio = createFrenchAudio({ onActivity: (active) => cityAudio.setDucked(active) });
 const lesson = createLesson((key) => inspector.show(key));
 const inspector = installWordInspector(renderer.domElement, scene, camera, world.sky.moonDirection, audio, lesson.inspect, lesson.review);
@@ -86,7 +88,7 @@ performance.mark('paris-ready');
 
 const debug = new URLSearchParams(location.search).has('debug');
 if (debug) addDebugPanel();
-window.__game = { heroine, passersby, get people() { return people; }, world, stars, inspector, mapData, camera, controls, renderer, cityAudio, get painted() { return painter !== null; }, get painter() { return painter; } };
+window.__game = { heroine, passersby, rain, get people() { return people; }, world, stars, inspector, mapData, camera, controls, renderer, cityAudio, get painted() { return painter !== null; }, get painter() { return painter; } };
 
 // ── Движение ─────────────────────────────────────────────────
 const MAX_WALK = 1.45, MAX_RUN = 3.8, MAX_BACK = 0.95; // м/с
@@ -156,7 +158,8 @@ renderer.setAnimationLoop(() => {
     afterFrame(() => addPasserby(true));
   }
   for (const actor of passersby) actor.update(dt);
-  people?.update(dt);
+  rain.update(dt);
+  people?.update(dt, rain.level);
   stars.update(dt, p.x, p.z, facing);
   cityAudio.update(dt, p.x, p.z, yaw, heroine.busy !== 'jump');
 
@@ -185,6 +188,7 @@ renderer.setAnimationLoop(() => {
     }
   }
   if (painter) painter.render(scene, camera); else renderer.render(scene, camera);
+  rain.render(camera);                // штрихи дождя поверх картины
 });
 
 // 38 МБ второстепенных моделей не задерживают вход. Дальняя прохожая нужна только у базилики.

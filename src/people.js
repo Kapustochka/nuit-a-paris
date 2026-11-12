@@ -14,6 +14,9 @@ import { words } from './french-words.js';
 
 // Что говорят прохожие (ключи карточек из french-words.js; голос — assets/voice/people/<ключ>-f|m.mp3)
 const GREETINGS = ['bonsoirStreet', 'bonsoirMademoiselle', 'bonneSoiree', 'salut', 'belleNuit', 'ilFaitFrais', 'bonneNuit', 'pardon'];
+// …а в дождь (rain.js) ещё и это
+const RAIN_GREETINGS = ['ilPleut', 'quelTemps'];
+const UMBRELLAS = [0x1a1820, 0x1a1820, 0x1a1820, 0x8a1e2a, 0x24305a, 0x2f5a4e, 0xd8a03a, 0x6a3a6a];
 
 // По каким дорогам ходят и как далеко от оси дороги их тротуар (м)
 const WALK_OFFSET = { footway: [0.45, 0], path: [0.4, 0], steps: [0.45, 0], pedestrian: [2.4, 1.4, 0.6], living_street: [2.4, 1.4, 0.6], residential: [3.6, 2.8, 2, 1.2] };
@@ -145,6 +148,22 @@ function figureGeometry(rnd) {
   return { geometry, woman, busyArm, height: woman ? 1.58 + rnd() * 0.14 : 1.7 + rnd() * 0.17 };
 }
 
+// Зонт: восемь клиньев купола, спица-ручка; держится в кисти и всегда смотрит вверх
+function umbrellaGeometry(hex) {
+  const canopy = new THREE.ConeGeometry(0.48, 0.19, 8, 1, true).translate(0, 1.0, 0);
+  const tip = new THREE.CylinderGeometry(0.008, 0.008, 0.08, 4).translate(0, 1.13, 0);
+  const stick = new THREE.CylinderGeometry(0.012, 0.012, 1.0, 5).translate(0, 0.48, 0);
+  const color = new THREE.Color(hex), dark = new THREE.Color(0x24222a);
+  const parts = [[canopy, color], [tip, dark], [stick, dark]].map(([g, c]) => {
+    g.deleteAttribute('uv');
+    const n = g.attributes.position.count, col = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) col.set([Math.min(1, c.r * 1.8), Math.min(1, c.g * 1.8), Math.min(1, c.b * 1.8)], i * 3);
+    g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    return g.index ? g.toNonIndexed() : g;
+  });
+  return mergeGeometries(parts);
+}
+
 function makeSkeleton() {
   const bones = BONES.map((name) => { const b = new THREE.Bone(); b.name = name; return b; });
   BONES.forEach((name, i) => {
@@ -178,6 +197,9 @@ export function createPeople(scene, world, mapData, { count = 16, inspector, cam
   const net = walkNetwork(mapData.roads);
   const material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9 });
   const rnd = mulberry(4242);
+  const umbrellaMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.6, side: THREE.DoubleSide });
+  const umbrellaShapes = new Map();
+  let rain = 0;
   const people = [];
   const frustum = new THREE.Frustum(), viewProj = new THREE.Matrix4(), tmp = new THREE.Vector3();
   const bubble = createBubble(inspector);
@@ -273,10 +295,26 @@ export function createPeople(scene, world, mapData, { count = 16, inspector, cam
     };
     mesh.userData.word = () => (person.saying && performance.now() < person.sayUntil + 6000 ? person.saying : woman ? 'passerby' : 'passant');
     inspector?.addTarget(mesh);
+    // зонт есть примерно у двух третей; в руке, свободной от багета
+    if (rnd() < 0.68) {
+      const hex = UMBRELLAS[Math.floor(rnd() * UMBRELLAS.length)];
+      if (!umbrellaShapes.has(hex)) umbrellaShapes.set(hex, umbrellaGeometry(hex));
+      const side = busyArm === 'R' ? 'L' : 'R';
+      const umbrella = new THREE.Mesh(umbrellaShapes.get(hex), umbrellaMat);
+      umbrella.position.set(side === 'R' ? -0.005 : 0.005, -0.285, 0.0);
+      umbrella.rotation.x = 1.6;                      // компенсирует поднятую руку: спица вертикальна
+      umbrella.visible = false;
+      umbrella.userData.word = 'umbrella';
+      bones[B['fore' + side]].add(umbrella);
+      inspector?.addTarget(umbrella);
+      person.umbrella = umbrella; person.umbrellaSide = side; person.open = 0;
+    }
     people.push(person);
     spawn(person, 4, 70, false);
   }
   if (people[0]) world.paint(people[0].root);   // материал общий на всех
+  const anyUmbrella = people.find((p) => p.umbrella);
+  if (anyUmbrella) world.paint(anyUmbrella.umbrella);
 
   function pose(person, dt, moving) {
     const b = person.bones;
@@ -290,11 +328,28 @@ export function createPeople(scene, world, mapData, { count = 16, inspector, cam
     b[B.armR].rotation.set(person.busyArm === 'R' ? 0.05 : -0.32 * s * a, 0, person.busyArm === 'R' ? -0.16 : -0.07);
     b[B.foreL].rotation.x = -(0.18 + 0.3 * Math.max(0, -s) * a);
     b[B.foreR].rotation.x = person.busyArm === 'R' ? -1.0 : -(0.18 + 0.3 * Math.max(0, s) * a);
+    // зонт: рука поднята и согнута, спица смотрит вверх, купол раскрывается
+    if (person.umbrella) {
+      const want = rain > 0.25 ? 1 : rain < 0.1 ? 0 : person.open > 0.5 ? 1 : 0;
+      person.open += (want - person.open) * (1 - Math.exp(-dt * 4));
+      const o = person.open, side = person.umbrellaSide, sx = side === 'L' ? 1 : -1;
+      if (o > 0.02) {
+        const arm = b[B['arm' + side]], fore = b[B['fore' + side]];
+        arm.rotation.set(THREE.MathUtils.lerp(arm.rotation.x, -0.2, o), 0, THREE.MathUtils.lerp(arm.rotation.z, 0.12 * sx, o));
+        fore.rotation.x = THREE.MathUtils.lerp(fore.rotation.x, -1.15, o);
+        const k = 0.15 + 0.85 * THREE.MathUtils.smoothstep(o, 0.3, 1);
+        person.umbrella.rotation.x = -(arm.rotation.x + fore.rotation.x);
+        person.umbrella.scale.set(k, 1, k);
+      }
+      person.umbrella.visible = o > 0.02;
+    }
+    // без зонта под дождём — плечи вперёд, шаг быстрее (см. update)
+    const hunch = person.umbrella ? 0 : Math.min(1, rain * 1.5) * 0.12;
     b[B.hips].position.y = person.rest + (Math.abs(c) - 0.6) * 0.035 * a;
     b[B.hips].rotation.y = 0.09 * s * a;
     const idle = Math.sin(performance.now() / 900 + person.speed * 10) * (1 - a);
     b[B.hips].rotation.z = 0.02 * idle;
-    b[B.spine].rotation.set(0.05 * a, -0.16 * s * a, -0.02 * idle);
+    b[B.spine].rotation.set(0.05 * a + hunch, -0.16 * s * a, -0.02 * idle);
     b[B.head].rotation.y += (person.look - b[B.head].rotation.y) * (1 - Math.exp(-dt * 5));
     b[B.head].rotation.x = 0.04 * a - 0.03 * (1 - a);
   }
@@ -311,7 +366,8 @@ export function createPeople(scene, world, mapData, { count = 16, inspector, cam
   }
 
   let viewTick = 0;
-  function update(dt) {
+  function update(dt, rainLevel = 0) {
+    rain = rainLevel;
     viewTick -= dt;
     if (viewTick <= 0) { viewTick = 0.25; frustum.setFromProjectionMatrix(viewProj.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse)); }
     greetCooldown -= dt;
@@ -335,7 +391,8 @@ export function createPeople(scene, world, mapData, { count = 16, inspector, cam
       // здоровается
       if (dist < 3.4 && facingHero > 0.35 && greetCooldown <= 0 && now - person.greeted > 90000 && dist > 0.9) {
         person.greeted = now;
-        let key = GREETINGS[Math.floor(rnd() * (GREETINGS.length - 1))];
+        let key = rain > 0.25 && rnd() < 0.5 ? RAIN_GREETINGS[Math.floor(rnd() * RAIN_GREETINGS.length)]
+          : GREETINGS[Math.floor(rnd() * (GREETINGS.length - 1))];
         if (key === lastGreeting) key = 'bonsoirStreet';
         say(person, dist < 1.4 ? 'pardon' : key);
       }
@@ -353,7 +410,8 @@ export function createPeople(scene, world, mapData, { count = 16, inspector, cam
           person.wait = blockedByHero ? person.wait + dt : 0;
           if (person.wait > 2.5) { person.wait = 0; person.dir = -person.dir; nextTarget(person, true); }
           else if (!blockedByHero) {
-            const step = person.speed * dt * Math.max(0, Math.cos(delta));
+            const hurry = person.umbrella ? 1 : 1 + Math.min(1, rain * 1.5) * 0.3;
+            const step = person.speed * hurry * dt * Math.max(0, Math.cos(delta));
             const nx = pos.x + Math.sin(person.root.rotation.y) * step, nz = pos.z + Math.cos(person.root.rotation.y) * step;
             if (free(nx, nz)) {
               pos.x = nx; pos.z = nz; pos.y = world.heightAt(nx, nz);
