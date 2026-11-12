@@ -37,6 +37,8 @@ The “Ночное небо” (Night sky) section controls cloud density, star
 - `src/night-sky.js` — procedural night sky
 - `src/night-light.js` — one light map for the whole city: lamp light pools, sidewalks and shade at the foot of walls
 - `src/terrain.js`, `assets/terrain.json` — the real slopes of the Montmartre hill (4 m height grid), built by `scripts/build-terrain.py`
+- `src/stairs.js` — stone stairs with iron railings on every `highway=steps` street from OpenStreetMap (Rue Foyatier and others), fitted to the slope
+- `src/viewpoint.js` — the balustrade and telescopes in front of Sacré-Cœur, city lights at the foot of the hill and the mist above them
 - `assets/street/` — lightweight in-game copies of Meshy street models
 - `assets/people/` — lightweight copies of passer-by models
 - `assets/voice/` — French voice-over for word cards and the bakery order, [voice source and build](assets/voice/README.md)

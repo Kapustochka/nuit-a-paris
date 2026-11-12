@@ -142,3 +142,18 @@ export function nightFacade(material, light, key) {
   };
   material.customProgramCacheKey = () => 'night-facade-' + key;
 }
+
+// Камень лестниц и балюстрад: тёплый свет фонарей из той же карты, тень у стен
+export function nightStone(material, light, key) {
+  material.onBeforeCompile = (shader) => {
+    addWorldPos(shader, light.uniforms, light.defines);
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nvec4 stoneCell;')
+      .replace('#include <map_fragment>', `#include <map_fragment>
+        stoneCell = nightSample(vNightPos.xz);
+        diffuseColor.rgb *= (0.85 + nNoise(vNightPos.xz * 1.7) * 0.3) * (1.0 - stoneCell.b * 0.5);`)
+      .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+        totalEmissiveRadiance += diffuseColor.rgb * uLampColor * stoneCell.r * (0.4 + stoneCell.r) * 2.2;`);
+  };
+  material.customProgramCacheKey = () => 'night-stone-' + key;
+}

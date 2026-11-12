@@ -78,7 +78,8 @@ function convert(raw) {
       for (const m of e.members) if (m.type === 'way' && m.role !== 'inner') { const w = ways.get(m.ref); if (w) addBuilding(w, t); }
     } else if (e.type === 'way' && t.highway) {
       if (['service', 'cycleway', 'construction', 'proposed'].includes(t.highway)) continue;
-      roads.push({ p: ring(e), n: t.name || '', k: t.highway });
+      const w = parseFloat(t.width);
+      roads.push({ p: ring(e), n: t.name || '', k: t.highway, ...(w > 0 ? { w } : {}) });
     } else if (e.type === 'node' && t.natural === 'tree') {
       const [x, z] = toXZ(e.lat, e.lon); trees.push(r1(x), r1(z));
     } else if (e.type === 'node' && (t.amenity || t.shop)) {

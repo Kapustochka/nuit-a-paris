@@ -9,6 +9,8 @@ import { addPropInstances, placeBenches, placePigeons } from './street-props.js'
 import { placeStreetLife, terraceSet } from './street-life.js';
 import { createNightLight, nightGround, nightFacade } from './night-light.js';
 import { createTerrain, groundGeometry, liftToGround } from './terrain.js';
+import { buildStairs } from './stairs.js';
+import { buildViewpoint, buildCityBelow } from './viewpoint.js';
 
 const FLOOR = 3.2;            // высота этажа, м
 const ROOF = 2.8;             // высота мансарды
@@ -19,6 +21,7 @@ const BURGUNDY = 0x7a1730;
 export function buildParis(scene, renderer, data, city, props = {}) {
   const firstChild = scene.children.length;
   const terrain = city.terrain || createTerrain(null), heightAt = terrain.heightAt;
+  let standAt = heightAt;                 // рельеф плюс ступени лестниц
   const sky = createNightSky(scene);
   scene.fog = new THREE.FogExp2(0x333858, 0.009);
 
@@ -313,12 +316,21 @@ export function buildParis(scene, renderer, data, city, props = {}) {
 
   // ── Сакре-Кёр, Эйфелева башня и огни вдали ─────────────────
   buildSacreCards(scene, SACRE[0], SACRE[1], city);
-  buildFarParis(scene, terrain.flat ? 0 : terrain.heightAt(1e4, 1e4));
+  const drop = terrain.flat ? 0 : terrain.heightAt(1e4, 1e4);
+  buildFarParis(scene, drop);
+
+  // ── Лестницы Монмартра, смотровая площадка и город внизу ───
+  const stairs = terrain.flat ? { lift: () => 0, count: 0 } : buildStairs(scene, data.roads, heightAt, night);
+  standAt = (x, z) => heightAt(x, z) + stairs.lift(x, z);
+  if (!terrain.flat) {
+    solids.push(...buildViewpoint(scene, SACRE[0], SACRE[1] + 64, heightAt, night));
+    buildCityBelow(scene, drop, heightAt, renderer.getPixelRatio());
+  }
 
   // Всё, что выше расставлено на ровном полу, встаёт на склон холма
   if (!terrain.flat) {
-    for (const object of scene.children.slice(firstChild)) liftToGround(object, heightAt);
-    for (const l of lampLights) l.y += heightAt(l.x, l.z);
+    for (const object of scene.children.slice(firstChild)) liftToGround(object, standAt);
+    for (const l of lampLights) l.y += standAt(l.x, l.z);
   }
 
   // Названия улиц
@@ -347,7 +359,7 @@ export function buildParis(scene, renderer, data, city, props = {}) {
   let tick = 0;
   function update(dt, hx, hz, camera) {
     sky.update(dt);
-    const hy = heightAt(hx, hz);
+    const hy = standAt(hx, hz);
     moon.target.position.set(hx, hy, hz);
     moon.position.copy(moon.target.position).add(moonOffset);
     fill.position.set(hx + (camera.position.x - hx) * 0.35, hy + 2.3, hz + (camera.position.z - hz) * 0.35);
@@ -362,8 +374,8 @@ export function buildParis(scene, renderer, data, city, props = {}) {
   }
 
   return {
-    blocked, inside, streetAt, freeSpot, update, sky, bakery, night, heightAt,
-    stats: { buildings: polys.length, lamps: lamps.length, detailedLamps, benches: benches.length, pigeons, ...streetLife },
+    blocked, inside, streetAt, freeSpot, update, sky, bakery, night, heightAt: (x, z) => standAt(x, z),
+    stats: { stairs: stairs.count, buildings: polys.length, lamps: lamps.length, detailedLamps, benches: benches.length, pigeons, ...streetLife },
   };
 }
 
