@@ -108,10 +108,10 @@ export function createCityAudio(cafes = [], square = { x: 0, z: 0 }) {
         tone(3650, 0.025 * cafeLevel, 0.25, nearest.pan);
       }
     }
-    rain.gain.setTargetAtTime(rainLevel * 0.09, ctx.currentTime, 0.8);
+    rain.gain.setTargetAtTime(rainLevel * 0.17, ctx.currentTime, 0.8);
     if (rainLevel > 0.05 && elapsed >= nextDrip) {                // капли по навесам и подоконникам
       nextDrip = elapsed + (0.4 + Math.random() * 1.6) / rainLevel;
-      burst(0.02 * rainLevel, 2600 + Math.random() * 2400, 0.04, Math.random() * 1.6 - 0.8);
+      burst(0.03 * rainLevel, 2600 + Math.random() * 2400, 0.04, Math.random() * 1.6 - 0.8);
     }
     const at = spatial(square, x, z, yaw, 42);
     musicLevel = at.level;
