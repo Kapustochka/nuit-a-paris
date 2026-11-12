@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#14103a">
+  <title>Nuit à Paris</title>
+  <style>
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #14103a; color: #f4e9d8;
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      -webkit-user-select: none; user-select: none; }
+    #app, #app canvas { position: fixed; inset: 0; display: block; }
+    #app canvas { touch-action: none; }
+    #loading { position: fixed; inset: 0; display: grid; place-items: center; font-size: 18px; letter-spacing: .05em; }
+    #hint { position: fixed; left: 50%; top: max(12px, env(safe-area-inset-top)); transform: translateX(-50%);
+      font-size: 13px; opacity: .75; background: rgba(5,8,22,.45); padding: 6px 12px; border-radius: 999px;
+      width: max-content; max-width: calc(100% - 32px); text-align: center; pointer-events: none; }
+    #hint small { display: block; margin-top: 3px; color: #ffdfa2; }
+    #street { position: fixed; left: 50%; bottom: max(18px, env(safe-area-inset-bottom)); transform: translateX(-50%);
+      font: italic 600 17px Georgia, serif; letter-spacing: .04em; color: #f6dfb4; background: rgba(20,24,70,.72);
+      border: 1.5px solid rgba(246,223,180,.55); padding: 6px 16px; border-radius: 8px; white-space: nowrap;
+      pointer-events: none; opacity: 0; transition: opacity .4s; }
+    #minimap { position: fixed; left: max(12px, env(safe-area-inset-left)); bottom: max(12px, env(safe-area-inset-bottom));
+      width: clamp(104px, 17vmin, 170px); height: clamp(104px, 17vmin, 170px); border-radius: 50%; cursor: pointer; touch-action: none;
+      box-shadow: 0 4px 18px rgba(0,0,0,.55); }
+    #bigmap { position: fixed; inset: 0; display: none; place-items: center; background: rgba(8,6,30,.82); z-index: 20; }
+    #bigmap canvas { position: static; width: min(96vw, 1500px); height: min(88vh, 1100px); border-radius: 14px; }
+    #bigmap span { position: fixed; top: 14px; left: 50%; transform: translateX(-50%); font: italic 600 18px Georgia, serif; color: #f6dfb4; }
+    #joy-base { display: none; position: fixed; width: 120px; height: 120px; margin: -60px 0 0 -60px;
+      border-radius: 50%; border: 2px solid rgba(255,214,150,.55); background: rgba(255,214,150,.08); pointer-events: none; }
+    #joy-knob { position: absolute; left: 50%; top: 50%; width: 52px; height: 52px; border-radius: 50%;
+      background: rgba(255,214,150,.7); transform: translate(-50%, -50%); }
+    .act { position: fixed; right: max(18px, env(safe-area-inset-right)); width: 64px; height: 64px; border-radius: 50%;
+      border: 2px solid rgba(255,214,150,.6); background: rgba(40,30,80,.55); color: #f6dfb4; font-size: 26px;
+      display: none; place-items: center; touch-action: none; -webkit-tap-highlight-color: transparent; }
+    #btn-jump { bottom: max(26px, env(safe-area-inset-bottom)); }
+    #btn-punch { bottom: calc(max(26px, env(safe-area-inset-bottom)) + 78px); }
+    .act:active { background: rgba(255,214,150,.35); }
+    @media (pointer: coarse) { .act { display: grid; } }
+    .touch-only { display: none; }
+    @media (pointer: coarse) { .touch-only { display: inline; } .mouse-only { display: none; } }
+  </style>
+  <link rel="stylesheet" href="src/word-card.css">
+  <script type="importmap">
+    { "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+    } }
+  </script>
+</head>
+<body>
+  <div id="app"></div>
+  <div id="loading">Bonsoir… chargement</div>
+  <div id="hint">
+    <span class="mouse-only">WASD — идти · Shift — бежать · Пробел — прыжок · F — удар · M — карта · мышь — камера</span>
+    <span class="touch-only">Слева — джойстик (до края — бег) · справа — камера</span>
+    <small><span class="mouse-only">Двойной клик по предмету — слово</span><span class="touch-only">Двойное касание предмета — слово</span></small>
+  </div>
+  <div id="street"></div>
+  <canvas id="minimap"></canvas>
+  <div id="bigmap"><span>Montmartre · M — закрыть</span><canvas></canvas></div>
+  <button class="act" id="btn-punch" aria-label="Удар">✊</button>
+  <button class="act" id="btn-jump" aria-label="Прыжок">⤒</button>
+  <div id="joy-base"><div id="joy-knob"></div></div>
+  <button id="open-notebook" type="button" class="lesson-button" aria-controls="notebook" aria-expanded="false" hidden>Блокнот</button>
+  <aside id="notebook" lang="ru" aria-label="Найденные слова" hidden>
+    <button type="button" data-close aria-label="Закрыть блокнот">×</button>
+    <h2>Найденные слова</h2>
+    <p data-empty>Дважды нажми на предмет, чтобы добавить слово.</p>
+    <ul></ul>
+  </aside>
+  <section id="bakery-quest" lang="ru" aria-label="Заказ в булочной" hidden>
+    <button class="lesson-button" type="button">Булочная</button>
+    <p role="status"></p>
+    <details data-bakery-progress hidden>
+      <summary>Показать фразу</summary>
+      <p lang="fr"></p>
+      <p lang="ru"></p>
+    </details>
+  </section>
+  <span id="word-marker" aria-hidden="true" hidden></span>
+  <aside id="word-card" lang="ru" aria-label="Французское слово" hidden>
+    <button class="word-close" type="button" data-close aria-label="Закрыть карточку">×</button>
+    <div class="word-content" aria-live="polite">
+      <h2 lang="fr" data-field="term"></h2>
+      <p class="word-pronunciation"><span data-field="ipa"></span><span data-field="reading"></span></p>
+      <p class="word-translation" data-field="translation"></p>
+      <div class="word-example">
+        <p lang="fr" data-field="example"></p>
+        <p data-field="meaning"></p>
+      </div>
+    </div>
+    <div class="word-actions">
+      <button type="button" data-say="term">▶ Слово</button>
+      <button type="button" data-say="example">▶ Фраза</button>
+    </div>
+    <p class="word-status" data-field="status" role="status"></p>
+  </aside>
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,10 @@
+# Рабочие файлы, которые не нужны самой игре
+.DS_Store
+_bake/
+Heroine/
+meshy-bikini-references/
+meshy-character-references/
+people on street/
+*.zip
+/*.glb
+__pycache__/
