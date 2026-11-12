@@ -121,6 +121,10 @@ export function installWordInspector(canvas, scene, camera, moonDirection, audio
   }
   card.querySelector('[data-close]').addEventListener('click', close);
   addEventListener('keydown', (event) => { if (event.key === 'Escape' && !card.hidden) close(); });
+  // Песенка: строка, которую сейчас играет шкатулка, подсвечивается
+  addEventListener('song-line', ({ detail }) => {
+    [...fields.lines.children].forEach((item, i) => item.classList.toggle('singing', i === detail));
+  });
   for (const button of sayButtons) {
     button.addEventListener('click', () => {
       const [clip, text] = selected.say[button.dataset.say];

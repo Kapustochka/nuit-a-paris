@@ -77,7 +77,7 @@ loading.remove();
 
 const debug = new URLSearchParams(location.search).has('debug');
 if (debug) addDebugPanel();
-window.__game = { heroine, world, stars, mapData, camera, controls, renderer, get painted() { return painter !== null; }, get painter() { return painter; } };
+window.__game = { heroine, world, stars, inspector, mapData, camera, controls, renderer, get painted() { return painter !== null; }, get painter() { return painter; } };
 
 // ── Движение ─────────────────────────────────────────────────
 const MAX_WALK = 1.45, MAX_RUN = 3.8, MAX_BACK = 0.95; // м/с

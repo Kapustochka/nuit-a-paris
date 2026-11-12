@@ -9,7 +9,9 @@ const FIRST_AFTER = 3;       // первая звезда падает почт�
 const LOST_AFTER = 3;        // секунд вне кадра, после которых звезда считается потерянной
 const LOST_DISTANCE = 30;    // дальше этого расстояния звезду уже не разглядеть
 const FALL_TIME = 1.7, HOVER = 0.55;
-const KIND_ODDS = [['word', 0.68], ['phrase', 0.19], ['story', 0.13]];
+const KIND_ODDS = [['word', 0.62], ['phrase', 0.2], ['story', 0.12], ['song', 0.06]];   // фиолетовые — редкие
+// Для отладки: ?star=song (или word, phrase, story) — падают звёзды только этого вида.
+const FORCED_KIND = new URLSearchParams(location.search).get('star');
 const seenKey = 'nuit-a-paris:stars:v1';
 
 export function createFallingStars(scene, camera, world, inspector) {
@@ -27,11 +29,13 @@ export function createFallingStars(scene, camera, world, inspector) {
   }
   const geometry = new THREE.ExtrudeGeometry(outline, { depth: 0.05, bevelEnabled: true, bevelSize: 0.02, bevelThickness: 0.025, bevelSegments: 2 });
   geometry.center();
-  // Цвет звезды говорит, что внутри: золотая — слово или фраза, голубая — история.
+  // Цвет звезды говорит, что внутри: жёлтая — слово, салатовая — фраза, голубая — история, фиолетовая (редкая) — песенка.
   // Как в рисованном мире вокруг: пастельное тело, обводка тушью и мягкий ореол.
   const PALETTES = {
     gold: { body: new THREE.Color(1.75, 1.18, 0.42), glow: new THREE.Color(0xffc468) },
     blue: { body: new THREE.Color(0.62, 0.92, 2.0), glow: new THREE.Color(0x8ab8ff) },
+    green: { body: new THREE.Color(0.95, 1.9, 0.5), glow: new THREE.Color(0xb6f27a) },
+    violet: { body: new THREE.Color(1.45, 0.72, 2.1), glow: new THREE.Color(0xc79bff) },
   };
   const bodyMaterial = new THREE.MeshBasicMaterial({ color: PALETTES.gold.body.clone(), fog: false, transparent: true });
   const inkMaterial = new THREE.MeshBasicMaterial({ color: 0x1c1440, side: THREE.BackSide, fog: false, transparent: true });
@@ -85,7 +89,9 @@ export function createFallingStars(scene, camera, world, inspector) {
     if (!Object.keys(starKeys).some((kind) => fresh(kind).length)) seen.clear();
     let roll = Math.random(), kind = 'word';
     for (const [name, odds] of KIND_ODDS) { if (roll < odds) { kind = name; break; } roll -= odds; }
+    if (starKeys[FORCED_KIND]) kind = FORCED_KIND;
     let pool = fresh(kind);
+    if (!pool.length && starKeys[FORCED_KIND]) pool = starKeys[kind];
     if (!pool.length) pool = Object.keys(starKeys).flatMap(fresh);
     return pool[Math.floor(Math.random() * pool.length)];
   }
@@ -109,7 +115,7 @@ export function createFallingStars(scene, camera, world, inspector) {
     if (!spot) return false;
     if (state !== 'none') inspector.removeTarget(hit);
     key = pick();
-    tint(kindOf(key) === 'story' ? 'blue' : 'gold');
+    tint({ story: 'blue', phrase: 'green', song: 'violet' }[kindOf(key)] || 'gold');
     const groundY = world.heightAt?.(spot[0], spot[1]) ?? 0;
     to.set(spot[0], groundY + HOVER, spot[1]);
     // Летит издалека навстречу героине: так весь след виден в небе над улицей.

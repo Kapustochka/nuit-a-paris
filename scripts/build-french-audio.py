@@ -15,6 +15,7 @@ from piper import PiperVoice, SynthesisConfig
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("model", type=Path, help="Path to fr_FR-siwis-medium.onnx")
 parser.add_argument("--only", choices=["street", "star"], help="Build only one group of clips")
+parser.add_argument("--missing", action="store_true", help="Build only star clips that do not exist yet")
 args = parser.parse_args()
 root = Path(__file__).resolve().parents[1]
 lesson = json.loads(subprocess.check_output([
@@ -45,13 +46,16 @@ if args.only != "star":
     built += len(clips)
 if args.only != "street":
     (output / "star").mkdir(exist_ok=True)
-    for stale in (output / "star").glob("*.mp3"):
-        stale.unlink()
+    if not args.missing:
+        for stale in (output / "star").glob("*.mp3"):
+            stale.unlink()
     with tempfile.TemporaryDirectory() as scratch:
         raw = Path(scratch) / "clip.wav"
         for name, text in lesson["star"].items():
+            if args.missing and (output / (name + ".mp3")).exists():
+                continue
+            built += 1
             synthesize(text, raw)
             subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-i", str(raw), "-ac", "1",
                             "-codec:a", "libmp3lame", "-b:a", "48k", str(output / (name + ".mp3"))], check=True)
-    built += len(lesson["star"])
 print(f"Built {built} clips.")
