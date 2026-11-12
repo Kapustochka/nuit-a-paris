@@ -395,11 +395,15 @@ export function buildFacades(scene, look, plan, shopFronts) {
       for (const e of h.edges) for (const seg of e.segs) {
         const along = (s.x - e.ax) * e.tx + (s.z - e.az) * e.tz, off = Math.abs((s.x - e.ax) * e.nx + (s.z - e.az) * e.nz);
         if (along < seg.x0 - 0.5 || along > seg.x1 + 0.5 || off > bd) continue;
-        bd = off; best = { seg, e, h, at: Math.max(seg.x0 + 0.5, Math.min(seg.x1 - 0.5, along)), w: s.w, name: s.name };
+        bd = off; best = { seg, e, h, at: Math.max(seg.x0 + 0.5, Math.min(seg.x1 - 0.5, along)), w: s.w, name: s.name, kind: s.kind };
       }
     }
     if (best && !shops.has(best.seg)) shops.set(best.seg, best);
   }
+
+  // Точки крепления вывесок вычисляются в той же системе координат, что и фасад.
+  // Так вывески не плавают отдельно от зданий на склонах Монмартра.
+  const signAnchors = [];
 
   // кварталы
   const chunks = new Map();
@@ -429,8 +433,17 @@ export function buildFacades(scene, look, plan, shopFronts) {
     if (F.pos.length) { c.far = add(flatGeometry(F), material, true); }
   }
   // вывески лавок: золотые буквы на крашеном дереве, над витриной
-  for (const { seg, e, h, at, w, name } of shops.values()) {
+  for (const { seg, e, h, at, w, name, kind } of shops.values()) {
     const Lo = layout(seg, h.E, { at, w }), [xa, xb] = Lo.floors[0].cells[1], [, , y0, y1] = Lo.floors[0].rows;
+    // Вешаем «enseigne drapeau» сбоку от маркизы, на реальном простенке.
+    // Отказываемся от вывески, когда по обеим сторонам витрина вплотную к краю дома.
+    const leftPier = xa - seg.x0, rightPier = seg.x1 - xb;
+    if (xa < xb && (leftPier >= 0.45 || rightPier >= 0.45)) {
+      const useLeft = leftPier >= 0.45 && (rightPier < 0.45 || leftPier >= rightPier);
+      const wallX = useLeft ? xa - Math.min(0.28, leftPier * 0.5) : xb + Math.min(0.28, rightPier * 0.5);
+      const [x, y, z] = edgeFrame(e, seg, h.E, deforms.get(h))([wallX, seg.b, 0.09]);
+      signAnchors.push({ x, y, z, nx: e.nx, nz: e.nz, kind, name });
+    }
     const B = new Builder();
     B.quad([xa + 0.1, y0 + 0.04, 0.05], [xb - 0.1, y0 + 0.04, 0.05], [xb - 0.1, y1 - 0.04, 0.05], [xa + 0.1, y1 - 0.04, 0.05], [1, 1, 1], K.PAINT);
     B.transform(edgeFrame(e, seg, h.E, deforms.get(h)));
@@ -472,7 +485,7 @@ export function buildFacades(scene, look, plan, shopFronts) {
     for (const c of want) { if (built++ >= budget) break; buildChunk(c); }
     for (const c of list) if (c.near && (c.x - x) ** 2 + (c.z - z) ** 2 > FAR * FAR) dropChunk(c);
   }
-  return { update, stats: () => ({ houses: houses.length, chunks: list.length, near: list.filter((c) => c.near).length, baseTris: tris }) };
+  return { update, signAnchors, stats: () => ({ houses: houses.length, chunks: list.length, near: list.filter((c) => c.near).length, baseTris: tris }) };
 }
 
 // быстрые «плоские» нормали без поиска соседей — для фасадов из множества мелких граней
