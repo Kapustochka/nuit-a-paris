@@ -126,15 +126,15 @@ const bracketPath = (vertices, radius) => new THREE.TubeGeometry(
 
 /**
  * Парижские «enseigne drapeau» перпендикулярно настоящим витринам OSM.
- * Батчинг: до 5 материалов табличек + 5 инстансированных деталей кронштейна;
- * около 10 draw calls вместо сотен отдельных Mesh. Все высоты добавит liftToGround.
+ * Батчинг: до 5 материалов табличек + 6 инстансированных деталей кронштейна;
+ * до 11 draw calls. Высота уже учтена в точке крепления на фасаде.
  */
 export function addHangingShopSigns(scene, shopFronts) {
   if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('no-hanging-signs'))
     return { count: 0 };
 
   const shops = shopFronts.filter((s) => Number.isFinite(s.x) && Number.isFinite(s.z) &&
-    Number.isFinite(s.nx) && Number.isFinite(s.nz) && s.w >= 3).slice(0, 28);
+    Number.isFinite(s.y) && Number.isFinite(s.nx) && Number.isFinite(s.nz)).slice(0, 28);
   if (!shops.length) return { count: 0 };
 
   const iron = new THREE.MeshStandardMaterial({ color: '#30283d', metalness: 0.14, roughness: 0.84 });
@@ -152,9 +152,8 @@ export function addHangingShopSigns(scene, shopFronts) {
   const entries = shops.map((s) => {
     const normal = new THREE.Vector2(s.nx, s.nz).normalize();
     const nx = normal.x, nz = normal.y;
-    const shift = Math.min(1.8, s.w * 0.31);
-    const x = s.x + nz * shift, z = s.z - nx * shift;
-    const entry = { x, z, nx, nz, yaw: Math.atan2(nx, nz), kind: category(s) };
+    // These coordinates come from the same deformed OSM facade as the actual storefront.
+    const entry = { x: s.x, y: s.y, z: s.z, nx, nz, yaw: Math.atan2(nx, nz), kind: category(s) };
     byCategory.get(entry.kind).push(entry);
     return entry;
   });
@@ -167,6 +166,7 @@ export function addHangingShopSigns(scene, shopFronts) {
   };
   const push = (mesh, name) => {
     mesh.userData.word = name;
+    mesh.userData.noLift = true; // world elevation already includes slope
     mesh.instanceMatrix.needsUpdate = true;
     scene.add(mesh);
   };
@@ -180,7 +180,7 @@ export function addHangingShopSigns(scene, shopFronts) {
     for (const s of entriesOfKind) for (const side of [-1, 1]) {
       const tx = s.nz, tz = -s.nx;
       set(signs, i++, s.x + s.nx * 1.02 + tx * side * 0.015,
-        3.42, s.z + s.nz * 1.02 + tz * side * 0.015,
+        s.y + 2.94, s.z + s.nz * 1.02 + tz * side * 0.015,
         s.yaw + Math.PI / 2 + (side < 0 ? Math.PI : 0));
     }
     push(signs, 'sign');
@@ -188,16 +188,18 @@ export function addHangingShopSigns(scene, shopFronts) {
 
   // Один набор кованых деталей переиспользуется на всех лавках.
   const parts = [
-    [bracketPath([[0,4.12,0.04],[0,4.22,0.25],[0,4.20,0.80],[0,4.13,1.51]],0.035),iron],
-    [bracketPath([[0,3.75,0.02],[0,3.99,0.19],[0,4.21,0.58]],0.022),iron],
-    [bracketPath([[0,4.13,0.62],[0,3.91,0.62]],0.012),bronze],
-    [bracketPath([[0,4.13,1.42],[0,3.91,1.42]],0.012),bronze],
-    [new THREE.IcosahedronGeometry(0.085,0).translate(0,4.13,1.51),bronze],
+    // A plate anchored to the wall and a clear, curved support over the sign.
+    [new THREE.BoxGeometry(0.19, 0.52, 0.085).translate(0,3.40,0.055),iron],
+    [bracketPath([[0,3.63,0.04],[0,3.73,0.24],[0,3.69,0.85],[0,3.63,1.51]],0.035),iron],
+    [bracketPath([[0,3.16,0.04],[0,3.35,0.20],[0,3.69,0.64]],0.025),iron],
+    [bracketPath([[0,3.63,0.62],[0,3.45,0.62]],0.012),bronze],
+    [bracketPath([[0,3.63,1.42],[0,3.45,1.42]],0.012),bronze],
+    [new THREE.IcosahedronGeometry(0.085,0).translate(0,3.63,1.51),bronze],
   ];
   for (const [geometry, material] of parts) {
     const brackets = new THREE.InstancedMesh(geometry, material, entries.length);
     for (let i=0;i<entries.length;i++)
-      set(brackets, i, entries[i].x, 0, entries[i].z, entries[i].yaw);
+      set(brackets, i, entries[i].x, entries[i].y, entries[i].z, entries[i].yaw);
     push(brackets, 'sign');
   }
   return { count: entries.length };
