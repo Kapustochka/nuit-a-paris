@@ -2,12 +2,14 @@
 //   1) кадр рисуется в текстуру (в линейных цветах), отдельно — нормали и глубина без неба, спрайтов и прозрачного;
 //   2) фильтр Кувахары превращает пиксели в плоские мазки, сохраняя края;
 //   3) контуры по скачкам нормалей и глубины: толщина плавает, линия дрожит и местами рвётся;
-//   4) перевод в sRGB, зерно бумаги и виньетка.
+//   4) воздух (paint/air.js): дымка по высоте, конусы света под фонарями, сияние Сакре-Кёр;
+//   5) перевод в sRGB, зерно бумаги и виньетка.
 // Листва и всё с alphaTest-картой пишут в нормали чёрный «маркер» — обводится только силуэт кроны, а не каждый лист.
 import * as THREE from 'three';
 import { NOISE } from './paint.js';
+import { AIR_GLSL, airUniforms, MAX_SHAFTS } from './air.js';
 
-export function createPainter(renderer, { radius = 3, scale = 1, heroStyle = 1 } = {}) {
+export function createPainter(renderer, { radius = 3, scale = 1, heroStyle = 1, shafts = 8, shaftSteps = 8 } = {}) {
   const size = new THREE.Vector2(), cssSize = new THREE.Vector2();
   const colorRT = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: Math.min(4, renderer.capabilities.maxSamples) });
   const normalRT = new THREE.WebGLRenderTarget(1, 1, { depthTexture: new THREE.DepthTexture(1, 1) });
@@ -33,11 +35,12 @@ export function createPainter(renderer, { radius = 3, scale = 1, heroStyle = 1 }
   };
 
   const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({
-    defines: { RADIUS: radius },
+    defines: { RADIUS: radius, SHAFTS: Math.min(shafts, MAX_SHAFTS), SHAFT_STEPS: shaftSteps },
     uniforms: {
       tColor: { value: colorRT.texture }, tNormal: { value: normalRT.texture }, tDepth: { value: normalRT.depthTexture },
       uRes: { value: new THREE.Vector2() }, uNear: { value: 0.1 }, uFar: { value: 600 },
       uCssRes: { value: new THREE.Vector2(1, 1) }, uHeroLine: { value: 0.65 }, uHeroStyle: { value: heroStyle },
+      ...airUniforms(),
       uPaint: { value: 1 }, uEdges: { value: 1 }, uLine: { value: 1.4 }, uInk: { value: new THREE.Color(0.08, 0.06, 0.2) },
     },
     vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
@@ -46,6 +49,7 @@ export function createPainter(renderer, { radius = 3, scale = 1, heroStyle = 1 }
       varying vec2 vUv;
       ${NOISE}
       float lin(float d) { float z = d * 2.0 - 1.0; return 2.0 * uNear * uFar / (uFar + uNear - z * (uFar - uNear)); }
+      ${AIR_GLSL}
       vec3 srgb(vec3 c) { return pow(clamp(c, 0.0, 1.0), vec3(1.0 / 2.2)); }
       vec3 tap(vec2 uv) { return srgb(texture2D(tColor, uv).rgb); }
       vec3 kuwahara(vec2 uv, vec2 px) {
@@ -100,6 +104,7 @@ export function createPainter(renderer, { radius = 3, scale = 1, heroStyle = 1 }
         vec3 ink = mix(col * vec3(0.35, 0.3, 0.55), uInk, 0.5);
         ink = mix(ink, col * vec3(0.45, 0.43, 0.55), hero);
         col = mix(col, ink, e);
+        col = air(col, vUv, texture2D(tDepth, vUv).r, sp);
 
         float grain = hash(floor(sp)) * 0.05 + vnoise(sp / 2.5) * 0.04 + vnoise(vec2(sp.x / 70.0, sp.y / 5.0)) * 0.03;
         col *= mix(0.95 + grain, 1.0, real * uHeroStyle);
@@ -123,6 +128,9 @@ export function createPainter(renderer, { radius = 3, scale = 1, heroStyle = 1 }
   const skip = (m) => m.transparent || m.depthWrite === false || m.visible === false || m.blending === THREE.AdditiveBlending;
   function render(scene, camera) {
     U.uNear.value = camera.near; U.uFar.value = camera.far;
+    U.uProjInv.value.copy(camera.projectionMatrixInverse); U.uCamWorld.value.copy(camera.matrixWorld);
+    U.uTime.value = performance.now() / 1000 % 3600;
+    if (airSrc) U.uGroundY.value = airSrc.groundY;
     // нормали и глубина: без неба, спрайтов, огоньков и прозрачного; листва — «маркером»
     const mask = camera.layers.mask;
     camera.layers.set(0);
@@ -150,5 +158,9 @@ export function createPainter(renderer, { radius = 3, scale = 1, heroStyle = 1 }
   }
   function setRadius(r) { quad.material.defines.RADIUS = r; quad.material.needsUpdate = true; }
   function setScale(s) { curScale = s; setSize(); }
-  return { render, setSize, uniforms: U, setRadius, setScale, get radius() { return quad.material.defines.RADIUS; } };
+  // воздух: world.air даёт фонари для лучей, маяк-базилику и высоту земли под героиней
+  let airSrc = null;
+  function setAir(air) { airSrc = air; U.uShaftPos.value = air.shaftPos; U.uBeacon.value = air.beacon; }
+  function setShafts(n, steps = n) { quad.material.defines.SHAFTS = Math.min(n, MAX_SHAFTS); quad.material.defines.SHAFT_STEPS = steps; quad.material.needsUpdate = true; }
+  return { render, setSize, uniforms: U, setRadius, setScale, setAir, setShafts, get shafts() { return quad.material.defines.SHAFTS; }, get radius() { return quad.material.defines.RADIUS; } };
 }

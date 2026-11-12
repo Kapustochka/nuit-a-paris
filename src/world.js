@@ -10,6 +10,7 @@ import { createTerrain, groundGeometry, liftToGround } from './terrain.js';
 import { buildStairs } from './stairs.js';
 import { buildViewpoint, buildCityBelow } from './viewpoint.js';
 import { createLook, groundMaterial, paintMaterial, paintObject, MAX_LIGHTS } from './paint/paint.js';
+import { MAX_SHAFTS } from './paint/air.js';
 import { planFacades, buildFacades } from './paint/facades.js';
 import { Builder, K } from './paint/builder.js';
 import { foliage, leafTexture, basilicaMesh } from './paint/props.js';
@@ -200,8 +201,17 @@ export function buildParis(scene, renderer, data, city, props = {}) {
   // Тёплые блики на мокрой мостовой: в шейдер идут ближайшие к камере фонари
   let tick = 0;
   const lampOrder = lampLights.map((p) => ({ p, d: 0 }));
+  // Воздух для пост-прохода (paint/air.js): ближайшие фонари дают лучи, базилика светит сквозь дымку
+  const air = {
+    shaftPos: Array.from({ length: MAX_SHAFTS }, () => new THREE.Vector4(0, -100, 0, 0)),
+    beacon: new THREE.Vector4(SACRE[0], standAt(SACRE[0], SACRE[1]) + 46, SACRE[1], 0.5),
+    groundY: 0, started: false,
+  };
   function update(dt, hx, hz, camera) {
     sky.update(dt);
+    const gy = standAt(hx, hz);
+    air.groundY = air.started ? air.groundY + (gy - air.groundY) * (1 - Math.exp(-dt * 2)) : gy;
+    air.started = true;
     facades.update(camera.position.x, camera.position.z);
     if (hero) {
       const h = hero.position, [, moon, fill, lamp] = heroLights;
@@ -220,6 +230,14 @@ export function buildParis(scene, renderer, data, city, props = {}) {
         if (!l) { look.uLightCol.value[i].setRGB(0, 0, 0); continue; }
         look.uLightPos.value[i].set(l.p.x, l.p.y, l.p.z, 10.5);
         look.uLightCol.value[i].setRGB(1.0, 0.64, 0.3, THREE.LinearSRGBColorSpace);
+      }
+      // лучи гаснут к расстоянию первого фонаря, который в список не попал, — без скачков при ходьбе
+      const reach = Math.min(55, Math.sqrt(lampOrder[MAX_SHAFTS]?.d ?? Infinity));
+      for (let i = 0; i < MAX_SHAFTS; i++) {
+        const l = lampOrder[i];
+        if (!l) { air.shaftPos[i].w = 0; continue; }
+        const k = Math.min(1, Math.max(0, (reach - Math.sqrt(l.d)) / (reach * 0.3)));
+        air.shaftPos[i].set(l.p.x, l.p.y, l.p.z, k * k * (3 - 2 * k));
       }
     }
   }
@@ -241,7 +259,7 @@ export function buildParis(scene, renderer, data, city, props = {}) {
   }
 
   return {
-    blocked, inside, streetAt, freeSpot, update, sky, night, look, paint, facades, lightHeroine, heightAt: (x, z) => standAt(x, z),
+    blocked, inside, streetAt, freeSpot, update, sky, night, look, air, paint, facades, lightHeroine, heightAt: (x, z) => standAt(x, z),
     soundSpots: shopFronts.filter((s) => ['cafe', 'restaurant', 'bar', 'pub'].includes(s.kind)),
     stats: { stairs: stairs.count, buildings: polys.length, lamps: lamps.length, detailedLamps, benches: benches.length, pigeons, ...streetLife },
   };
