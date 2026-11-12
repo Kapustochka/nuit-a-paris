@@ -81,8 +81,8 @@ export function createCityAudio(cafes = [], square = { x: 0, z: 0 }) {
       const stride = distance / Math.max(dt, 0.001) > 2.5 ? 0.95 : 0.65;
       if (walked >= stride) {
         walked %= stride; steps++;
-        burst(0.28, 850 + Math.random() * 500, 0.085, steps % 2 ? -0.13 : 0.13);
-        tone(125 + Math.random() * 30, 0.12, 0.07, 0);
+        burst(0.14, 850 + Math.random() * 500, 0.085, steps % 2 ? -0.13 : 0.13);
+        tone(125 + Math.random() * 30, 0.06, 0.07, 0);
       }
     } else walked = 0;
 
