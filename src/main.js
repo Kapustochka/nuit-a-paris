@@ -15,6 +15,7 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 
 const loading = document.getElementById('loading');
 const streetEl = document.getElementById('street');
@@ -32,6 +33,24 @@ document.getElementById('app').appendChild(renderer.domElement);
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(58, innerWidth / innerHeight, 0.1, 4000);
 
+// Цветокоррекция ночи (до тонмаппинга): тени уходят в синеву, свет фонарей теплее, края кадра темнее
+const NIGHT_GRADE = {
+  uniforms: { tDiffuse: { value: null } },
+  vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+  fragmentShader: `
+    uniform sampler2D tDiffuse; varying vec2 vUv;
+    void main() {
+      vec4 c = texture2D(tDiffuse, vUv);
+      float l = dot(c.rgb, vec3(0.2126, 0.7152, 0.0722));
+      vec3 cool = vec3(0.86, 0.92, 1.12), warm = vec3(1.08, 0.98, 0.86);
+      c.rgb *= mix(cool, warm, smoothstep(0.05, 0.6, l));
+      c.rgb = mix(vec3(l), c.rgb, 1.08);                                  // чуть сочнее
+      vec2 d = vUv - 0.5;
+      c.rgb *= 1.0 - smoothstep(0.35, 0.95, length(d * vec2(1.1, 1.0))) * 0.55;
+      gl_FragColor = c;
+    }`,
+};
+
 // Мягкое свечение фонарей и окон (bloom). На слабом телефоне отключается само.
 const noBloom = new URLSearchParams(location.search).has('nobloom');
 let composer = null;
@@ -44,7 +63,8 @@ if (!noBloom) {
   composer = new EffectComposer(renderer, target);
   composer.setSize(innerWidth, innerHeight);
   composer.addPass(new RenderPass(scene, camera));
-  composer.addPass(new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.32, 0.65, 0.85));
+  composer.addPass(new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.36, 0.6, 0.82));
+  composer.addPass(new ShaderPass(NIGHT_GRADE));
   composer.addPass(new OutputPass());
 }
 let slowFrames = 0, frames = 0;
