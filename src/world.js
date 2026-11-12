@@ -13,6 +13,7 @@ import { createLook, groundMaterial, paintMaterial, paintObject, MAX_LIGHTS } fr
 import { planFacades, buildFacades } from './paint/facades.js';
 import { Builder, K } from './paint/builder.js';
 import { foliage, leafTexture, basilicaMesh } from './paint/props.js';
+import { addHangingShopSigns } from './paint/shop-signs.js';
 
 const CELL = 24;              // ячейка сетки для столкновений
 
@@ -144,6 +145,8 @@ export function buildParis(scene, renderer, data, city, props = {}) {
   for (const s of shopFronts) night.shopSpill(s.x, s.z, s.nx, s.nz, s.w);
   night.done();
   const facades = buildFacades(scene, look, plan, shopFronts);
+  // Перпендикулярные кованые вывески только у реальных лавок. Вне коллизий и генератора домов.
+  const hangingSigns = addHangingShopSigns(scene, shopFronts).count;
   if (props['chair-rattan']) solids.push(...terraces);     // за столики со стульями не заходим
 
   // ── Мелочи улицы из моделей Meshy ──────────────────────────
@@ -237,7 +240,7 @@ export function buildParis(scene, renderer, data, city, props = {}) {
 
   return {
     blocked, inside, streetAt, freeSpot, update, sky, night, look, paint, facades, lightHeroine, heightAt: (x, z) => standAt(x, z),
-    stats: { stairs: stairs.count, buildings: polys.length, lamps: lamps.length, detailedLamps, benches: benches.length, pigeons, ...streetLife },
+    stats: { stairs: stairs.count, buildings: polys.length, lamps: lamps.length, detailedLamps, benches: benches.length, pigeons, hangingSigns, ...streetLife },
   };
 }
 
@@ -415,7 +418,7 @@ function buildShops(scene, pois, polys, inside, rnd, props = {}, propRandom = rn
         terraces.push({ x, z, cos: Math.cos(turn), sin: Math.sin(turn), halfWidth: 0.85, halfDepth: 0.35 });
       }
     }
-    shopFronts.push({ x: s.x, z: s.z, w, nx: s.nx, nz: s.nz, name: s.name });
+    shopFronts.push({ x: s.x, z: s.z, w, nx: s.nx, nz: s.nz, name: s.name, kind: s.kind });
     // ящик с яблоками у булочной и у каждой третьей лавки
     if (s === bakery || i % 3 === 1) {
       const off = w / 2 + 0.95;
