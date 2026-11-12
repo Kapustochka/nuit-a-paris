@@ -27,7 +27,14 @@ export function createFallingStars(scene, camera, world, inspector) {
   }
   const geometry = new THREE.ExtrudeGeometry(outline, { depth: 0.05, bevelEnabled: true, bevelSize: 0.02, bevelThickness: 0.025, bevelSegments: 2 });
   geometry.center();
-  const bodyMaterial = new THREE.MeshBasicMaterial({ color: new THREE.Color(2.1, 1.3, 0.34), fog: false, transparent: true });
+  // Цвет звезды говорит, что внутри: золотая — слово или фраза, голубая — история.
+  // Как в рисованном мире вокруг: пастельное тело, обводка тушью и мягкий ореол.
+  const PALETTES = {
+    gold: { body: new THREE.Color(1.75, 1.18, 0.42), glow: new THREE.Color(0xffc468) },
+    blue: { body: new THREE.Color(0.62, 0.92, 2.0), glow: new THREE.Color(0x8ab8ff) },
+  };
+  const bodyMaterial = new THREE.MeshBasicMaterial({ color: PALETTES.gold.body.clone(), fog: false, transparent: true });
+  const inkMaterial = new THREE.MeshBasicMaterial({ color: 0x1c1440, side: THREE.BackSide, fog: false, transparent: true });
   const glowTexture = makeGlow();
   const glowMaterial = (opacity) => new THREE.SpriteMaterial({ map: glowTexture, color: 0xffc468, opacity,
     blending: THREE.AdditiveBlending, depthWrite: false, fog: false });
@@ -35,6 +42,9 @@ export function createFallingStars(scene, camera, world, inspector) {
   const group = new THREE.Group();
   group.visible = false;
   const body = new THREE.Mesh(geometry, bodyMaterial);
+  const ink = new THREE.Mesh(geometry, inkMaterial);
+  ink.scale.set(1.22, 1.22, 1.6);
+  body.add(ink);
   const halo = new THREE.Sprite(glowMaterial(0.85));
   const hit = new THREE.Mesh(new THREE.SphereGeometry(0.6, 12, 8), new THREE.MeshBasicMaterial({ visible: false }));
   group.add(body, halo, hit);
@@ -51,7 +61,13 @@ export function createFallingStars(scene, camera, world, inspector) {
   const from = new THREE.Vector3(), to = new THREE.Vector3(), probe = new THREE.Sphere(new THREE.Vector3(), 0.3);
   let state = 'none';        // none → falling → resting → opened → none
   let key = null, time = 0, walked = STEPS_BETWEEN - FIRST_AFTER, unseen = 0, lost = false;
-  let lastX = null, lastZ = null;
+  let lastX = null, lastZ = null, enabled = true;
+  const kindOf = (k) => Object.keys(starKeys).find((kind) => starKeys[kind].includes(k)) || 'word';
+  function tint(name) {
+    const p = PALETTES[name];
+    bodyMaterial.color.copy(p.body);
+    for (const m of [halo.material, ground.material, ...tail.map((t) => t.material)]) m.color.copy(p.glow);
+  }
 
   hit.userData.onInspect = (x, y) => {
     if (state !== 'resting' && state !== 'falling') return;
@@ -93,6 +109,7 @@ export function createFallingStars(scene, camera, world, inspector) {
     if (!spot) return false;
     if (state !== 'none') inspector.removeTarget(hit);
     key = pick();
+    tint(kindOf(key) === 'story' ? 'blue' : 'gold');
     const groundY = world.heightAt?.(spot[0], spot[1]) ?? 0;
     to.set(spot[0], groundY + HOVER, spot[1]);
     // Летит издалека навстречу героине: так весь след виден в небе над улицей.
@@ -101,7 +118,7 @@ export function createFallingStars(scene, camera, world, inspector) {
     group.position.copy(from);
     group.scale.setScalar(1);
     group.visible = true;
-    bodyMaterial.opacity = 1;
+    bodyMaterial.opacity = inkMaterial.opacity = 1;
     halo.material.opacity = 0.85;
     ground.position.set(to.x, groundY + 0.03, to.z);
     ground.visible = true;
@@ -121,6 +138,7 @@ export function createFallingStars(scene, camera, world, inspector) {
   }
 
   function update(dt, px, pz, facing) {
+    if (!enabled) { lastX = px; lastZ = pz; return; }
     if (lastX !== null) walked += Math.min(1, Math.hypot(px - lastX, pz - lastZ));
     lastX = px; lastZ = pz;
     time += dt;
@@ -163,7 +181,7 @@ export function createFallingStars(scene, camera, world, inspector) {
       const k = Math.min(1, time / 0.45);
       group.scale.setScalar(1 + k * 1.6);
       group.position.y += dt * 1.8;
-      bodyMaterial.opacity = 1 - k;
+      bodyMaterial.opacity = inkMaterial.opacity = 1 - k;
       halo.material.opacity = 0.9 * (1 - k);
       ground.material.opacity = 0.4 * (1 - k);
       if (k >= 1) hide();
@@ -174,8 +192,19 @@ export function createFallingStars(scene, camera, world, inspector) {
     }
   }
 
+  // Звёзды можно выключить: тогда новая не падает, а текущая тихо исчезает
+  function setEnabled(on) {
+    enabled = on;
+    if (!on && state !== 'none') {
+      if (state !== 'opened') inspector.removeTarget(hit);
+      hide();
+    }
+    if (on) walked = Math.max(walked, STEPS_BETWEEN - FIRST_AFTER);
+  }
+
   return {
-    update,
+    update, setEnabled,
+    get enabled() { return enabled; },
     get state() { return state; },
     get key() { return key; },
     get position() { return group.position; },
