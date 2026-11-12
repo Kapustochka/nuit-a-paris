@@ -229,8 +229,13 @@ export function buildParis(scene, renderer, data, city, props = {}) {
   let hero = null;
   const heroLights = [new THREE.HemisphereLight(0x9aa0d8, 0x4a4256, 1.15), new THREE.DirectionalLight(0xb8c0ff, 0.7),
     new THREE.PointLight(0xffddae, 3.2, 7, 1.4), new THREE.PointLight(0xffb066, 0, 14, 1.6)];
-  function lightHeroine(root) {
+  function lightHeroine(root, { clarity = false } = {}) {
     hero = root;
+    if (clarity) {
+      heroLights[0].color.set(0xaeb4dc); heroLights[0].intensity = 1.2;
+      heroLights[1].color.set(0xc6cfff); heroLights[1].intensity = 0.8;
+      heroLights[2].color.set(0xffe8ca); heroLights[2].intensity = 4.0;
+    }
     heroLights[1].position.copy(sky.moonDirection).multiplyScalar(30);
     for (const l of heroLights) scene.add(l);
   }

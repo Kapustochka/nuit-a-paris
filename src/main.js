@@ -31,7 +31,8 @@ const camera = new THREE.PerspectiveCamera(58, innerWidth / innerHeight, 0.1, 40
 // Кадр как нарисованный: мазки (фильтр Кувахары), контуры тушью, зерно бумаги (paint/post.js).
 // С ?plain — обычный кадр без живописи, для сравнения и для очень слабых устройств.
 const plainView = new URLSearchParams(location.search).has('plain');
-let painter = plainView ? null : createPainter(renderer, { radius: phone ? 2 : 3 });
+const originalHero = new URLSearchParams(location.search).has('original-hero');
+let painter = plainView ? null : createPainter(renderer, { radius: phone ? 2 : 3, heroStyle: originalHero ? 0 : 1 });
 painter?.setSize();
 let slowFrames = 0, frames = 0;
 
@@ -69,7 +70,7 @@ const circularPasserby = placeCircularPasserby(scene, circleAsset, world, player
 const passersby = [walkingPasserby, circularPasserby].filter(Boolean);
 // Героиня чуть реалистичнее мира вокруг: обычный свет вместо живописного и без мазков (только тонкий контур)
 heroine.root.traverse((o) => { o.userData.noPaint = true; o.userData.realistic = true; });
-world.lightHeroine(heroine.root);
+world.lightHeroine(heroine.root, { clarity: !originalHero });
 world.paint(scene);                 // прохожие и всё остальное — в живописный свет
 const blocked = (x, z) => world.blocked(x, z) || passersby.some((actor) => passerbyBlocksStep(actor, player, x, z));
 const cityAudio = createCityAudio(world.soundSpots);
@@ -207,6 +208,7 @@ async function addDebugPanel() {
     art.add(painter.uniforms.uPaint, 'value', 0, 1, 1).name('мазки');
     art.add(painter.uniforms.uEdges, 'value', 0, 1, 0.05).name('контуры');
     art.add(painter.uniforms.uLine, 'value', 0.5, 3, 0.05).name('толщина линии');
+    art.add(painter.uniforms.uHeroLine, 'value', 0.3, 1.2, 0.05).name('контур героини');
   }
   const arms = gui.addFolder('Руки к телу (°)');
   for (const k of ['idle', 'walk', 'run']) arms.add(TUNING.armIn, k, -20, 30, 0.5);
