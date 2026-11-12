@@ -70,69 +70,88 @@ function figureGeometry(rnd) {
     g.setAttribute('skinWeight', new THREE.BufferAttribute(sw, 4));
     parts.push(g.index ? g.toNonIndexed() : g);
   }
-  const blob = ([x, y, z], [rx, ry, rz], w = 9, h = 7) => new THREE.SphereGeometry(1, w, h).scale(rx, ry, rz).translate(x, y, z);
+  const blob = ([x, y, z], [rx, ry, rz], w = 14, h = 10) => new THREE.SphereGeometry(1, w, h).scale(rx, ry, rz).translate(x, y, z);
   // конус между двумя точками
-  const limb = (a, b, r0, r1, seg = 7) => {
+  const limb = (a, b, r0, r1, seg = 12) => {
     const A = new THREE.Vector3(...a), Bv = new THREE.Vector3(...b), d = Bv.clone().sub(A), len = d.length();
-    const g = new THREE.CylinderGeometry(r1, r0, len, seg, 1, false);
+    const g = new THREE.CylinderGeometry(r1, r0, len, seg, 3, true);
+    // чуть «мышечный» профиль: середина толще концов, а не ровный цилиндр
+    const pos = g.attributes.position;
+    for (let i = 0; i < pos.count; i++) {
+      const t = pos.getY(i) / len + 0.5, k = 1 + Math.sin(t * Math.PI) * 0.12;
+      pos.setX(i, pos.getX(i) * k); pos.setZ(i, pos.getZ(i) * k);
+    }
+    g.computeVertexNormals();
     g.translate(0, len / 2, 0);
     g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize()));
     return g.translate(...a);
   };
   // «колокол» по профилю [радиус, высота] снизу вверх, сплющенный спереди-назад
-  const bell = (profile, depth = 0.72, seg = 12) => new THREE.LatheGeometry(profile.map(([r, y]) => new THREE.Vector2(r, y)), seg).scale(1, 1, depth);
+  const bell = (profile, depth = 0.72, seg = 20) => new THREE.LatheGeometry(profile.map(([r, y]) => new THREE.Vector2(r, y)), seg).scale(1, 1, depth);
 
   const skin = pick(SKIN), hair = pick(HAIR), shoes = pick(SHOES);
   const coat = pick(COATS), legs = pick(TROUSERS), accent = pick(ACCENTS);
   const outfit = woman ? pick(['coat', 'coat', 'dress', 'jacket']) : pick(['coat', 'coat', 'jacket', 'jacket']);
 
-  // ноги и обувь
+  // ноги и обувь; шарики в коленях скругляют сгиб
   for (const [side, x] of [['L', 0.095], ['R', -0.095]]) {
     const legColor = outfit === 'dress' ? 0x241c26 : legs;
-    add(limb([x, 0.95, 0], [x, 0.47, 0.005], woman ? 0.068 : 0.078, woman ? 0.05 : 0.058), legColor, B['thigh' + side]);
-    add(limb([x, 0.53, 0.005], [x, 0.07, 0], woman ? 0.05 : 0.058, woman ? 0.036 : 0.045), legColor, B['shin' + side]);
-    add(blob([x, 0.045, 0.035], [0.048, 0.04, woman ? 0.1 : 0.115]), shoes, B['shin' + side]);
+    const knee = woman ? 0.05 : 0.058;
+    add(limb([x, 0.97, 0], [x, 0.5, 0.005], woman ? 0.072 : 0.078, knee), legColor, B['thigh' + side]);
+    add(blob([x, 0.5, 0.008], [knee, knee * 1.1, knee]), legColor, B['shin' + side]);
+    add(limb([x, 0.5, 0.005], [x, 0.08, -0.005], knee * 0.98, woman ? 0.032 : 0.042), legColor, B['shin' + side]);
+    add(blob([x, 0.05, 0.035], [0.046, 0.042, woman ? 0.1 : 0.115]), shoes, B['shin' + side]);
   }
-  // туловище: внизу на тазу, вверху на позвоночнике, между ними плавно
+  // туловище: внизу на тазу, вверху на позвоночнике, между ними плавно; покатые плечи
   const torsoWeight = (x, y) => [B.hips, B.spine, THREE.MathUtils.smoothstep(y, 0.98, 1.14)];
   const top = outfit === 'jacket' ? accent : coat;
-  const chest = woman ? 0.16 : 0.18, shoulders = woman ? 0.175 : 0.2;
-  add(bell([[0.001, 0.86], [woman ? 0.17 : 0.16, 0.87], [woman ? 0.14 : 0.155, 1.02], [chest, 1.22], [shoulders, 1.38], [0.13, 1.45], [0.05, 1.47]], 0.68), outfit === 'jacket' ? coat : top, 0, torsoWeight);
+  const hip = woman ? 0.175 : 0.16, waist = woman ? 0.13 : 0.15, chest = woman ? 0.16 : 0.18, sh = woman ? 0.17 : 0.195;
+  add(bell([[0.001, 0.84], [hip * 0.8, 0.85], [hip, 0.9], [hip * 0.97, 0.97], [waist, 1.06], [chest * 0.97, 1.18], [chest, 1.26],
+    [sh, 1.34], [sh * 0.93, 1.39], [sh * 0.72, 1.43], [0.07, 1.46], [0.045, 1.47]], woman ? 0.66 : 0.62), outfit === 'jacket' ? coat : top, 0, torsoWeight);
+  // воротник
+  add(new THREE.TorusGeometry(0.058, 0.022, 8, 18).rotateX(Math.PI / 2).translate(0, 1.445, 0.0), outfit === 'jacket' ? coat : top, B.spine);
   // полы пальто или юбка: низ качается вместе с бедром своей стороны
   const hem = outfit === 'coat' ? (woman ? 0.5 : 0.56) : outfit === 'dress' ? 0.6 : 0;
   if (hem) {
-    const flare = outfit === 'dress' ? 0.27 : 0.23;
-    add(bell([[flare, hem], [flare - 0.03, hem + 0.12], [0.18, 0.9], [0.16, 1.0]], 0.75, 14), outfit === 'dress' ? accent : coat, 0, (x, y) => {
-      const t = THREE.MathUtils.clamp((0.95 - y) / 0.45, 0, 1), s = Math.min(1, Math.abs(x) / 0.1);
-      return [B.hips, x > 0 ? B.thighL : B.thighR, t * s * 0.6];
-    });
+    const flare = outfit === 'dress' ? 0.26 : 0.22;
+    add(bell([[flare, hem], [flare - 0.005, hem + 0.04], [flare - 0.03, hem + 0.15], [hip + 0.02, 0.85], [hip + 0.01, 0.92], [waist + 0.01, 1.02]], 0.74, 22),
+      outfit === 'dress' ? accent : coat, 0, (x, y) => {
+        const t = THREE.MathUtils.clamp((0.95 - y) / 0.45, 0, 1), s = Math.min(1, Math.abs(x) / 0.1);
+        return [B.hips, x > 0 ? B.thighL : B.thighR, t * s * 0.6];
+      });
   }
-  // руки: рукав, предплечье, кисть
+  // руки: плечо-шарик, рукав, локоть, предплечье, кисть
   for (const [side, sx] of [['L', 1], ['R', -1]]) {
-    add(limb(J['arm' + side], [0.215 * sx, 1.12, -0.02], 0.058, 0.05), coat, B['arm' + side]);
-    add(limb([0.215 * sx, 1.16, -0.02], [0.22 * sx, 0.9, 0.0], 0.048, 0.042), coat, B['fore' + side]);
-    add(blob([0.222 * sx, 0.855, 0.005], [0.03, 0.05, 0.038], 7, 5), skin, B['fore' + side]);
+    const [ax, ay, az] = J['arm' + side];
+    add(blob([ax - 0.012 * sx, ay - 0.005, az], [0.062, 0.06, 0.062]), coat, B['arm' + side]);
+    add(limb([ax, ay, az], [0.212 * sx, 1.14, -0.02], 0.056, 0.046), coat, B['arm' + side]);
+    add(blob([0.213 * sx, 1.14, -0.02], [0.045, 0.047, 0.045]), coat, B['fore' + side]);
+    add(limb([0.213 * sx, 1.14, -0.02], [0.22 * sx, 0.91, 0.0], 0.045, 0.04), coat, B['fore' + side]);
+    add(blob([0.221 * sx, 0.86, 0.008], [0.028, 0.052, 0.04], 10, 8), skin, B['fore' + side]);
   }
-  // шея, голова, волосы
-  add(limb([0, 1.43, 0], [0, 1.55, 0.005], 0.045, 0.042), skin, B.head);
-  add(blob([0, 1.6, 0.01], [0.092, 0.112, 0.1], 10, 8), skin, B.head);
-  add(blob([0, 1.645, -0.03], [0.1, 0.1, 0.098], 10, 8), hair, B.head);
+  // шея, голова (с подбородком и носом), волосы
+  add(limb([0, 1.42, -0.005], [0, 1.56, 0.0], 0.043, 0.04), skin, B.head);
+  add(blob([0, 1.605, 0.008], [0.088, 0.108, 0.098], 18, 14), skin, B.head);
+  add(blob([0, 1.545, 0.04], [0.052, 0.04, 0.06], 12, 8), skin, B.head);          // подбородок и щёки
+  add(blob([0, 1.6, 0.104], [0.013, 0.024, 0.02], 8, 6), skin, B.head);           // нос
+  add(blob([0, 1.648, -0.028], [0.098, 0.098, 0.098], 18, 14), hair, B.head);
   if (woman) {
+    add(blob([0, 1.665, 0.055], [0.085, 0.035, 0.05], 12, 8), hair, B.head);      // чёлка
     const style = rnd();
-    if (style < 0.45) add(blob([0, 1.5, -0.06], [0.1, 0.17, 0.065]), hair, B.head);           // длинные
-    else if (style < 0.75) add(blob([0, 1.66, -0.1], [0.05, 0.05, 0.05], 7, 5), hair, B.head); // пучок
+    if (style < 0.45) add(blob([0, 1.5, -0.055], [0.098, 0.17, 0.062], 14, 12), hair, B.head);  // длинные
+    else if (style < 0.75) add(blob([0, 1.665, -0.105], [0.05, 0.05, 0.05], 10, 8), hair, B.head); // пучок
   }
   // шарф
   if (rnd() < 0.6) {
-    add(new THREE.TorusGeometry(0.075, 0.032, 6, 12).rotateX(Math.PI / 2).scale(1, 1, 0.9).translate(0, 1.45, 0.005), accent === top ? pick(ACCENTS) : accent, B.spine);
-    add(new THREE.BoxGeometry(0.06, 0.24, 0.025).translate(0.045, 1.33, 0.115), accent === top ? pick(ACCENTS) : accent, B.spine);
+    add(new THREE.TorusGeometry(0.07, 0.03, 8, 18).rotateX(Math.PI / 2).scale(1, 1, 0.9).translate(0, 1.45, 0.005), accent === top ? pick(ACCENTS) : accent, B.spine);
+    add(new THREE.BoxGeometry(0.06, 0.24, 0.022).translate(0.045, 1.32, 0.11), accent === top ? pick(ACCENTS) : accent, B.spine);
   }
   // головной убор
   const hat = rnd();
   if (woman && hat < 0.3) add(blob([0.02, 1.705, -0.01], [0.115, 0.035, 0.115]).rotateZ(-0.15), pick([0x7b2230, 0x1f1d24, 0x2c3a5a, accent]), B.head);
   else if (!woman && hat < 0.22) {
-    add(new THREE.CylinderGeometry(0.085, 0.095, 0.08, 10).translate(0, 1.73, -0.005), 0x23212a, B.head);
-    add(new THREE.CylinderGeometry(0.15, 0.15, 0.012, 12).translate(0, 1.69, -0.005), 0x23212a, B.head);
+    add(new THREE.CylinderGeometry(0.085, 0.095, 0.08, 16).translate(0, 1.73, -0.005), 0x23212a, B.head);
+    add(new THREE.CylinderGeometry(0.15, 0.15, 0.012, 18).translate(0, 1.69, -0.005), 0x23212a, B.head);
   } else if (!woman && hat < 0.4) add(blob([0, 1.69, 0.02], [0.105, 0.04, 0.12]), pick([0x3a3d48, 0x5a4a3a]), B.head);   // кепка
   // что несут
   const carry = rnd();
