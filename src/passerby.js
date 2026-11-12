@@ -25,9 +25,9 @@ export async function loadPasserby(file, clip) {
   }
 }
 
-export function placePasserby(scene, asset, world, player, occupied) {
+// anchor — район, где прохожая гуляет (в пределах 16 м от него)
+export function placePasserby(scene, asset, world, player, occupied, [anchorX, anchorZ] = [player.x - 2.7, player.z - 6]) {
   if (!asset) return null;
-  const anchorX = player.x - 2.7, anchorZ = player.z - 6;
   const [x, z] = world.freeSpot(anchorX, anchorZ);
   const root = new THREE.Group();
   root.name = 'Passante';
@@ -92,7 +92,7 @@ export function placePasserby(scene, asset, world, player, occupied) {
   return { update, position };
 }
 
-export function placeCircularPasserby(scene, asset, world, player, occupied) {
+export function placeCircularPasserby(scene, asset, world, player, occupied, anchor = [player.x, player.z]) {
   if (!asset) return null;
   const { model, mixer, duration } = asset;
   const hips = model.getObjectByName('mixamorigHips');
@@ -104,8 +104,9 @@ export function placeCircularPasserby(scene, asset, world, player, occupied) {
     return hips.getWorldPosition(new THREE.Vector3());
   });
   const center = new THREE.Box3().setFromPoints(path).getCenter(new THREE.Vector3());
-  const candidates = [[4, -10], [2, -7], [-2, -9], [5, -12]];
-  const start = candidates.map(([x, z]) => [player.x + x - center.x, player.z + z - center.z])
+  const [ax, az] = world.freeSpot(anchor[0], anchor[1]);
+  const candidates = [[0, 0], [3, 0], [-3, 0], [0, 3], [0, -3], [4, -10], [2, -7], [-2, -9], [5, -12]];
+  const start = candidates.map(([x, z]) => [ax + x - center.x, az + z - center.z])
     .find(([x, z]) => path.every((point) => {
       const px = x + point.x, pz = z + point.z;
       return [[0, 0], [RADIUS, 0], [-RADIUS, 0], [0, RADIUS], [0, -RADIUS]]

@@ -37,14 +37,13 @@ The “Ночное небо” (Night sky) section controls cloud density, star
   - `facades.js` — houses on the real OSM footprints: window niches, shutters, balconies, shopfronts with awnings and signs, mansards with dormers and chimneys, stepped on the slope; detailed blocks are built around the heroine as she walks
   - `post.js` — brush strokes (Kuwahara filter), wobbly ink outlines and paper grain over the frame; `?plain` turns it off
   - `builder.js`, `props.js` — geometry helpers, foliage, railings, signs, the painted Sacré-Cœur
-- `assets/city/` — the old facade cards baked from Meshy models (no longer loaded)
 - `src/night-sky.js` — procedural night sky
 - `src/night-light.js` — one light map for the whole city: lamp light pools, sidewalks and shade at the foot of walls
 - `src/terrain.js`, `assets/terrain.json` — the real slopes of the Montmartre hill (4 m height grid), built by `scripts/build-terrain.py`
 - `src/stairs.js` — stone stairs with iron railings on every `highway=steps` street from OpenStreetMap (Rue Foyatier and others), fitted to the slope
 - `src/viewpoint.js` — the balustrade and telescopes in front of Sacré-Cœur, city lights at the foot of the hill and the mist above them
 - `assets/street/` — lightweight in-game copies of Meshy street models
-- `assets/people/` — lightweight copies of passer-by models
+- `assets/people/` — the two walking passers-by (`sporty-walking.glb` near Place du Tertre, `athletic-walk-in-circle.glb` on the terrace in front of Sacré-Cœur), driven by `src/passerby.js`; they may become alternative heroines later
 - `assets/voice/` — French voice-over for word cards, [voice source and build](assets/voice/README.md)
 - `src/falling-star.js` — the falling star; its color tells what is inside: yellow for a word, green for a phrase, blue for a story, rare violet for a song. The dictionary lives in `src/star-words.js`, the songs in `src/star-songs.js` (traditional French nursery songs, public domain, played as a music box). Voice clips are in `assets/voice/star/`. Add `?star=song` (or `word`, `phrase`, `story`) to the URL to make only that kind of star fall.
 - `src/street-props.js` — loading and placing street models

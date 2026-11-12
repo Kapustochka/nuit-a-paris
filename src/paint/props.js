@@ -1,8 +1,6 @@
-// props.js — всё, что вокруг домов: мостовая на склоне, фонари, дерево и цветы «мазками»,
-// кованые перила, вывески, нарисованное небо и силуэт Сакре-Кёр в дымке.
+// props.js — то, что рисуется вокруг домов: листва «мазками», кованые перила, вывески и Сакре-Кёр.
 import * as THREE from 'three';
 import { Builder, K, mulberry } from './builder.js';
-import { NOISE } from './paint.js';
 
 const canvas = (w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return [c, c.getContext('2d')]; };
 const tex = (c, repeat = false) => {
@@ -90,141 +88,10 @@ export function foliage(clusters, color, seed = 1) {
   return g;
 }
 
-// Мостовая на склоне: проезжая часть, тротуары с бордюром
-export function street(slope, x0, x1, half = 3.0, walk = 1.6) {
-  const B = new Builder(), y = (x) => x * slope, cobble = [0.62, 0.6, 0.66], paving = [0.78, 0.74, 0.72], curb = [0.84, 0.8, 0.76];
-  for (let x = x0; x < x1; x += 1.5) {
-    const xa = x, xb = Math.min(x + 1.5, x1);
-    for (let z = -half; z < half; z += 1.5) {
-      const za = z, zb = Math.min(z + 1.5, half);
-      B.quad([xa, y(xa), zb], [xb, y(xb), zb], [xb, y(xb), za], [xa, y(xa), za], cobble, K.COBBLE);
-    }
-    for (const s of [-1, 1]) {
-      const zi = s * half, zo = s * (half + walk), hgt = 0.15;
-      B.quad([xa, y(xa) + hgt, zo], [xb, y(xb) + hgt, zo], [xb, y(xb) + hgt, zi], [xa, y(xa) + hgt, zi], paving, K.PAVING);
-      B.quad([xa, y(xa), zi], [xb, y(xb), zi], [xb, y(xb) + hgt, zi], [xa, y(xa) + hgt, zi], curb, K.TRIM);
-      B.quad([xa, y(xa) + hgt, zo], [xb, y(xb) + hgt, zo], [xb, y(xb) - 2, zo], [xa, y(xa) - 2, zo], paving, K.TRIM);
-    }
-  }
-  return B;
-}
 
-// Парижский фонарь: точёный столб и четырёхгранный фонарь
-export function lamp(B, x, y, z) {
-  const iron = [0.2, 0.19, 0.3];
-  B.lathe(x, y, z, [[0.17, 0], [0.16, 0.25], [0.11, 0.35], [0.12, 0.55], [0.075, 0.7], [0.06, 2.6], [0.09, 2.75], [0.05, 2.95], [0.05, 3.25]], 10, iron, K.IRON);
-  B.lathe(x, y + 3.25, z, [[0.12, 0], [0.24, 0.1], [0.3, 0.62], [0.36, 0.68]], 4, [1, 1, 1], K.LAMP, Math.PI / 4);
-  B.lathe(x, y + 3.25, z, [[0.13, -0.03], [0.13, 0.02]], 8, iron, K.IRON);
-  B.lathe(x, y + 3.92, z, [[0.42, 0], [0.34, 0.08], [0.1, 0.32], [0.04, 0.42], [0, 0.48]], 4, iron, K.IRON, Math.PI / 4);
-  return [x, y + 3.6, z];
-}
 
-// Платан: изогнутый ствол с ветками и крона из мазков
-export function tree(B, x, y, z, rnd) {
-  const bark = [0.62, 0.56, 0.5], crowns = [];
-  const branch = (p, dir, len, r0, depth) => {
-    let [px, py, pz] = p, [dx, dy, dz] = dir;
-    const seg = 5, ring = [];
-    for (let k = 0; k <= seg; k++) {
-      ring.push([px, py, pz, r0 * (1 - k / seg * 0.55)]);
-      px += dx * len / seg; py += dy * len / seg; pz += dz * len / seg;
-      dx += (rnd() - 0.5) * 0.25; dz += (rnd() - 0.5) * 0.25; const l = Math.hypot(dx, dy, dz); dx /= l; dy /= l; dz /= l;
-    }
-    for (let k = 0; k < seg; k++) {
-      const [ax, ay, az, ar] = ring[k], [bx, by, bz, br] = ring[k + 1];
-      for (let s = 0; s < 8; s++) {
-        const a0 = s / 8 * Math.PI * 2, a1 = (s + 1) / 8 * Math.PI * 2;
-        B.quad([ax + Math.cos(a0) * ar, ay, az + Math.sin(a0) * ar], [ax + Math.cos(a1) * ar, ay, az + Math.sin(a1) * ar],
-          [bx + Math.cos(a1) * br, by, bz + Math.sin(a1) * br], [bx + Math.cos(a0) * br, by, bz + Math.sin(a0) * br], bark, K.BARK);
-      }
-    }
-    const end = [px, py, pz];
-    if (depth > 0) for (let i = 0; i < 3; i++) {
-      const a = rnd() * Math.PI * 2;
-      branch(end, [Math.cos(a) * 0.7, 0.75, Math.sin(a) * 0.7], len * 0.6, r0 * 0.45, depth - 1);
-    } else crowns.push([px, py + 0.4, pz, 1.25 + rnd() * 0.4]);
-  };
-  branch([x, y, z], [0.08, 1, 0.04], 3.2, 0.2, 2);
-  crowns.push([x + 0.2, y + 5.6, z, 1.9]);
-  return crowns;
-}
 
-// Нарисованное небо: градиент, мягкие облака-мазки, звёзды и луна с ореолом
-export function sky(look) {
-  const mat = new THREE.ShaderMaterial({
-    side: THREE.BackSide, depthWrite: false,
-    uniforms: {
-      uTop: { value: new THREE.Color() }, uMid: { value: new THREE.Color() }, uHorizon: { value: new THREE.Color() },
-      uCloud: { value: new THREE.Color() }, uCloudLit: { value: new THREE.Color() }, uMoonDir: { value: new THREE.Vector3(0.35, 0.42, -0.84).normalize() },
-      uStars: { value: 1 },
-    },
-    vertexShader: `varying vec3 vDir; void main() { vDir = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); gl_Position.z = gl_Position.w; }`,
-    fragmentShader: `
-      uniform vec3 uTop, uMid, uHorizon, uCloud, uCloudLit, uMoonDir; uniform float uStars;
-      varying vec3 vDir;
-      ${NOISE}
-      void main() {
-        vec3 d = normalize(vDir); float h = d.y;
-        vec3 col = mix(uHorizon, uMid, smoothstep(-0.05, 0.25, h));
-        col = mix(col, uTop, smoothstep(0.2, 0.8, h));
-        vec2 p = d.xz / (h + 0.18);
-        float c = fbm(p * vec2(0.9, 2.4) + vec2(3.0, 0.0)) + fbm(p * 2.6) * 0.25;
-        float shape = smoothstep(0.62, 0.68, c) * smoothstep(-0.02, 0.15, h);
-        float edge = smoothstep(0.68, 0.8, c);
-        float toMoon = max(dot(d, uMoonDir), 0.0);
-        vec3 cloud = mix(uCloudLit, uCloud, edge);
-        cloud += uCloudLit * pow(toMoon, 6.0) * 0.4;
-        col = mix(col, cloud, shape * 0.92);
-        float st = step(0.996, hash(floor(d.xz / (h + 0.4) * 260.0))) * smoothstep(0.08, 0.4, h) * (1.0 - shape);
-        col += st * uStars * vec3(1.0, 0.95, 0.85);
-        float moon = smoothstep(0.9993, 0.9996, toMoon);
-        col = mix(col, vec3(1.0, 0.97, 0.88), moon * uStars);
-        col += vec3(0.75, 0.7, 0.9) * pow(toMoon, 60.0) * 0.35 * uStars;
-        gl_FragColor = vec4(col, 1.0);
-      }`,
-  });
-  const m = new THREE.Mesh(new THREE.SphereGeometry(500, 32, 16), mat);
-  m.layers.set(1); m.renderOrder = -10; m.frustumCulled = false;
-  void look;
-  return m;
-}
 
-// Лестница как на рю Фуайатье: каменные ступени во всю ширину, два поручня посередине
-export function stairs(S, R, x0, x1, y0, steep, half) {
-  const rise = 0.16, tread = rise / steep, n = Math.round((x1 - x0) / tread);
-  for (let k = 0; k < n; k++) {
-    const xa = x0 + k * tread, top = y0 + (k + 1) * rise, v = 0.95 + (k % 3) * 0.03;
-    S.box(xa, top - 0.7, -half, xa + tread + 0.01, top, half, [0.86 * v, 0.82 * v, 0.78 * v], K.TRIM);
-    if (k % 8 === 0) S.box(xa, top - 0.7, -half - 0.6, xa + tread * 8, top + 0.55 + (Math.min(k + 8, n) - k) * rise * 0.5, -half, [0.8, 0.76, 0.72], K.TRIM);   // боковые стенки
-    if (k % 8 === 0) S.box(xa, top - 0.7, half, xa + tread * 8, top + 0.55 + (Math.min(k + 8, n) - k) * rise * 0.5, half + 0.6, [0.8, 0.76, 0.72], K.TRIM);
-  }
-  const iron = [0.2, 0.19, 0.3];
-  for (const z of [-0.45, 0.45]) {
-    const yRail = (x) => y0 + (x - x0) * steep + 0.95;
-    bar(R, [x0 + 0.3, yRail(x0 + 0.3), z], [x1 - 0.3, yRail(x1 - 0.3), z], 0.035, iron);
-    for (let x = x0 + 0.3; x < x1; x += 1.8) { const t = Math.floor((x - x0) / tread) + 1; R.box(x - 0.025, y0 + t * rise, z - 0.025, x + 0.025, yRail(x), z + 0.025, iron, K.IRON); }
-  }
-}
-// Площадь перед базиликой: плиты, низкая балюстрада по краю, газоны
-export function parvis(S, x0, x1, y, halfZ) {
-  for (let x = x0; x < x1; x += 2) for (let z = -halfZ; z < halfZ; z += 2) {
-    S.quad([x, y, z + 2], [x + 2, y, z + 2], [x + 2, y, z], [x, y, z], [0.8, 0.77, 0.74], K.PAVING);
-  }
-  for (const sz of [-1, 1]) {
-    S.box(x0, y - 4, sz * halfZ - 0.3, x1, y + 0.75, sz * halfZ + 0.3, [0.88, 0.84, 0.78], K.TRIM);
-    S.box(x0 + 6, y, sz * 9 - 3, x0 + 26, y + 0.2, sz * 9 + 3, [0.42, 0.58, 0.4], K.PAINT);      // газоны
-  }
-  S.box(x0, y - 8, -halfZ, x0 + 0.5, y + 0.02, -4.6, [0.82, 0.78, 0.74], K.TRIM);                 // подпорная стена по бокам лестницы
-  S.box(x0, y - 8, 4.6, x0 + 0.5, y + 0.02, halfZ, [0.82, 0.78, 0.74], K.TRIM);
-}
-function bar(B, a, b, r, col) {
-  const dx = b[0] - a[0], dz = b[2] - a[2], l = Math.hypot(dx, dz) || 1, sx = -dz / l * r, sz = dx / l * r;
-  const A = (u, v) => [a[0] + sx * u, a[1] + r * v, a[2] + sz * u], Bp = (u, v) => [b[0] + sx * u, b[1] + r * v, b[2] + sz * u];
-  B.quad(A(-1, 1), A(1, 1), Bp(1, 1), Bp(-1, 1), col, K.IRON);
-  B.quad(A(1, -1), A(-1, -1), Bp(-1, -1), Bp(1, -1), col, K.IRON);
-  B.quad(A(1, 1), A(1, -1), Bp(1, -1), Bp(1, 1), col, K.IRON);
-  B.quad(A(-1, -1), A(-1, 1), Bp(-1, 1), Bp(-1, -1), col, K.IRON);
-}
 
 // Сакре-Кёр в том же живописном стиле: белый камень, яйцевидные купола, кампанила.
 // Фасад смотрит в −x (вниз по улице). Подсвечен ночью и меньше тонет в дымке.
@@ -275,13 +142,3 @@ export function basilicaMesh(material) {
   return m;
 }
 
-// Мягкий ореол вокруг фонарей и витрин
-export function glow(color, size) {
-  const [c, g] = canvas(64, 64), gr = g.createRadialGradient(32, 32, 0, 32, 32, 32);
-  gr.addColorStop(0, 'rgba(255,255,255,0.9)'); gr.addColorStop(0.25, 'rgba(255,255,255,0.35)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
-  g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
-  const t = tex(c); t.colorSpace = THREE.NoColorSpace;
-  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, color, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, fog: false }));
-  s.scale.set(size, size, 1); s.layers.set(1);
-  return s;
-}
