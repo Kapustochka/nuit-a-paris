@@ -3,13 +3,14 @@
 //   2) фильтр Кувахары превращает пиксели в плоские мазки, сохраняя края;
 //   3) контуры по скачкам нормалей и глубины: толщина плавает, линия дрожит и местами рвётся;
 //   4) воздух (paint/air.js): дымка по высоте, конусы света под фонарями, сияние Сакре-Кёр;
-//   5) перевод в sRGB, зерно бумаги и виньетка.
+//   5) свечение (bloom): яркое — фонари, окна, луна — размывается в маленьких текстурах и ложится поверх;
+//   6) бумага: едва заметные волокна и зерно листа, мягкая виньетка.
 // Листва и всё с alphaTest-картой пишут в нормали чёрный «маркер» — обводится только силуэт кроны, а не каждый лист.
 import * as THREE from 'three';
 import { NOISE } from './paint.js';
 import { AIR_GLSL, airUniforms, MAX_SHAFTS } from './air.js';
 
-export function createPainter(renderer, { radius = 3, scale = 1, heroStyle = 1, shafts = 8, shaftSteps = 8 } = {}) {
+export function createPainter(renderer, { radius = 3, scale = 1, heroStyle = 1, shafts = 8, shaftSteps = 8, bloom = 2 } = {}) {
   const size = new THREE.Vector2(), cssSize = new THREE.Vector2();
   const colorRT = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: Math.min(4, renderer.capabilities.maxSamples) });
   const normalRT = new THREE.WebGLRenderTarget(1, 1, { depthTexture: new THREE.DepthTexture(1, 1) });
@@ -34,18 +35,65 @@ export function createPainter(renderer, { radius = 3, scale = 1, heroStyle = 1, 
     return leafMats.get(map);
   };
 
+  // ── Свечение: яркие места кадра → 1/4 и 1/8 размера → размытие по двум осям ──
+  let bloomLevels = bloom;                               // 2 — широкое и узкое, 1 — только узкое (телефон), 0 — нет
+  const bloomRT = [0, 1, 2, 3].map(() => new THREE.WebGLRenderTarget(1, 1, { depthBuffer: false }));
+  const fsVert = 'varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }';
+  const brightMat = new THREE.ShaderMaterial({
+    uniforms: { tColor: { value: colorRT.texture }, uPx: { value: new THREE.Vector2() }, uThreshold: { value: 0.66 } },
+    vertexShader: fsVert, depthTest: false, depthWrite: false,
+    fragmentShader: /* glsl */ `
+      uniform sampler2D tColor; uniform vec2 uPx; uniform float uThreshold; varying vec2 vUv;
+      vec3 tap(vec2 o) { return pow(clamp(texture2D(tColor, vUv + o * uPx).rgb, 0.0, 1.0), vec3(1.0 / 2.2)); }
+      void main() {
+        vec3 c = (tap(vec2(-1.0, -1.0)) + tap(vec2(1.0, -1.0)) + tap(vec2(-1.0, 1.0)) + tap(vec2(1.0, 1.0))) * 0.25;
+        float l = max(c.r, max(c.g, c.b));                 // тёплый свет ярок в красном, а не в «серой» яркости
+        gl_FragColor = vec4(c * smoothstep(uThreshold, uThreshold + 0.3, l), 1.0);
+      }`,
+  });
+  const blurMat = new THREE.ShaderMaterial({
+    uniforms: { tMap: { value: null }, uDir: { value: new THREE.Vector2() } },
+    vertexShader: fsVert, depthTest: false, depthWrite: false,
+    fragmentShader: /* glsl */ `
+      uniform sampler2D tMap; uniform vec2 uDir; varying vec2 vUv;
+      void main() {                                        // 9 точек Гаусса за 5 выборок (между пикселями)
+        vec3 c = texture2D(tMap, vUv).rgb * 0.227;
+        c += (texture2D(tMap, vUv + uDir * 1.385).rgb + texture2D(tMap, vUv - uDir * 1.385).rgb) * 0.316;
+        c += (texture2D(tMap, vUv + uDir * 3.231).rgb + texture2D(tMap, vUv - uDir * 3.231).rgb) * 0.0703;
+        gl_FragColor = vec4(c, 1.0);
+      }`,
+  });
+  const fsQuad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), brightMat);
+  const fsScene = new THREE.Scene(); fsScene.add(fsQuad);
+  function pass(material, target) { fsQuad.material = material; renderer.setRenderTarget(target); renderer.render(fsScene, postCam); }
+  function blur(src, tmp, spread) {                      // src → tmp (по горизонтали) → src (по вертикали)
+    blurMat.uniforms.tMap.value = src.texture; blurMat.uniforms.uDir.value.set(spread / src.width, 0); pass(blurMat, tmp);
+    blurMat.uniforms.tMap.value = tmp.texture; blurMat.uniforms.uDir.value.set(0, spread / src.height); pass(blurMat, src);
+  }
+  function renderBloom() {
+    if (!bloomLevels || U.uBloom.value <= 0) return;
+    brightMat.uniforms.tColor.value = colorRT.texture; brightMat.uniforms.uPx.value.set(1 / colorRT.width, 1 / colorRT.height);
+    pass(brightMat, bloomRT[0]); blur(bloomRT[0], bloomRT[1], 1);
+    if (bloomLevels > 1) {
+      blurMat.uniforms.tMap.value = bloomRT[0].texture; blurMat.uniforms.uDir.value.set(0, 0); pass(blurMat, bloomRT[2]);
+      blur(bloomRT[2], bloomRT[3], 1.6);
+    }
+  }
+
   const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({
-    defines: { RADIUS: radius, SHAFTS: Math.min(shafts, MAX_SHAFTS), SHAFT_STEPS: shaftSteps },
+    defines: { RADIUS: radius, BLOOM: bloom, SHAFTS: Math.min(shafts, MAX_SHAFTS), SHAFT_STEPS: shaftSteps },
     uniforms: {
       tColor: { value: colorRT.texture }, tNormal: { value: normalRT.texture }, tDepth: { value: normalRT.depthTexture },
       uRes: { value: new THREE.Vector2() }, uNear: { value: 0.1 }, uFar: { value: 600 },
       uCssRes: { value: new THREE.Vector2(1, 1) }, uHeroLine: { value: 0.65 }, uHeroStyle: { value: heroStyle },
       ...airUniforms(),
+      tBloom: { value: bloomRT[0].texture }, tBloomWide: { value: bloomRT[2].texture }, uBloom: { value: 1 },
+      uPaper: { value: 1 }, uVignette: { value: 1 },
       uPaint: { value: 1 }, uEdges: { value: 1 }, uLine: { value: 1.4 }, uInk: { value: new THREE.Color(0.08, 0.06, 0.2) },
     },
     vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
     fragmentShader: /* glsl */ `
-      uniform sampler2D tColor, tNormal, tDepth; uniform vec2 uRes, uCssRes; uniform float uNear, uFar, uPaint, uEdges, uLine, uHeroLine, uHeroStyle; uniform vec3 uInk;
+      uniform sampler2D tColor, tNormal, tDepth, tBloom, tBloomWide; uniform float uBloom, uPaper, uVignette; uniform vec2 uRes, uCssRes; uniform float uNear, uFar, uPaint, uEdges, uLine, uHeroLine, uHeroStyle; uniform vec3 uInk;
       varying vec2 vUv;
       ${NOISE}
       float lin(float d) { float z = d * 2.0 - 1.0; return 2.0 * uNear * uFar / (uFar + uNear - z * (uFar - uNear)); }
@@ -106,9 +154,26 @@ export function createPainter(renderer, { radius = 3, scale = 1, heroStyle = 1, 
         col = mix(col, ink, e);
         col = air(col, vUv, texture2D(tDepth, vUv).r, sp);
 
-        float grain = hash(floor(sp)) * 0.05 + vnoise(sp / 2.5) * 0.04 + vnoise(vec2(sp.x / 70.0, sp.y / 5.0)) * 0.03;
-        col *= mix(0.95 + grain, 1.0, real * uHeroStyle);
-        vec2 q = vUv - 0.5; col *= 1.0 - dot(q, q) * 0.6;
+        #if BLOOM > 0
+          vec3 glowB = texture2D(tBloom, vUv).rgb * 0.5;
+          #if BLOOM > 1
+            glowB += texture2D(tBloomWide, vUv).rgb * 0.6;
+          #endif
+          col = 1.0 - (1.0 - col) * (1.0 - min(glowB * uBloom, 1.0));   // «экран»: свет добавляется, но не выгорает
+        #endif
+
+        // бумага: лист один на весь экран и не зависит от плотности пикселей
+        vec2 pp = vUv * uCssRes;
+        float fibre = vnoise(vec2(pp.x / 46.0, pp.y / 3.2) + 3.0) * 0.6 + vnoise(vec2(pp.x / 4.0, pp.y / 61.0) + 11.0) * 0.4;
+        float tooth = vnoise(pp / 1.6) * 0.55 + hash(floor(pp * 1.5)) * 0.45;
+        float sheet = fbm(pp / 190.0);
+        float paper = (fibre - 0.5) * 0.05 + (tooth - 0.5) * 0.075 + (sheet - 0.5) * 0.05;
+        float keep = real * uHeroStyle;                          // на героине бумаги почти нет
+        col *= 1.0 + paper * uPaper * (1.0 - 0.7 * keep);
+        col += vec3(0.05, 0.04, 0.03) * max(tooth - 0.62, 0.0) * uPaper * (1.0 - keep);   // светлые ворсинки листа
+        // виньетка уводит углы в фиолетовую тень, а не в чёрный
+        vec2 q = vUv - 0.5; float vg = smoothstep(0.18, 0.85, dot(q, q) * 1.9) * uVignette;
+        col = mix(col, col * vec3(0.5, 0.46, 0.66), vg * 0.75);
         gl_FragColor = vec4(col, 1.0);
       }`,
     depthTest: false, depthWrite: false,
@@ -122,6 +187,9 @@ export function createPainter(renderer, { radius = 3, scale = 1, heroStyle = 1, 
     renderer.getDrawingBufferSize(size);
     const w = Math.max(1, Math.round(size.x * curScale)), h = Math.max(1, Math.round(size.y * curScale));
     colorRT.setSize(w, h); normalRT.setSize(w, h); U.uRes.value.set(w, h);
+    const bw = Math.max(1, w >> 2), bh = Math.max(1, h >> 2);
+    bloomRT[0].setSize(bw, bh); bloomRT[1].setSize(bw, bh);
+    bloomRT[2].setSize(Math.max(1, bw >> 1), Math.max(1, bh >> 1)); bloomRT[3].setSize(Math.max(1, bw >> 1), Math.max(1, bh >> 1));
     renderer.getSize(cssSize); U.uCssRes.value.copy(cssSize);
   }
   const swap = [], hidden = [];
@@ -154,13 +222,15 @@ export function createPainter(renderer, { radius = 3, scale = 1, heroStyle = 1, 
     camera.layers.mask = mask;
     camera.layers.enableAll();
     renderer.setRenderTarget(colorRT); renderer.setClearColor(0x000000, 1); renderer.clear(); renderer.render(scene, camera);
+    renderBloom();
     renderer.setRenderTarget(null); renderer.render(postScene, postCam);
   }
   function setRadius(r) { quad.material.defines.RADIUS = r; quad.material.needsUpdate = true; }
   function setScale(s) { curScale = s; setSize(); }
+  function setBloom(levels) { bloomLevels = levels; quad.material.defines.BLOOM = levels; quad.material.needsUpdate = true; }
   // воздух: world.air даёт фонари для лучей, маяк-базилику и высоту земли под героиней
   let airSrc = null;
   function setAir(air) { airSrc = air; U.uShaftPos.value = air.shaftPos; U.uBeacon.value = air.beacon; }
   function setShafts(n, steps = n) { quad.material.defines.SHAFTS = Math.min(n, MAX_SHAFTS); quad.material.defines.SHAFT_STEPS = steps; quad.material.needsUpdate = true; }
-  return { render, setSize, uniforms: U, setRadius, setScale, setAir, setShafts, get shafts() { return quad.material.defines.SHAFTS; }, get radius() { return quad.material.defines.RADIUS; } };
+  return { render, setSize, uniforms: U, setRadius, setScale, setAir, setShafts, setBloom, get bloom() { return bloomLevels; }, get shafts() { return quad.material.defines.SHAFTS; }, get radius() { return quad.material.defines.RADIUS; } };
 }

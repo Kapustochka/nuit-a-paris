@@ -43,7 +43,7 @@ export const AIR_GLSL = /* glsl */ `
     float banks = 0.7 + 0.6 * fbm(far.xz * 0.012 + vec2(uTime * 0.012, far.y * 0.02));
     float mist = (1.0 - exp(-path * top * 0.0042 * banks)) * uMist;
     vec3 mistCol = mix(uMistCol, uMistWarm, smoothstep(0.25, 0.0, abs(rd.y)) * smoothstep(120.0, 500.0, dist));
-    col = mix(col, mistCol, mist * (sky ? 0.75 : 1.0));
+    col = mix(col, mistCol, mist * (sky ? 0.5 : 1.0));
 
     // ── Сакре-Кёр светит сквозь туман ──
     float halo = airlight(ro, rd, dist, uBeacon.xyz, 55.0) * 55.0 / 3.1416;
@@ -71,7 +71,7 @@ export const AIR_GLSL = /* glsl */ `
 
     // ── фонари: ореол и конус света с лучами ──
     #if SHAFTS > 0
-    float jitter = 0.5 + (vnoise(sp / 2.6) - 0.5) * 0.5;     // мягкая зернистость вместо полос от шагов
+    float jitter = 0.5 + (hash(floor(sp)) - 0.5) * 0.6;     // мягкая зернистость вместо полос от шагов
     vec3 glow = vec3(0.0);
     for (int i = 0; i < SHAFTS; i++) {
       vec4 L = uShaftPos[i];

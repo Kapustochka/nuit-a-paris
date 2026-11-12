@@ -338,7 +338,30 @@ function buildLamps(scene, lamps, props, random) {
   }));
   for (const part of [pole, foot, cap, lantern]) part.userData.word = 'lamp';
   glow.renderOrder = 2;
-  for (const m of [pole, foot, cap, lantern, glow]) { m.frustumCulled = false; scene.add(m); }
+  // Боке: далёкие фонари расплываются в мягкие кружки, как огни не в фокусе; вблизи их нет
+  const bokeh = new THREE.Points(geo, new THREE.ShaderMaterial({
+    uniforms: { uScale: { value: 1 } }, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false,
+    vertexShader: /* glsl */ `
+      uniform float uScale; varying float vAmount; varying float vSeed;
+      void main() {
+        vec4 mv = modelViewMatrix * vec4(position, 1.0);
+        vSeed = fract(sin(dot(position.xz, vec2(12.9898, 78.233))) * 43758.5453);
+        vAmount = smoothstep(32.0, 95.0, -mv.z);
+        gl_PointSize = uScale * mix(6.0, 30.0, vAmount) * (0.75 + 0.5 * vSeed);
+        gl_Position = projectionMatrix * mv;
+      }`,
+    fragmentShader: /* glsl */ `
+      varying float vAmount; varying float vSeed;
+      void main() {
+        float r = length(gl_PointCoord - 0.5) * 2.0;
+        float disc = smoothstep(1.0, 0.86, r) * (0.5 + 0.5 * smoothstep(0.55, 0.95, r));   // кружок со светлым краем
+        vec3 tint = mix(vec3(1.0, 0.62, 0.3), vec3(1.0, 0.82, 0.55), vSeed);
+        gl_FragColor = vec4(tint * disc * vAmount * vAmount * 0.3, 1.0);
+      }`,
+  }));
+  bokeh.renderOrder = 3;
+  bokeh.onBeforeRender = (r) => { bokeh.material.uniforms.uScale.value = (r.getRenderTarget()?.height ?? r.domElement.height) / 720; };
+  for (const m of [pole, foot, cap, lantern, glow, bokeh]) { m.frustumCulled = false; scene.add(m); }
   return { lights, detailed: chosen.size };
 }
 
