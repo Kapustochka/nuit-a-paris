@@ -1,5 +1,6 @@
 // Артикль входит в слово: так запоминаются род и написание.
 export const words = {
+  bonsoir: ['bonsoir', 'bɔ̃swaʁ', 'бонсуар', 'добрый вечер', 'Bonsoir ! Bonne promenade !', 'Добрый вечер! Приятной прогулки!'],
   door: ['la porte', 'la pɔʁt', 'ла порт', 'дверь', 'La porte est fermée.', 'Дверь закрыта.'],
   window: ['la fenêtre', 'la fənɛtʁ', 'ла фёнэтр', 'окно', 'La lumière passe par la fenêtre.', 'Свет проникает через окно.'],
   brick: ['la brique', 'la bʁik', 'ла брик', 'кирпич', 'Ce mur est fait de briques.', 'Эта стена сделана из кирпича.'],

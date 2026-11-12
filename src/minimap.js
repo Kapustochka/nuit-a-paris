@@ -135,7 +135,11 @@ export function createMinimap(el, data) {
     bctx.beginPath(); bctx.moveTo(0, -a * 1.3); bctx.lineTo(a * 0.9, a); bctx.lineTo(0, a * 0.5); bctx.lineTo(-a * 0.9, a); bctx.closePath(); bctx.fill(); bctx.stroke();
     bctx.restore();
   }
-  addEventListener('keydown', (e) => { if (e.code === 'KeyM' && !e.repeat) toggleBig(); if (e.code === 'Escape') toggleBig(false); });
+  addEventListener('keydown', (e) => {
+    if (e.target instanceof Element && e.target.closest('input, select, textarea, [contenteditable]')) return;
+    if (e.code === 'KeyM' && !e.repeat) toggleBig();
+    if (e.code === 'Escape') toggleBig(false);
+  });
   el.addEventListener('pointerdown', (e) => { e.stopPropagation(); toggleBig(); });
   overlay.addEventListener('pointerdown', () => toggleBig(false));
 

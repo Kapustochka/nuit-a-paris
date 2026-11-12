@@ -14,6 +14,7 @@ export function createControls(dom) {
   };
 
   addEventListener('keydown', (e) => {
+    if (e.target instanceof Element && e.target.closest('input, select, textarea, [contenteditable]')) return;
     if (e.code === 'Space' && e.target instanceof HTMLButtonElement) return;
     keys.add(e.code);
     if (e.repeat) return;
@@ -26,6 +27,12 @@ export function createControls(dom) {
   }
   addEventListener('keyup', (e) => keys.delete(e.code));
   addEventListener('blur', () => keys.clear());
+  addEventListener('focusin', (e) => {
+    if (e.target instanceof Element && e.target.closest('input, select, textarea, [contenteditable]')) {
+      keys.clear();
+      state.jump = state.punch = false;
+    }
+  });
 
   // ── Джойстик ──────────────────────────────────────────────
   const base = document.getElementById('joy-base');

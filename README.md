@@ -70,3 +70,5 @@ For review debugging, `?star=review` uses any due notebook word when available (
 Map data © OpenStreetMap contributors (ODbL). Elevation: AWS Terrain Tiles (Mapzen terrarium; includes SRTM and other public sources).
 
 For streaming regression checks, open `tests/facade-streaming.html` on the local HTTP server. The checks compare exact vertex/normal buffers, incremental and eager builds, cancellation, disposal, and deferred distant chunks. See [PERFORMANCE.md](PERFORMANCE.md) for measurements and remaining bottlenecks.
+
+The notebook supports French/Russian search, accent-insensitive matching and filters for words, phrases, stories and songs. Double-click a passer-by and choose “Поздороваться” to hear and save a greeting.

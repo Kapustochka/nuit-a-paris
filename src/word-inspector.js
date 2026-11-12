@@ -6,6 +6,7 @@ export function installWordInspector(canvas, scene, camera, moonDirection, audio
   const fields = Object.fromEntries(Array.from(card.querySelectorAll('[data-field]'),
     (element) => [element.dataset.field, element]));
   const marker = document.querySelector('#word-marker');
+  const greet = card.querySelector('[data-greet]');
   const targets = [];
   scene.traverse((object) => { if (object.userData.word) targets.push(object); });
   const ray = new THREE.Raycaster();
@@ -79,6 +80,7 @@ export function installWordInspector(canvas, scene, camera, moonDirection, audio
       if (line) button.textContent = line[2];
     }
     fields.status.textContent = '';
+    greet.hidden = word !== 'passerby' || !object;
     card.scrollTop = 0;
     card.hidden = false;
     onInspect(word, object);
@@ -93,6 +95,7 @@ export function installWordInspector(canvas, scene, camera, moonDirection, audio
   function showReview(key, x, y, object) {
     if (entryFor(key)?.kind !== 'word') return;
     show(key, x, y, object);
+    greet.hidden = true;
     reviewKey = key;
     fields.badge.textContent = '✦ Вспомни слово из блокнота';
     card.dataset.review = 'prompt';
@@ -161,12 +164,20 @@ export function installWordInspector(canvas, scene, camera, moonDirection, audio
   addEventListener('song-line', ({ detail }) => {
     [...fields.lines.children].forEach((item, i) => item.classList.toggle('singing', i === detail));
   });
-  for (const button of sayButtons) {
-    button.addEventListener('click', () => {
-      const [clip, text] = selected.say[button.dataset.say];
-      fields.status.textContent = '';
-      audio.play(clip, text, (status) => { fields.status.textContent = status; });
-    });
+  function pronounce(field) {
+    fields.status.textContent = '';
+    const [clip, text] = selected.say[field];
+    audio.play(clip, text, (status) => { fields.status.textContent = status; });
+  }
+
+  greet.addEventListener('click', () => {
+    show('bonsoir');
+    marker.hidden = true;
+    card.querySelector('[data-say="example"]').focus();
+    pronounce('example');
+  });
+  for (const button of card.querySelectorAll('[data-say]')) {
+    button.addEventListener('click', () => pronounce(button.dataset.say));
   }
   // Предметы, которые появляются уже во время прогулки (например, упавшая звезда).
   const addTarget = (object) => { targets.push(object); };

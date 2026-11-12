@@ -260,3 +260,13 @@
   .paper-toggle { top: max(132px, calc(env(safe-area-inset-top) + 122px)); }
   #notebook { top: max(174px, calc(env(safe-area-inset-top) + 164px)); }
 }
+.notebook-tools { display: grid; gap: 6px; margin-bottom: 12px; }
+.notebook-tools label { font-size: 12px; }
+.notebook-tools input, .notebook-tools select {
+  box-sizing: border-box; width: 100%; min-height: 40px;
+  padding: 8px; border: 1px solid #80596370; border-radius: 5px;
+  background: #fff8e4bd; color: #3e283b; font: inherit;
+}
+#notebook [data-results]:not(:empty) { margin-bottom: 10px; font-size: 12px; }
+#notebook li[hidden], #word-card button[hidden] { display: none; }
+.notebook-tools :focus-visible { outline: 2px solid #864762; outline-offset: 2px; }

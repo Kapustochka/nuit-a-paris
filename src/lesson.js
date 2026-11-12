@@ -9,6 +9,11 @@ export function createLesson(openWord) {
   const bookButton = document.querySelector('#open-notebook');
   const list = notebook.querySelector('ul');
   const empty = notebook.querySelector('[data-empty]');
+  const search = notebook.querySelector('#notebook-search');
+  const kind = notebook.querySelector('#notebook-kind');
+  const results = notebook.querySelector('[data-results]');
+  const normalize = (text) => text.normalize('NFD').replace(/\p{M}/gu, '').toLocaleLowerCase();
+  const items = [];
   const found = new Set();
 
   try {
@@ -18,7 +23,8 @@ export function createLesson(openWord) {
   const review = createWordReview(found);
 
   function addWord(key) {
-    const { term, translation } = entryFor(key);
+    const entry = entryFor(key);
+    const { term, translation } = entry;
     const item = document.createElement('li');
     const button = document.createElement('button');
     button.type = 'button';
@@ -31,11 +37,30 @@ export function createLesson(openWord) {
     button.addEventListener('click', () => { toggleNotebook(false); openWord(key); });
     item.append(button);
     list.prepend(item);
+    items.push({ item, kind: entry.kind, text: normalize([
+      term, translation, entry.example, entry.meaning,
+      ...(entry.lines || []).flat(),
+    ].filter(Boolean).join(' ')) });
   }
+
+  function filterBook() {
+    const query = normalize(search.value.trim());
+    let count = 0;
+    for (const record of items) {
+      record.item.hidden = (kind.value && record.kind !== kind.value) || !record.text.includes(query);
+      if (!record.item.hidden) count++;
+    }
+    results.textContent = found.size === 0 ? '' : count === 0
+      ? 'Ничего не найдено. Попробуй другой запрос или тип.'
+      : `Показано ${count} из ${found.size}`;
+  }
+  search.addEventListener('input', filterBook);
+  kind.addEventListener('change', filterBook);
 
   function refreshBook() {
     bookButton.textContent = `Блокнот · ${found.size}`;
     empty.hidden = found.size > 0;
+    filterBook();
   }
 
   function toggleNotebook(open) {

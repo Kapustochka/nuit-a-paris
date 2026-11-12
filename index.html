@@ -68,9 +68,22 @@
   <button id="open-notebook" type="button" class="lesson-button" aria-controls="notebook" aria-expanded="false" hidden>Блокнот</button>
   <label id="star-toggle" class="paper-toggle" lang="ru"><input type="checkbox" checked><span class="tick" aria-hidden="true"></span><span>Падающие звёзды</span></label>
   <button id="city-sound" type="button" class="lesson-button" lang="ru" aria-pressed="true">Звук города: вкл</button>
-  <aside id="notebook" lang="ru" aria-label="Найденные слова" hidden>
+  <aside id="notebook" lang="ru" aria-label="Мои находки" hidden>
     <button type="button" data-close aria-label="Закрыть блокнот">×</button>
-    <h2>Найденные слова</h2>
+    <h2>Мои находки</h2>
+    <div class="notebook-tools">
+      <label for="notebook-search">Поиск по-французски или по-русски</label>
+      <input id="notebook-search" type="search" placeholder="Например, café или кафе" autocomplete="off">
+      <label for="notebook-kind">Показать</label>
+      <select id="notebook-kind">
+        <option value="">Все находки</option>
+        <option value="word">Слова</option>
+        <option value="phrase">Фразы</option>
+        <option value="song">Песни</option>
+        <option value="story">Истории и факты</option>
+      </select>
+    </div>
+    <p data-results role="status"></p>
     <p data-empty>Дважды нажми на предмет или упавшую звезду, чтобы добавить слово.</p>
     <p class="notebook-review-note">Иногда звезда возвращает знакомое слово: вспомни перевод, затем проверь себя.</p>
     <ul></ul>
@@ -98,6 +111,7 @@
     <div class="word-actions">
       <button type="button" data-say="term">▶ Слово</button>
       <button type="button" data-say="example">▶ Фраза</button>
+      <button type="button" data-greet hidden>Поздороваться</button>
     </div>
     <p class="word-status" data-field="status" role="status"></p>
   </aside>
