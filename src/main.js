@@ -11,6 +11,7 @@ import { installWordInspector } from './word-inspector.js';
 import { createFrenchAudio } from './french-audio.js';
 import { createLesson } from './lesson.js';
 import { createFallingStars } from './falling-star.js';
+import { createCityAudio } from './city-audio.js';
 import { loadPasserby, placePasserby, placeCircularPasserby, passerbyBlocksStep } from './passerby.js';
 import { createPainter } from './paint/post.js';
 
@@ -69,17 +70,18 @@ heroine.root.traverse((o) => { o.userData.noPaint = true; o.userData.realistic =
 world.lightHeroine(heroine.root);
 world.paint(scene);                 // прохожие и всё остальное — в живописный свет
 const blocked = (x, z) => world.blocked(x, z) || passersby.some((actor) => passerbyBlocksStep(actor, player, x, z));
-const audio = createFrenchAudio();
+const cityAudio = createCityAudio(world.soundSpots);
+const audio = createFrenchAudio({ onActivity: (active) => cityAudio.setDucked(active) });
 const lesson = createLesson((key) => inspector.show(key));
-const inspector = installWordInspector(renderer.domElement, scene, camera, world.sky.moonDirection, audio, lesson.inspect);
-const stars = createFallingStars(scene, camera, world, inspector);
+const inspector = installWordInspector(renderer.domElement, scene, camera, world.sky.moonDirection, audio, lesson.inspect, lesson.review);
+const stars = createFallingStars(scene, camera, world, inspector, lesson.review);
 installStarToggle(stars);
 loading.remove();
 performance.mark('paris-ready');
 
 const debug = new URLSearchParams(location.search).has('debug');
 if (debug) addDebugPanel();
-window.__game = { heroine, passersby, world, stars, inspector, mapData, camera, controls, renderer, get painted() { return painter !== null; }, get painter() { return painter; } };
+window.__game = { heroine, passersby, world, stars, inspector, mapData, camera, controls, renderer, cityAudio, get painted() { return painter !== null; }, get painter() { return painter; } };
 
 // ── Движение ─────────────────────────────────────────────────
 const MAX_WALK = 1.45, MAX_RUN = 3.8, MAX_BACK = 0.95; // м/с
@@ -150,6 +152,7 @@ renderer.setAnimationLoop(() => {
   }
   for (const actor of passersby) actor.update(dt);
   stars.update(dt, p.x, p.z, facing);
+  cityAudio.update(dt, p.x, p.z, yaw, heroine.busy !== 'jump');
 
   // Название улицы
   streetTick -= dt;

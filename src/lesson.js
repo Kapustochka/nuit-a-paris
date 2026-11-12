@@ -1,4 +1,5 @@
 import { entryFor } from './entries.js';
+import { createWordReview } from './word-review.js';
 
 const notebookKey = 'nuit-a-paris:words:v1';
 
@@ -14,6 +15,7 @@ export function createLesson(openWord) {
     const saved = JSON.parse(localStorage.getItem(notebookKey) || '[]');
     if (Array.isArray(saved)) saved.filter((key) => entryFor(key)).forEach((key) => found.add(key));
   } catch { /* браузер может запретить хранение */ }
+  const review = createWordReview(found);
 
   function addWord(key) {
     const { term, translation } = entryFor(key);
@@ -56,11 +58,12 @@ export function createLesson(openWord) {
   function inspect(key) {
     if (!found.has(key)) {
       found.add(key);
+      review.learn(key);
       addWord(key);
       refreshBook();
       try { localStorage.setItem(notebookKey, JSON.stringify([...found])); } catch { /* нет доступа к записи */ }
     }
   }
 
-  return { inspect };
+  return { inspect, review };
 }

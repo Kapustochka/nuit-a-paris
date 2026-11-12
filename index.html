@@ -67,10 +67,12 @@
   <div id="joy-base"><div id="joy-knob"></div></div>
   <button id="open-notebook" type="button" class="lesson-button" aria-controls="notebook" aria-expanded="false" hidden>Блокнот</button>
   <label id="star-toggle" class="paper-toggle" lang="ru"><input type="checkbox" checked><span class="tick" aria-hidden="true"></span><span>Падающие звёзды</span></label>
+  <button id="city-sound" type="button" class="lesson-button" lang="ru" aria-pressed="true">Звук города: вкл</button>
   <aside id="notebook" lang="ru" aria-label="Найденные слова" hidden>
     <button type="button" data-close aria-label="Закрыть блокнот">×</button>
     <h2>Найденные слова</h2>
     <p data-empty>Дважды нажми на предмет или упавшую звезду, чтобы добавить слово.</p>
+    <p class="notebook-review-note">Иногда звезда возвращает знакомое слово: вспомни перевод, затем проверь себя.</p>
     <ul></ul>
   </aside>
   <span id="word-marker" aria-hidden="true" hidden></span>
@@ -79,6 +81,7 @@
     <div class="word-content" aria-live="polite">
       <p class="word-badge" data-field="badge"></p>
       <h2 lang="fr" data-field="term"></h2>
+      <p class="review-prompt">Как переводится это слово? Вспомни, затем проверь себя.</p>
       <p class="word-pronunciation"><span data-field="ipa"></span><span data-field="reading"></span></p>
       <p class="word-translation" data-field="translation"></p>
       <div class="word-example">
@@ -86,6 +89,11 @@
         <p data-field="meaning"></p>
       </div>
       <ol class="word-lines" data-field="lines"></ol>
+    </div>
+    <div class="review-actions">
+      <button type="button" data-review="reveal">Показать ответ</button>
+      <button type="button" data-review="again" hidden>Пока забыл</button>
+      <button type="button" data-review="remembered" hidden>Вспомнил</button>
     </div>
     <div class="word-actions">
       <button type="button" data-say="term">▶ Слово</button>

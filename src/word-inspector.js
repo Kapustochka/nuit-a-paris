@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { entryFor } from './entries.js';
 
-export function installWordInspector(canvas, scene, camera, moonDirection, audio, onInspect) {
+export function installWordInspector(canvas, scene, camera, moonDirection, audio, onInspect, review) {
   const card = document.querySelector('#word-card');
   const fields = Object.fromEntries(Array.from(card.querySelectorAll('[data-field]'),
     (element) => [element.dataset.field, element]));
@@ -16,6 +16,8 @@ export function installWordInspector(canvas, scene, camera, moonDirection, audio
   const pixels = sample.getContext('2d', { willReadFrequently: true });
   const uv = new THREE.Vector2();
   const sayButtons = Array.from(card.querySelectorAll('[data-say]'));
+  const reviewButtons = Object.fromEntries([...card.querySelectorAll('[data-review]')].map((b) => [b.dataset.review, b]));
+  let reviewKey = null;
   let gesture, lastTap, markerTimer, selected;
 
   function visibleAt({ object, uv: at }) {
@@ -51,6 +53,8 @@ export function installWordInspector(canvas, scene, camera, moonDirection, audio
     if (!entry) return;
     audio.stop();
     selected = entry;
+    reviewKey = null;
+    delete card.dataset.review;
     card.dataset.kind = entry.kind;
     fields.badge.textContent = entry.badge;
     fields.term.textContent = entry.term;
@@ -86,6 +90,37 @@ export function installWordInspector(canvas, scene, camera, moonDirection, audio
     markerTimer = setTimeout(() => { marker.hidden = true; }, 550);
   }
 
+  function showReview(key, x, y, object) {
+    if (entryFor(key)?.kind !== 'word') return;
+    show(key, x, y, object);
+    reviewKey = key;
+    fields.badge.textContent = '✦ Вспомни слово из блокнота';
+    card.dataset.review = 'prompt';
+    reviewButtons.reveal.hidden = false;
+    reviewButtons.again.hidden = reviewButtons.remembered.hidden = true;
+    reviewButtons.reveal.focus({ preventScroll: true });
+  }
+  reviewButtons.reveal.addEventListener('click', () => {
+    if (!reviewKey || card.dataset.review !== 'prompt') return;
+    card.dataset.review = 'answer';
+    reviewButtons.reveal.hidden = true;
+    reviewButtons.again.hidden = reviewButtons.remembered.hidden = false;
+    const [clip, text] = selected.say.term;
+    audio.play(clip, text, (status) => { fields.status.textContent = status; });
+    reviewButtons.remembered.focus({ preventScroll: true });
+  });
+  for (const [name, remembered] of [['again', false], ['remembered', true]]) {
+    reviewButtons[name].addEventListener('click', () => {
+      if (!reviewKey || card.dataset.review !== 'answer') return;
+      review.rate(reviewKey, remembered);
+      card.dataset.review = 'rated';
+      reviewButtons.again.hidden = reviewButtons.remembered.hidden = true;
+      fields.status.textContent = remembered ? 'Отлично! Повторим позже.' : 'Ничего страшного — слово вернётся раньше.';
+      reviewKey = null;
+      card.querySelector('[data-close]').focus({ preventScroll: true });
+    });
+  }
+
   canvas.addEventListener('pointerdown', (event) => {
     if (!event.isPrimary || event.button !== 0) { gesture = lastTap = null; return; }
     gesture = { id: event.pointerId, x: event.clientX, y: event.clientY, time: event.timeStamp };
@@ -115,6 +150,7 @@ export function installWordInspector(canvas, scene, camera, moonDirection, audio
   });
 
   function close() {
+    reviewKey = null;
     card.hidden = true;
     marker.hidden = true;
     audio.stop();
@@ -138,5 +174,5 @@ export function installWordInspector(canvas, scene, camera, moonDirection, audio
     const index = targets.indexOf(object);
     if (index >= 0) targets.splice(index, 1);
   };
-  return { show, close, addTarget, removeTarget };
+  return { show, showReview, close, addTarget, removeTarget };
 }
