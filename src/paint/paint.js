@@ -212,10 +212,12 @@ const GROUND_FRAG = /* glsl */ `
     vec3 n = normalize(vNormal);
     vec4 cell = nightSample(vWorld.xz);
     float walk = smoothstep(0.42, 0.58, cell.g), curb = smoothstep(0.18, 0.4, cell.g) * (1.0 - smoothstep(0.42, 0.56, cell.g));
-    vec3 c = cells(vWorld.xz * vec2(3.4, 4.2));
+    vec2 cp = vWorld.xz * vec2(3.4, 4.2);
+    float far = smoothstep(0.35, 0.9, max(length(fwidth(cp)), 0.0));   // вдали камни сливаются в ровный тон — без ряби
+    vec3 c = mix(cells(cp), vec3(0.42, 0.5, 0.5), far);
     vec3 base = vec3(0.62, 0.6, 0.66) * (0.82 + c.z * 0.3) * (1.06 - c.x * 0.25);
     base = mix(base, base * vec3(0.55, 0.52, 0.66), 1.0 - smoothstep(0.03, 0.13, c.y));
-    vec2 g = fract(vWorld.xz * vec2(0.9, 1.3));
+    vec2 g = mix(fract(vWorld.xz * vec2(0.9, 1.3)), vec2(0.5), smoothstep(0.2, 0.6, length(fwidth(vWorld.xz * vec2(0.9, 1.3)))));
     vec3 slab = vec3(0.78, 0.74, 0.72) * (0.9 + hash(floor(vWorld.xz * vec2(0.9, 1.3))) * 0.14) * (1.0 - (1.0 - smoothstep(0.0, 0.04, min(g.x, g.y))) * 0.3);
     base = mix(base, slab, walk);
     base = mix(base, vec3(0.84, 0.8, 0.76), curb * 0.85);
@@ -226,7 +228,7 @@ const GROUND_FRAG = /* glsl */ `
       vec2 dl = vWorld.xz - uLightPos[i].xz, vd = normalize(cameraPosition.xz - uLightPos[i].xz + 0.001);
       float along = dot(dl, vd), across = dot(dl, vec2(-vd.y, vd.x));
       float s = exp(-across * across / max(0.18 + along * 0.05, 0.12)) * smoothstep(-0.6, 1.0, along) * exp(-max(along, 0.0) / 7.0);
-      col += uLightCol[i] * s * (0.75 + 0.25 * vnoise(vec2(along * 3.0, across * 6.0))) * 0.22;
+      col += uLightCol[i] * s * 0.2;
     }
     float puddle = smoothstep(0.58, 0.7, fbm(vWorld.xz * 0.18 + 2.0)) * (1.0 - walk);
     col = mix(col, uSkyCol * 0.75 + col * 0.35, puddle * 0.2);
