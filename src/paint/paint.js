@@ -282,7 +282,7 @@ export function paintPatch(material, look) {
 // Пройтись по объекту и «перерисовать» все подходящие материалы
 export function paintObject(object, look) {
   object.traverse((o) => {
-    if (!o.isMesh) return;
+    if (!o.isMesh || o.userData.noPaint) return;
     for (const m of Array.isArray(o.material) ? o.material : [o.material]) paintPatch(m, look);
   });
 }

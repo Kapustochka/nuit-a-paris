@@ -13,6 +13,7 @@ export function createPainter(renderer, { radius = 3, scale = 1 } = {}) {
   const normalRT = new THREE.WebGLRenderTarget(1, 1, { depthTexture: new THREE.DepthTexture(1, 1) });
   const normalMat = new THREE.MeshNormalMaterial({ side: THREE.DoubleSide });
   const normalInst = new THREE.MeshNormalMaterial({ side: THREE.DoubleSide });
+  const normalReal = new THREE.MeshNormalMaterial({ opacity: 0 });   // альфа 0 — «здесь без мазков»
   const leafMats = new Map();
   const leafNormal = (map) => {
     if (!leafMats.has(map)) leafMats.set(map, new THREE.ShaderMaterial({
@@ -62,7 +63,8 @@ export function createPainter(renderer, { radius = 3, scale = 1 } = {}) {
       }
       void main() {
         vec2 px = 1.0 / uRes, sp = vUv * uRes;
-        vec3 col = uPaint > 0.5 ? kuwahara(vUv, px) : tap(vUv);
+        float real = 1.0 - texture2D(tNormal, vUv).a;             // героиня: чёткий кадр без мазков
+        vec3 col = uPaint > 0.5 && real < 0.5 ? kuwahara(vUv, px) : tap(vUv);
 
         float w = uLine * (0.5 + 1.3 * vnoise(sp / 80.0));
         vec2 c = vUv + (vec2(vnoise(sp / 19.0), vnoise(sp / 19.0 + 31.0)) - 0.5) * 1.8 * px;
@@ -77,6 +79,7 @@ export function createPainter(renderer, { radius = 3, scale = 1 } = {}) {
         float dn = length(nL - nR) + length(nU - nD);
         float dz = (abs(zL - zR) + abs(zU - zD)) / max(zC, 0.1);
         float e = max(smoothstep(0.45, 0.95, dn), smoothstep(0.035, 0.11, dz));
+        e *= mix(1.0, 0.55, real);
         e *= (1.0 - leaf) * (1.0 - 0.85 * smoothstep(14.0, 70.0, zC)) * uEdges;
         e *= mix(0.55, 1.0, smoothstep(0.25, 0.5, vnoise(sp / 7.0 + 5.0)));
         vec3 ink = mix(col * vec3(0.35, 0.3, 0.55), uInk, 0.5);
@@ -111,7 +114,7 @@ export function createPainter(renderer, { radius = 3, scale = 1 } = {}) {
         const m = Array.isArray(o.material) ? o.material[0] : o.material;
         if (skip(m)) { hidden.push(o); return; }
         swap.push([o, o.material]);
-        o.material = o.userData.leafMap ? leafNormal(o.userData.leafMap)
+        o.material = o.userData.realistic ? normalReal : o.userData.leafMap ? leafNormal(o.userData.leafMap)
           : m.alphaTest > 0 && m.map ? leafNormal(m.map)
           : o.isInstancedMesh ? normalInst : normalMat;
       } else if (o.isPoints || o.isSprite || o.isLine) hidden.push(o);

@@ -63,7 +63,10 @@ const near = (actor, x, z) => actor && Math.hypot(x - actor.position.x, z - acto
 const walkingPasserby = placePasserby(scene, walkingAsset, world, player, (x, z) => near(circularPasserby, x, z));
 const circularPasserby = placeCircularPasserby(scene, circleAsset, world, player, (x, z) => near(walkingPasserby, x, z));
 const passersby = [walkingPasserby, circularPasserby].filter(Boolean);
-world.paint(scene);                 // героиня, прохожие — в тот же живописный свет
+// Героиня чуть реалистичнее мира вокруг: обычный свет вместо живописного и без мазков (только тонкий контур)
+heroine.root.traverse((o) => { o.userData.noPaint = true; o.userData.realistic = true; });
+world.lightHeroine(heroine.root);
+world.paint(scene);                 // прохожие и всё остальное — в живописный свет
 const blocked = (x, z) => world.blocked(x, z) || passersby.some((actor) => passerbyBlocksStep(actor, player, x, z));
 const audio = createFrenchAudio();
 const lesson = createLesson(world.bakery, heroine.root.position, audio, minimap, (key) => inspector.show(key));

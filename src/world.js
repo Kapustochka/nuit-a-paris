@@ -205,6 +205,13 @@ export function buildParis(scene, renderer, data, city, props = {}) {
   function update(dt, hx, hz, camera) {
     sky.update(dt);
     facades.update(camera.position.x, camera.position.z);
+    if (hero) {
+      const h = hero.position, [, moon, fill, lamp] = heroLights;
+      moon.target.position.copy(h); moon.position.copy(h).addScaledVector(sky.moonDirection, 30); moon.target.updateMatrixWorld();
+      fill.position.set(h.x + (camera.position.x - h.x) * 0.35, h.y + 2.3, h.z + (camera.position.z - h.z) * 0.35);
+      const near = lampOrder[0];
+      if (near) { lamp.position.copy(near.p); lamp.intensity = 14; }
+    }
     tick -= dt;
     if (tick <= 0) {
       tick = 0.2;
@@ -220,8 +227,18 @@ export function buildParis(scene, renderer, data, city, props = {}) {
   }
   const paint = (object) => paintObject(object, look);
 
+  // Свет только для героини (живописные материалы его не замечают): небо, луна, мягкая подсветка и ближайший фонарь
+  let hero = null;
+  const heroLights = [new THREE.HemisphereLight(0x9aa0d8, 0x4a4256, 1.15), new THREE.DirectionalLight(0xb8c0ff, 0.7),
+    new THREE.PointLight(0xffddae, 3.2, 7, 1.4), new THREE.PointLight(0xffb066, 0, 14, 1.6)];
+  function lightHeroine(root) {
+    hero = root;
+    heroLights[1].position.copy(sky.moonDirection).multiplyScalar(30);
+    for (const l of heroLights) scene.add(l);
+  }
+
   return {
-    blocked, inside, streetAt, freeSpot, update, sky, bakery, night, look, paint, facades, heightAt: (x, z) => standAt(x, z),
+    blocked, inside, streetAt, freeSpot, update, sky, bakery, night, look, paint, facades, lightHeroine, heightAt: (x, z) => standAt(x, z),
     stats: { stairs: stairs.count, buildings: polys.length, lamps: lamps.length, detailedLamps, benches: benches.length, pigeons, ...streetLife },
   };
 }
