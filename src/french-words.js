@@ -49,5 +49,14 @@ export const words = {
   rat: ['le rat', 'lə ʁa', 'лё ра', 'крыса', 'Un rat court près de la poubelle.', 'Крыса бегает возле урны.'],
   flowerpot: ['le pot de fleurs', 'lə po də flœʁ', 'лё по дё флёр', 'цветочный горшок', 'Il y a un pot de fleurs devant la fenêtre.', 'Перед окном стоит горшок с цветами.'],
   crate: ['la cagette', 'la kaʒɛt', 'ла кажэт', 'ящик для фруктов', 'La cagette est pleine de pommes.', 'Ящик полон яблок.'],
+  passant: ['le passant', 'lə pasɑ̃', 'лё паса̃', 'прохожий', 'Un passant me souhaite une bonne soirée.', 'Прохожий желает мне хорошего вечера.'],
+  // Что говорят прохожие на улице (облачко над головой; двойной клик по облачку или прохожему — карточка)
+  bonsoir: ['Bonsoir !', 'bɔ̃swaʁ', 'бо̃суар', 'Добрый вечер!', 'Bonsoir, madame. Bonsoir, monsieur.', 'Добрый вечер, мадам. Добрый вечер, месье.'],
+  bonsoirMademoiselle: ['Bonsoir, mademoiselle !', 'bɔ̃swaʁ madmwazɛl', 'бо̃суар, мадмуазэль', 'Добрый вечер, девушка!', 'Bonsoir, mademoiselle, vous cherchez quelque chose ?', 'Добрый вечер, девушка, вы что-то ищете?'],
+  bonneSoiree: ['Bonne soirée !', 'bɔn swaʁe', 'бон суарэ', 'Хорошего вечера!', 'Merci, et bonne soirée à vous !', 'Спасибо, и вам хорошего вечера!'],
+  salut: ['Salut !', 'saly', 'салю', 'Привет! (по-дружески)', 'Salut, ça va ?', 'Привет, как дела?'],
+  pardon: ['Pardon !', 'paʁdɔ̃', 'пардо̃', 'Простите! (когда задел или проходишь мимо)', 'Pardon, je peux passer ?', 'Простите, можно пройти?'],
+  belleNuit: ['Belle nuit, n’est-ce pas ?', 'bɛl nɥi nɛs pa', 'бэль нюи, нэс па', 'Чудесная ночь, правда?', 'Quelle belle nuit sur Montmartre !', 'Какая чудесная ночь над Монмартром!'],
+  ilFaitFrais: ['Il fait frais ce soir.', 'il fɛ fʁɛ sə swaʁ', 'иль фэ фрэ сё суар', 'Сегодня вечером прохладно.', 'Il fait frais, je mets mon écharpe.', 'Прохладно, я надеваю шарф.'],
+  bonneNuit: ['Bonne nuit !', 'bɔn nɥi', 'бон нюи', 'Спокойной ночи! (на прощание поздно вечером)', 'Bonne nuit, à demain !', 'Спокойной ночи, до завтра!'],
 };
-
