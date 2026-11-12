@@ -50,42 +50,19 @@ export function createFrenchAudio() {
 
   function stop() {
     revision++;
-    clearLines();
     player.pause();
     box.stop();
     window.speechSynthesis?.cancel();
   }
 
-  // Песенка: заранее спетый голосом файл (scripts/build-star-songs.py); без него — одна шкатулка.
-  // Строки подсвечиваются по тем же долям, по которым собран файл.
-  let lineTimers = [];
-  const clearLines = () => { for (const t of lineTimers) clearTimeout(t); lineTimers = []; };
-  function sing(id, song) {
-    const attempt = revision;
-    player.src = `assets/voice/star/song-${id}.mp3`;
-    player.onplaying = () => {
-      if (attempt !== revision) return;
-      clearLines();
-      const beat = 60 / song.tempo;
-      let t = 0.08 - player.currentTime;
-      song.lines.forEach(([, , melody], line) => {
-        lineTimers.push(setTimeout(() => dispatchEvent(new CustomEvent('song-line', { detail: line })), Math.max(0, t) * 1000));
-        t += melody.split(' ').reduce((sum, step) => sum + Number(step.split(':')[1]), 0) * beat + beat * 0.5;
-      });
-    };
-    player.onended = () => { if (attempt === revision) dispatchEvent(new CustomEvent('song-line', { detail: -1 })); };
-    player.play().catch(() => { if (attempt === revision) box.play(song); });
-  }
-
   function play(clip, text, report = () => {}) {
     stop();
     if (clip.startsWith('song:')) {
-      const id = Number(clip.slice(5)), song = starSongs[id];
-      if (song) sing(id, song); else report('Песенка недоступна.');
+      const song = starSongs[Number(clip.slice(5))];
+      if (song) box.play(song); else report('Мелодия недоступна.');
       return;
     }
     const attempt = revision;
-    player.onplaying = player.onended = null;
     // Слова с улицы лежат в WAV, находки из звёзд — в сжатом MP3.
     player.src = `assets/voice/${clip}.${clip.startsWith('star/') ? 'mp3' : 'wav'}`;
     player.play().catch(() => {

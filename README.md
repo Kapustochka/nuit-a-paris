@@ -46,7 +46,7 @@ The “Ночное небо” (Night sky) section controls cloud density, star
 - `assets/street/` — lightweight in-game copies of Meshy street models
 - `assets/people/` — lightweight copies of passer-by models
 - `assets/voice/` — French voice-over for word cards, [voice source and build](assets/voice/README.md)
-- `src/falling-star.js` — the falling star; its color tells what is inside: yellow for a word, green for a phrase, blue for a story, rare violet for a song. The dictionary lives in `src/star-words.js`, the songs in `src/star-songs.js` (traditional French nursery songs, public domain, sung over a music box; `scripts/build-star-songs.py` renders `assets/voice/star/song-N.mp3` with Piper and Praat). Voice clips are in `assets/voice/star/`. Add `?star=song` (or `word`, `phrase`, `story`) to the URL to make only that kind of star fall.
+- `src/falling-star.js` — the falling star; its color tells what is inside: yellow for a word, green for a phrase, blue for a story, rare violet for a song. The dictionary lives in `src/star-words.js`, the songs in `src/star-songs.js` (traditional French nursery songs, public domain, played as a music box). Voice clips are in `assets/voice/star/`. Add `?star=song` (or `word`, `phrase`, `story`) to the URL to make only that kind of star fall.
 - `src/street-props.js` — loading and placing street models
 - `src/street-life.js` — the kiosk, bins, bicycles, scooters, flower pots, cats, rats and newspapers along the streets, plus the café terrace chairs
 - `scripts/optimize-meshy.mjs` — turns a heavy Meshy GLB into a light in-game copy (simplified mesh, WebP textures, meshopt compression); the settings used for each model are listed at the top of the file

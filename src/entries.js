@@ -29,7 +29,7 @@ export function entryFor(key) {
     const { title, lines } = starSongs[id];
     return { kind: 'song', badge: '♪ Песенка со звезды', term: title[0], translation: title[1],
       lines: lines.map(([french, russian]) => [french, russian]),
-      say: { term: [`song:${id}`, '', '♪ Спеть'] } };
+      say: { term: [`song:${id}`, '', '♪ Мелодия'], example: [`star/m-${id}`, lines.map(([french]) => french).join(' '), '▶ Слова'] } };
   }
   return null;
 }

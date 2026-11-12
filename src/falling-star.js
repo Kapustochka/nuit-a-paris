@@ -9,7 +9,7 @@ const FIRST_AFTER = 3;       // первая звезда падает почт�
 const LOST_AFTER = 3;        // секунд вне кадра, после которых звезда считается потерянной
 const LOST_DISTANCE = 30;    // дальше этого расстояния звезду уже не разглядеть
 const FALL_TIME = 1.7, HOVER = 0.55;
-const KIND_ODDS = [['word', 0.5], ['phrase', 0.2], ['story', 0.15], ['song', 0.15]];   // фиолетовые — пореже
+const KIND_ODDS = [['word', 0.62], ['phrase', 0.2], ['story', 0.12], ['song', 0.06]];   // фиолетовые — редкие
 // Для отладки: ?star=song (или word, phrase, story) — падают звёзды только этого вида.
 const FORCED_KIND = new URLSearchParams(location.search).get('star');
 const seenKey = 'nuit-a-paris:stars:v1';
