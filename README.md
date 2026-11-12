@@ -20,6 +20,8 @@ Windows may ask about the firewall — allow access on private networks.
 - Phone: left half of the screen — joystick (push to the edge to run), right half — camera, two fingers — zoom.
 - Double-click (or double-tap) an object to open a word card with pronunciation, translation and an example. The word is saved to the notebook in this browser. Close the card with × or Escape.
 - About every ten steps a glowing star falls in front of the heroine. Double-click it to get a random French word, phrase, short story or fun fact with a Russian translation and voice-over. The next star falls only after the current one is opened, or once it has dropped out of view.
+- Occasionally (at most every fourth star), a star asks you to recall a word from your notebook. Think of its translation, choose **Показать ответ**, then **Вспомнил** or **Пока забыл**. The answer plays aloud. New words wait two minutes before becoming eligible; forgotten words can return after one minute, while successful reviews spread from ten minutes to several days. The notebook and review progress stay in this browser. Closing a card does not count as a successful review. Songs, stories and phrases keep their normal stars.
+- **Звук города: вкл / выкл** controls quiet wind, footsteps, nearby café glasses and a distant synthesized accordion-style waltz at Place du Tertre. Sound starts after the first interaction, fades with distance, and becomes quieter during French speech or a song. Hidden tabs are silent. The setting is saved; the word-card pronunciation buttons work independently.
 
 The plan for the next walk and the list of models to look for in Meshy are in [NEXT-STEPS.md](NEXT-STEPS.md).
 
@@ -52,5 +54,9 @@ The “Ночное небо” (Night sky) section controls cloud density, star
 - `src/minimap.js` — minimap and the big map (M)
 - `src/controls.js` — keyboard, joystick, camera
 - `src/main.js` — game loop
+- `src/word-review.js` — notebook-word review scheduling; run `node --test tests/word-review.test.mjs` to check it
+- `src/city-audio.js` — bounded Web Audio synthesis for the city (no downloaded recordings or added 3D geometry)
+
+For review debugging, `?star=review` uses any due notebook word when available (an empty notebook falls back to normal stars). The existing `?star=word|phrase|story|song` modes keep their original kinds without review interruptions.
 
 Map data © OpenStreetMap contributors (ODbL). Elevation: AWS Terrain Tiles (Mapzen terrarium; includes SRTM and other public sources).

@@ -105,6 +105,15 @@
 .word-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 15px; }
 #word-card .word-actions button { padding: 7px 10px; font-size: 13px; }
 #word-card .word-status:not(:empty) { margin-top: 8px; font-size: 12px; }
+.review-prompt, .review-actions { display: none; }
+#word-card[data-review] .review-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+#word-card .review-actions button { min-height: 44px; padding: 9px 12px; font-size: 14px; }
+#word-card[data-review="prompt"] .review-prompt { display: block; margin-top: 14px; font-size: 14px; line-height: 1.5; }
+#word-card[data-review="prompt"] :is(.word-pronunciation, .word-translation, .word-example, .word-lines, .word-actions) { display: none; }
+#city-sound { position: fixed; z-index: 7; top: max(65px, calc(env(safe-area-inset-top) + 60px)); right: max(12px, env(safe-area-inset-right)); min-height: 44px; }
+#city-sound[aria-pressed="false"] { opacity: .78; }
+#notebook .notebook-review-note { font-size: 12px; line-height: 1.5; margin-bottom: 12px; color: var(--ink-soft); }
+@media (max-width: 490px) { #city-sound { top: max(88px, calc(env(safe-area-inset-top) + 78px)); font-size: 14px; max-width: 46vw; } }
 #word-marker {
   position: fixed;
   z-index: 9;
