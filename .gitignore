@@ -8,3 +8,4 @@ people on street/
 *.zip
 /*.glb
 __pycache__/
+node_modules/

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 
-export function buildBakeryCounter(scene, shop, blocked) {
+export function buildBakeryCounter(scene, shop, blocked, croissantModel = null) {
   if (!shop) return null;
   const { nx, nz } = shop;
   const yaw = Math.atan2(nx, nz);
@@ -87,7 +87,14 @@ export function buildBakeryCounter(scene, shop, blocked) {
   }
 
   const sphere = new THREE.SphereGeometry(1, 14, 9);
-  for (const offset of [-0.11, 0.08]) {
+  if (croissantModel) {                         // круассаны из модели Meshy
+    for (const [z, turn] of [[-0.09, 0.35], [0.09, -0.25]]) {
+      const curl = mesh(croissantModel.geometry, croissantModel.material, 0, 1.025 + pastryLift, z, 'croissant');
+      curl.rotation.y = turn;
+      curl.scale.setScalar(1.25);
+      curl.userData.bakeryChoice = true;
+    }
+  } else for (const offset of [-0.11, 0.08]) {
     for (let i = -3; i <= 3; i++) {
       const a = i * 0.38, thickness = 0.058 - Math.abs(i) * 0.012;
       const curl = mesh(sphere, i % 2 ? crust : pastry, Math.sin(a) * 0.13, 1.045 + pastryLift + thickness * 0.57,

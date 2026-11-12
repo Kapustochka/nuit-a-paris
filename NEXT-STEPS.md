@@ -10,9 +10,9 @@ The next learning step is a notebook of discovered words. After a walk the playe
 | --- | --- | --- | --- |
 | 1 | A separate Parisian door and a window with a balcony railing | `Parisian wooden door stone frame`, `Haussmann window wrought iron balcony` | *la porte*, *la poignée*, *la fenêtre*, *le balcon* |
 | 2 | Bakery facade with a shop window and an awning | `Montmartre boulangerie storefront warm light` | *la boulangerie*, *la vitrine*, *l’enseigne*, *le store* |
-| 3 | Baguette, croissant and basket as three separate objects | `French baguette`, `butter croissant`, `wicker bread basket` | *la baguette*, *le croissant*, *le panier* |
-| 4 | Café terrace set with separate parts | `Paris café bistro chair table espresso cup` | *la chaise*, *la table*, *la tasse*, *la soucoupe* |
-| 5 | Geranium pot, bicycle and street litter bin | `Paris geranium window planter`, `vintage city bicycle`, `Paris street litter bin` | *le pot*, *le géranium*, *le vélo*, *la poubelle* |
+| 3 | Baguette and basket as separate objects (the croissant is done) | `French baguette`, `wicker bread basket` | *la baguette*, *le panier* |
+| 4 | Espresso cup and saucer for the café tables (chairs and marble tables are done) | `Paris café espresso cup saucer` | *la tasse*, *la soucoupe* |
+| 5 | Geranium window planter (bicycles, bins and flower pots are done) | `Paris geranium window planter` | *la jardinière*, *le géranium* |
 | 6 | Stone stairway with railings | `Montmartre stone stairway iron railing modular` | *l’escalier*, *la marche*, *la rampe* |
 
 Models with clear silhouettes and matte surfaces work best for this scene. If the door, frame, handle and glass are separate meshes, each one can get its own word. Download models as GLB with textures. After importing, check the size in metres, the position on the ground and how the model looks under night lighting.

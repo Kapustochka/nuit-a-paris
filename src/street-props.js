@@ -1,16 +1,35 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 
+// size — реальный размер в метрах по оси axis; word — ключ карточки в french-words.js.
+// Новые модели Meshy сжаты meshopt (EXT_meshopt_compression), старые — без сжатия геометрии.
 const ASSETS = {
-  'lamp-elegance': { axis: 'y', size: 3.85, glass: [0.69, 0.84] },
-  'lamp-vintage': { axis: 'y', size: 3.65, glass: [0.59, 0.79] },
-  'park-bench': { axis: 'x', size: 1.85 },
-  pigeon: { axis: 'x', size: 0.33 },
-  'pigeon-small': { axis: 'x', size: 0.28 },
+  'lamp-elegance': { axis: 'y', size: 3.85, glass: [0.69, 0.84], word: 'lamp' },
+  'lamp-vintage': { axis: 'y', size: 3.65, glass: [0.59, 0.79], word: 'lamp' },
+  'lamp-ornate': { axis: 'y', size: 3.9, glass: [0.70, 0.85], word: 'lamp' },
+  'lamp-lantern': { axis: 'y', size: 3.6, glass: [0.80, 0.95], word: 'lamp' },
+  'park-bench': { axis: 'x', size: 1.85, word: 'bench' },
+  pigeon: { axis: 'x', size: 0.33, word: 'pigeon' },
+  'pigeon-small': { axis: 'x', size: 0.28, word: 'pigeon' },
+  'chair-rattan': { axis: 'y', size: 0.9, word: 'chair' },
+  'bistro-table': { axis: 'y', size: 0.74, word: 'table' },
+  croissant: { axis: 'x', size: 0.16, word: 'croissant' },
+  kiosk: { axis: 'y', size: 2.7, word: 'kiosk' },
+  newspaper: { axis: 'x', size: 0.55, word: 'newspaper' },
+  'trash-bin': { axis: 'y', size: 0.95, word: 'bin' },
+  'bicycle-red': { axis: 'x', size: 1.75, word: 'bicycle' },
+  'bicycle-black': { axis: 'x', size: 1.75, word: 'bicycle' },
+  'scooter-red': { axis: 'z', size: 1.8, word: 'scooter' },
+  'scooter-lime': { axis: 'x', size: 1.8, word: 'scooter' },
+  cat: { axis: 'x', size: 0.55, word: 'cat' },
+  rat: { axis: 'z', size: 0.34, word: 'rat' },
+  'flower-pot': { axis: 'y', size: 0.75, word: 'flowerpot' },
+  'fruit-crate': { axis: 'x', size: 0.6, word: 'crate' },
 };
 
 export async function loadStreetProps() {
-  const loader = new GLTFLoader();
+  const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
   const assets = await Promise.all(Object.entries(ASSETS).map(async ([name, spec]) => {
     try {
       const { scene } = await loader.loadAsync(`assets/street/${name}.glb`);
@@ -19,7 +38,7 @@ export async function loadStreetProps() {
       scene.traverse((object) => { if (object.isMesh) mesh = object; });
       if (!mesh) throw new Error('в модели нет меша');
 
-      const geometry = mesh.geometry.applyMatrix4(mesh.matrixWorld);
+      const geometry = toFloat(mesh.geometry).applyMatrix4(mesh.matrixWorld);
       geometry.computeBoundingBox();
       const bounds = geometry.boundingBox;
       const center = bounds.getCenter(new THREE.Vector3());
@@ -36,13 +55,25 @@ export async function loadStreetProps() {
         material.roughness = 0.84;
         material.roughnessMap = null;
       }
-      return [name, { name, geometry, material, glassHeight, bounds: geometry.boundingBox }];
+      return [name, { name, geometry, material, glassHeight, word: spec.word, bounds: geometry.boundingBox }];
     } catch (error) {
       console.warn(`Реквизит ${name}: ${error.message}`);
       return [name, null];
     }
   }));
   return Object.fromEntries(assets);
+}
+
+// meshopt хранит координаты в целых числах; до масштабирования переводим их в float,
+// иначе вершины за пределами [-1, 1] обрежутся.
+function toFloat(geometry) {
+  for (const [name, attribute] of Object.entries(geometry.attributes)) {
+    if (attribute.array instanceof Float32Array && !attribute.isInterleavedBufferAttribute) continue;
+    const { count, itemSize } = attribute, array = new Float32Array(count * itemSize);
+    for (let i = 0; i < count; i++) for (let k = 0; k < itemSize; k++) array[i * itemSize + k] = attribute.getComponent(i, k);
+    geometry.setAttribute(name, new THREE.BufferAttribute(array, itemSize));
+  }
+  return geometry;
 }
 
 function lightGlass(material, [bottom, top]) {
@@ -76,10 +107,11 @@ export function addPropInstances(scene, asset, placements) {
   for (const cell of cells.values()) {
     const mesh = new THREE.InstancedMesh(asset.geometry, asset.material, cell.length);
     mesh.name = asset.name;
-    mesh.userData.word = asset.name === 'park-bench' ? 'bench' : asset.glassHeight ? 'lamp' : 'pigeon';
-    cell.forEach(({ x, z, yaw }, i) => {
-      pose.position.set(x, 0, z);
+    mesh.userData.word = asset.word;
+    cell.forEach(({ x, z, yaw, y = 0, scale = 1 }, i) => {
+      pose.position.set(x, y, z);
       pose.rotation.y = yaw;
+      pose.scale.setScalar(scale);
       pose.updateMatrix();
       mesh.setMatrixAt(i, pose.matrix);
     });
