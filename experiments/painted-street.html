@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Nuit à Paris · рисованная улица</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #14103a; color: #f6e9d6; font: 14px system-ui, sans-serif; }
+  canvas { display: block; touch-action: none; }
+  .panel { position: fixed; top: max(12px, env(safe-area-inset-top)); left: 12px; z-index: 2; max-width: 300px; padding: 12px 14px; background: #171340d9; border: 1px solid #b59ab055; border-radius: 12px; backdrop-filter: blur(8px); }
+  h1 { font: italic 600 21px Georgia, serif; margin: 0 0 6px; }
+  p { margin: 4px 0 10px; line-height: 1.4; color: #d9d4ea; }
+  .row { display: flex; flex-wrap: wrap; gap: 6px; }
+  button { background: #6e3c5a; border: 1px solid #d9a690; color: #fff; border-radius: 8px; padding: 7px 10px; font: inherit; cursor: pointer; }
+  button.off { background: #2b2650; border-color: #6a6190; color: #a9a3c8; }
+  button.on { background: #b06a3c; }
+  a { color: #ffd9a6; }
+  .hint { position: fixed; bottom: max(10px, env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); background: #171340c9; padding: 7px 12px; border-radius: 99px; font-size: 12px; white-space: nowrap; }
+  @media (max-width: 650px) { .panel { right: 12px; max-width: none; padding: 9px 11px; } .panel p { display: none; } .hint { font-size: 10px; white-space: normal; width: 86%; text-align: center; border-radius: 12px; } }
+</style>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"}}</script>
+</head>
+<body>
+<div class="panel">
+  <h1>Рисованная улица</h1>
+  <p>Эксперимент: мягкая процедурная геометрия, живописный шейдер и «кисть и тушь» поверх кадра. Всё из кода, без моделей и картинок.</p>
+  <div class="row">
+    <button id="mode">Ночь</button>
+    <button id="edges">Контуры</button>
+    <button id="paint">Мазки</button>
+    <button id="compare" class="off">Обычное 3D</button>
+  </div>
+  <p><a href="../">← Основная игра</a></p>
+</div>
+<div class="hint">Мышь / палец — вращать · колесо / щипок — ближе · правая кнопка / два пальца — сдвиг</div>
+<script type="module" src="painted/main.js"></script>
+</body>
+</html>
