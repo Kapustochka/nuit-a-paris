@@ -12,69 +12,33 @@ import { createFrenchAudio } from './french-audio.js';
 import { createLesson } from './lesson.js';
 import { createFallingStars } from './falling-star.js';
 import { loadPasserby, placePasserby, placeCircularPasserby, passerbyBlocksStep } from './passerby.js';
-import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
-import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
-import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
-import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
-import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { createPainter } from './paint/post.js';
 
 const loading = document.getElementById('loading');
 const streetEl = document.getElementById('street');
 const fail = (e) => { loading.textContent = String(e.message || e); throw e; };
 
-const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 1.75));
+const phone = matchMedia('(pointer: coarse)').matches || innerWidth < 700;
+const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(devicePixelRatio, phone ? 1.25 : 1.5));
 renderer.setSize(innerWidth, innerHeight);
-renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.15;
 document.getElementById('app').appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(58, innerWidth / innerHeight, 0.1, 4000);
 
-// Цветокоррекция ночи (до тонмаппинга): тени уходят в синеву, свет фонарей теплее, края кадра темнее
-const NIGHT_GRADE = {
-  uniforms: { tDiffuse: { value: null } },
-  vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-  fragmentShader: `
-    uniform sampler2D tDiffuse; varying vec2 vUv;
-    void main() {
-      vec4 c = texture2D(tDiffuse, vUv);
-      float l = dot(c.rgb, vec3(0.2126, 0.7152, 0.0722));
-      vec3 cool = vec3(0.86, 0.92, 1.12), warm = vec3(1.08, 0.98, 0.86);
-      c.rgb *= mix(cool, warm, smoothstep(0.05, 0.6, l));
-      c.rgb = mix(vec3(l), c.rgb, 1.08);                                  // чуть сочнее
-      vec2 d = vUv - 0.5;
-      c.rgb *= 1.0 - smoothstep(0.35, 0.95, length(d * vec2(1.1, 1.0))) * 0.55;
-      gl_FragColor = c;
-    }`,
-};
-
-// Мягкое свечение фонарей и окон (bloom). На слабом телефоне отключается само.
-const noBloom = new URLSearchParams(location.search).has('nobloom');
-let composer = null;
-if (!noBloom) {
-  const pr = renderer.getPixelRatio();
-  const target = new THREE.WebGLRenderTarget(innerWidth * pr, innerHeight * pr, {
-    type: THREE.HalfFloatType,
-    samples: Math.min(2, renderer.capabilities.maxSamples),
-  });
-  composer = new EffectComposer(renderer, target);
-  composer.setSize(innerWidth, innerHeight);
-  composer.addPass(new RenderPass(scene, camera));
-  composer.addPass(new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.36, 0.6, 0.82));
-  composer.addPass(new ShaderPass(NIGHT_GRADE));
-  composer.addPass(new OutputPass());
-}
+// Кадр как нарисованный: мазки (фильтр Кувахары), контуры тушью, зерно бумаги (paint/post.js).
+// С ?plain — обычный кадр без живописи, для сравнения и для очень слабых устройств.
+const plainView = new URLSearchParams(location.search).has('plain');
+let painter = plainView ? null : createPainter(renderer, { radius: phone ? 2 : 3 });
+painter?.setSize();
 let slowFrames = 0, frames = 0;
 
 addEventListener('resize', () => {
   camera.aspect = innerWidth / innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
-  composer?.setSize(innerWidth, innerHeight);
+  painter?.setSize();
 });
 
 const streetProps = loadStreetProps();
@@ -84,16 +48,7 @@ const passerbyAssets = Promise.all([
 ]);
 const terrainLoad = loadTerrain();
 const mapData = await loadMapData((t) => { loading.textContent = t; }).catch(fail);
-// Нарисованные фасады домов и Сакре-Кёр (запечены из моделей Meshy)
-const tl = new THREE.TextureLoader();
-const cityTex = async (url) => { const t = await tl.loadAsync(url); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; return t; };
-const [facadeTex, groundTex, facadeMeta, sacreTex, sacre] = await Promise.all([
-  cityTex('assets/city/facades.webp'), cityTex('assets/city/facades_ground.webp'), fetch('assets/city/facades.json').then((r) => r.json()),
-  cityTex('assets/city/sacre.webp'), fetch('assets/city/sacre.json').then((r) => r.json()),
-]).catch(fail);
-const world = buildParis(scene, renderer, mapData, {
-  facadeTex, groundTex, facades: facadeMeta.facades, split: facadeMeta.split, sacreTex, sacre, terrain: await terrainLoad,
-}, await streetProps);
+const world = buildParis(scene, renderer, mapData, { terrain: await terrainLoad }, await streetProps);
 const controls = createControls(renderer.domElement);
 controls.state.camDist = 3.6;
 const minimap = createMinimap(document.getElementById('minimap'), mapData);
@@ -108,6 +63,7 @@ const near = (actor, x, z) => actor && Math.hypot(x - actor.position.x, z - acto
 const walkingPasserby = placePasserby(scene, walkingAsset, world, player, (x, z) => near(circularPasserby, x, z));
 const circularPasserby = placeCircularPasserby(scene, circleAsset, world, player, (x, z) => near(walkingPasserby, x, z));
 const passersby = [walkingPasserby, circularPasserby].filter(Boolean);
+world.paint(scene);                 // героиня, прохожие — в тот же живописный свет
 const blocked = (x, z) => world.blocked(x, z) || passersby.some((actor) => passerbyBlocksStep(actor, player, x, z));
 const audio = createFrenchAudio();
 const lesson = createLesson(world.bakery, heroine.root.position, audio, minimap, (key) => inspector.show(key));
@@ -117,7 +73,7 @@ loading.remove();
 
 const debug = new URLSearchParams(location.search).has('debug');
 if (debug) addDebugPanel();
-window.__game = { heroine, world, stars, mapData, camera, controls, renderer, get bloom() { return composer !== null; } };
+window.__game = { heroine, world, stars, mapData, camera, controls, renderer, get painted() { return painter !== null; }, get painter() { return painter; } };
 
 // ── Движение ─────────────────────────────────────────────────
 const MAX_WALK = 1.45, MAX_RUN = 3.8, MAX_BACK = 0.95; // м/с
@@ -197,21 +153,20 @@ renderer.setAnimationLoop(() => {
   minimap.update(p.x, p.z, facing, yaw);
   if (minimap.bigOpen) minimap.drawBig(p.x, p.z, facing);
 
-  // Если кадры идут медленно — выключаем свечение и снижаем чёткость
-  if (composer && ++frames > 60) {
+  // Если кадры идут медленно — мазки мельче, потом кадр в меньшем разрешении
+  if (painter && ++frames > 60) {
     if (dt > 1 / 26) slowFrames++;
     if (frames > 240) {
       if (slowFrames > 110) {
-        for (const pass of composer.passes) pass.dispose();
-        composer.dispose();
-        composer = null;
-        renderer.setPixelRatio(Math.min(devicePixelRatio, 1.25));
+        if (painter.radius > 1) painter.setRadius(painter.radius - 1);
+        else if (renderer.getPixelRatio() > 1) { renderer.setPixelRatio(1); painter.setSize(); }
+        else painter.setScale(0.75);
       }
       frames = 60;
       slowFrames = 0;
     }
   }
-  if (composer) composer.render(dt); else renderer.render(scene, camera);
+  if (painter) painter.render(scene, camera); else renderer.render(scene, camera);
 });
 
 // ── Отладка (открой игру с ?debug) ──────────────────────────────
@@ -222,7 +177,14 @@ async function addDebugPanel() {
   const atmosphere = gui.addFolder('Ночное небо');
   atmosphere.add(world.sky.uniforms.uCloudOpacity, 'value', 0, 1, 0.01).name('плотность облаков');
   atmosphere.add(world.sky.uniforms.uStarIntensity, 'value', 0, 1, 0.01).name('яркость звёзд');
-  atmosphere.add(scene.fog, 'density', 0, 0.02, 0.0001).name('дальняя дымка');
+  atmosphere.add(world.look.uFogDensity, 'value', 0, 0.02, 0.0001).name('дальняя дымка');
+  atmosphere.add(world.look.uWindowsOn, 'value', 0, 1, 0.01).name('горящие окна');
+  if (painter) {
+    const art = gui.addFolder('Живопись');
+    art.add(painter.uniforms.uPaint, 'value', 0, 1, 1).name('мазки');
+    art.add(painter.uniforms.uEdges, 'value', 0, 1, 0.05).name('контуры');
+    art.add(painter.uniforms.uLine, 'value', 0.5, 3, 0.05).name('толщина линии');
+  }
   const arms = gui.addFolder('Руки к телу (°)');
   for (const k of ['idle', 'walk', 'run']) arms.add(TUNING.armIn, k, -20, 30, 0.5);
   arms.add(TUNING, 'armSign', [1, -1]).name('направление');

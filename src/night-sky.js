@@ -4,10 +4,10 @@ export function createNightSky(scene) {
   const moonDirection = new THREE.Vector3(0.29, 0.36, -1).normalize();
   const uniforms = {
     uTime: { value: 0 },
-    uZenith: { value: new THREE.Color(0x090d26) },
-    uMidSky: { value: new THREE.Color(0x1a2149) },
-    uHorizon: { value: new THREE.Color(0x3e365f) },
-    uCloudColor: { value: new THREE.Color(0x58618e) },
+    uZenith: { value: new THREE.Color(0x0d0f33) },
+    uMidSky: { value: new THREE.Color(0x2b2461) },
+    uHorizon: { value: new THREE.Color(0x80547f) },
+    uCloudColor: { value: new THREE.Color(0x6a5c9a) },
     uCloudOpacity: { value: 0.38 },
     uCityGlow: { value: 0.22 },
     uStarIntensity: { value: 0.68 },

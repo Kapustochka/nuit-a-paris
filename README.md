@@ -33,7 +33,12 @@ The “Ночное небо” (Night sky) section controls cloud density, star
 - `assets/mixamo/` — the heroine: Mixamo rig (`base.fbx`), animations (idle, walk, run, walk back, jump, punch) and her textures from the original Meshy model
 - `src/heroine.js` — loading the heroine, animations, arm/leg adjustments
 - `src/world.js` — Montmartre from OpenStreetMap: buildings, street lamps, trees, Sacré-Cœur
-- `assets/city/` — building facades and Sacré-Cœur baked from Meshy models
+- `src/paint/` — the painted-anime look of the whole game (from the `experiments/painted-street.html` prototype):
+  - `paint.js` — painterly light: two tones with a brushy edge, violet shadows, lamp light from the night light map, haze, wet cobbles; also repaints any ready-made material (Meshy models, the heroine)
+  - `facades.js` — houses on the real OSM footprints: window niches, shutters, balconies, shopfronts with awnings and signs, mansards with dormers and chimneys, stepped on the slope; detailed blocks are built around the heroine as she walks
+  - `post.js` — brush strokes (Kuwahara filter), wobbly ink outlines and paper grain over the frame; `?plain` turns it off
+  - `builder.js`, `props.js` — geometry helpers, foliage, railings, signs, the painted Sacré-Cœur
+- `assets/city/` — the old facade cards baked from Meshy models (no longer loaded)
 - `src/night-sky.js` — procedural night sky
 - `src/night-light.js` — one light map for the whole city: lamp light pools, sidewalks and shade at the foot of walls
 - `src/terrain.js`, `assets/terrain.json` — the real slopes of the Montmartre hill (4 m height grid), built by `scripts/build-terrain.py`
