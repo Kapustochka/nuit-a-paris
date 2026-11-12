@@ -1,7 +1,7 @@
 // main.js — сцена, камера от третьего лица, движение героини по настоящему Монмартру
 import * as THREE from 'three';
 import { loadHeroine, TUNING } from './heroine.js';
-import { loadMapData, clearMapCache } from './osm.js';
+import { loadMapData, clearMapCache, toXZ } from './osm.js';
 import { buildParis } from './world.js';
 import { loadTerrain } from './terrain.js';
 import { createControls } from './controls.js';
@@ -60,8 +60,11 @@ heroine.root.position.set(sx, world.heightAt(sx, sz), sz);
 const [walkingAsset, circleAsset] = await passerbyAssets;
 const player = heroine.root.position;
 const near = (actor, x, z) => actor && Math.hypot(x - actor.position.x, z - actor.position.z) < 0.75;
-const walkingPasserby = placePasserby(scene, walkingAsset, world, player, (x, z) => near(circularPasserby, x, z));
-const circularPasserby = placeCircularPasserby(scene, circleAsset, world, player, (x, z) => near(walkingPasserby, x, z));
+// Две прохожие гуляют в разных местах: одна у площади Тертр, другая на смотровой площадке перед Сакре-Кёр.
+// (Возможно, потом станут альтернативными героинями.)
+const [sacreX, sacreZ] = toXZ(48.88672, 2.34306);
+const walkingPasserby = placePasserby(scene, walkingAsset, world, player, (x, z) => near(circularPasserby, x, z), [-6, -4]);
+const circularPasserby = placeCircularPasserby(scene, circleAsset, world, player, (x, z) => near(walkingPasserby, x, z), [sacreX, sacreZ + 60]);
 const passersby = [walkingPasserby, circularPasserby].filter(Boolean);
 // Героиня чуть реалистичнее мира вокруг: обычный свет вместо живописного и без мазков (только тонкий контур)
 heroine.root.traverse((o) => { o.userData.noPaint = true; o.userData.realistic = true; });
@@ -77,7 +80,7 @@ loading.remove();
 
 const debug = new URLSearchParams(location.search).has('debug');
 if (debug) addDebugPanel();
-window.__game = { heroine, world, stars, inspector, mapData, camera, controls, renderer, get painted() { return painter !== null; }, get painter() { return painter; } };
+window.__game = { heroine, passersby, world, stars, inspector, mapData, camera, controls, renderer, get painted() { return painter !== null; }, get painter() { return painter; } };
 
 // ── Движение ─────────────────────────────────────────────────
 const MAX_WALK = 1.45, MAX_RUN = 3.8, MAX_BACK = 0.95; // м/с

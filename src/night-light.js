@@ -97,51 +97,7 @@ function addWorldPos(shader, uniforms, defines = {}) {
   shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\n' + COMMON);
 }
 
-// Брусчатка: плиты тротуара, бордюр, тень у стен, лужи и тёплые пятна фонарей
-export function nightGround(material, light, sidewalkMap) {
-  material.onBeforeCompile = (shader) => {
-    addWorldPos(shader, { ...light.uniforms, uWalk: { value: sidewalkMap } }, light.defines);
-    shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', '#include <common>\nuniform sampler2D uWalk;\nvec4 nightCell; float nightWet;')
-      .replace('#include <map_fragment>', `#include <map_fragment>
-        nightCell = nightSample(vNightPos.xz);
-        float macro = nNoise(vNightPos.xz * 0.11) * 0.6 + nNoise(vNightPos.xz * 0.43) * 0.4;
-        diffuseColor.rgb *= 0.82 + macro * 0.34;                       // брусчатка не повторяется плиткой
-        float walk = smoothstep(0.42, 0.58, nightCell.g);
-        float curb = smoothstep(0.18, 0.4, nightCell.g) * (1.0 - smoothstep(0.42, 0.56, nightCell.g));
-        vec3 slab = texture2D(uWalk, vNightPos.xz * 0.5).rgb;
-        diffuseColor.rgb = mix(diffuseColor.rgb, slab, walk);
-        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.5, 0.49, 0.5), curb * 0.85);
-        diffuseColor.rgb *= 1.0 - nightCell.b * 0.75;
-        nightWet = smoothstep(0.52, 0.72, nNoise(vNightPos.xz * 0.07 + 3.1) * 0.7 + nNoise(vNightPos.xz * 0.31) * 0.3) * (1.0 - walk);`)
-      .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
-        roughnessFactor = mix(roughnessFactor, 0.3, nightWet);
-        roughnessFactor = mix(roughnessFactor, 0.78, walk);`)
-      .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
-        totalEmissiveRadiance += diffuseColor.rgb * uLampColor * nightCell.r * (0.4 + nightCell.r) * 2.6;`);
-  };
-  material.customProgramCacheKey = () => 'night-ground';
-}
 
-// Фасады-открытки (MeshBasicMaterial): ночь темнее, у фонарей — тёплое пятно, окна светятся как прежде
-export function nightFacade(material, light, key) {
-  material.onBeforeCompile = (shader) => {
-    addWorldPos(shader, light.uniforms, light.defines);
-    shader.fragmentShader = shader.fragmentShader.replace('#include <map_fragment>', `#include <map_fragment>
-      {
-        vec3 c = diffuseColor.rgb;
-        float glow = smoothstep(0.4, 0.68, c.g) * smoothstep(0.6, 0.85, c.r);   // светящиеся окна и витрины
-        vec4 cell = nightSample(vNightPos.xz);
-        float y = vNightPos.y - groundAt(vNightPos.xz);
-        float lamp = cell.r * exp(-max(y - 1.5, 0.0) * 0.28);
-        float shade = mix(0.4, 0.6, smoothstep(14.0, 2.0, y));         // верх домов уходит в ночь
-        shade *= 1.0 - 0.35 * (1.0 - smoothstep(0.0, 0.6, y));           // тень у самого тротуара
-        vec3 lit = c * (shade + lamp * 0.5) * mix(vec3(1.0), vec3(1.18, 0.96, 0.72), min(lamp, 1.0) * 0.6);
-        diffuseColor.rgb = mix(lit, c * 1.12, glow);
-      }`);
-  };
-  material.customProgramCacheKey = () => 'night-facade-' + key;
-}
 
 // Камень лестниц и балюстрад: тёплый свет фонарей из той же карты, тень у стен
 export function nightStone(material, light, key) {

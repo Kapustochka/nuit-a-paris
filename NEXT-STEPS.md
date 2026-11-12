@@ -17,4 +17,4 @@ The notebook of discovered words is done. The first bakery quest (hear an order,
 
 Models with clear silhouettes and matte surfaces work best for this scene. If the door, frame, handle and glass are separate meshes, each one can get its own word. Download models as GLB with textures. After importing, check the size in metres, the position on the ground and how the model looks under night lighting.
 
-When adding an object, record in `src/french-words.js` the word with its article, IPA, approximate pronunciation, Russian translation, a French phrase and its translation. The card key is assigned to the mesh through `userData.word`. For details on the baked facades, the mapping lives in `src/facade-words.js`.
+When adding an object, record in `src/french-words.js` the word with its article, IPA, approximate pronunciation, Russian translation, a French phrase and its translation. The card key is assigned to the mesh through `userData.word`.
