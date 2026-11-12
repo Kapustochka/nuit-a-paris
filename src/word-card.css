@@ -28,6 +28,23 @@
   font: 600 clamp(25px, 5vw, 33px)/1.06 Georgia, serif;
 }
 #word-card p { margin: 0; }
+#word-card .word-badge:empty, #word-card .word-pronunciation:not(:has(span:not(:empty))),
+#word-card .word-example:not(:has(p:not(:empty))), #word-card .word-lines:empty, #word-card button[hidden] { display: none; }
+#word-card .word-badge {
+  margin: 0 30px 7px 0;
+  color: #a8691f;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+#word-card[data-kind="phrase"] h2 { font-size: clamp(20px, 4vw, 24px); font-style: italic; line-height: 1.2; }
+#word-card[data-kind="story"] h2 { font-size: clamp(21px, 4.2vw, 26px); }
+#word-card[data-kind="story"] { width: min(400px, calc(100vw - 40px)); }
+.word-lines { margin: 14px 0 0; padding: 13px 0 0; border-top: 1px solid #885c543b; list-style: none; }
+.word-lines li + li { margin-top: 11px; }
+.word-lines [lang="fr"] { font: italic 16px/1.32 Georgia, serif; }
+.word-lines p + p { margin-top: 3px; color: #6b4656; font-size: 13px; line-height: 1.35; }
 #word-card button {
   border: 1px solid #8f5d625e;
   border-radius: 5px;
@@ -78,6 +95,7 @@
 }
 @media (max-width: 620px) {
   #word-card { right: max(10px, env(safe-area-inset-right)); bottom: max(9px, env(safe-area-inset-bottom)); width: min(335px, calc(100vw - 20px)); }
+  #word-card[data-kind="story"] { width: min(400px, calc(100vw - 20px)); }
 }
 @media (prefers-reduced-motion: reduce) {
   #word-card { animation: none; }

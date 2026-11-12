@@ -54,7 +54,7 @@
   <div id="hint">
     <span class="mouse-only">WASD — идти · Shift — бежать · Пробел — прыжок · F — удар · M — карта · мышь — камера</span>
     <span class="touch-only">Слева — джойстик (до края — бег) · справа — камера</span>
-    <small><span class="mouse-only">Двойной клик по предмету — слово</span><span class="touch-only">Двойное касание предмета — слово</span></small>
+    <small><span class="mouse-only">Двойной клик по предмету или упавшей звезде — слово</span><span class="touch-only">Двойное касание предмета или упавшей звезды — слово</span></small>
   </div>
   <div id="street"></div>
   <canvas id="minimap"></canvas>
@@ -66,7 +66,7 @@
   <aside id="notebook" lang="ru" aria-label="Найденные слова" hidden>
     <button type="button" data-close aria-label="Закрыть блокнот">×</button>
     <h2>Найденные слова</h2>
-    <p data-empty>Дважды нажми на предмет, чтобы добавить слово.</p>
+    <p data-empty>Дважды нажми на предмет или упавшую звезду, чтобы добавить слово.</p>
     <ul></ul>
   </aside>
   <section id="bakery-quest" lang="ru" aria-label="Заказ в булочной" hidden>
@@ -82,6 +82,7 @@
   <aside id="word-card" lang="ru" aria-label="Французское слово" hidden>
     <button class="word-close" type="button" data-close aria-label="Закрыть карточку">×</button>
     <div class="word-content" aria-live="polite">
+      <p class="word-badge" data-field="badge"></p>
       <h2 lang="fr" data-field="term"></h2>
       <p class="word-pronunciation"><span data-field="ipa"></span><span data-field="reading"></span></p>
       <p class="word-translation" data-field="translation"></p>
@@ -89,6 +90,7 @@
         <p lang="fr" data-field="example"></p>
         <p data-field="meaning"></p>
       </div>
+      <ol class="word-lines" data-field="lines"></ol>
     </div>
     <div class="word-actions">
       <button type="button" data-say="term">▶ Слово</button>

@@ -1,4 +1,5 @@
-import { bakeryOrder, words } from './french-words.js';
+import { bakeryOrder } from './french-words.js';
+import { entryFor } from './entries.js';
 
 const notebookKey = 'nuit-a-paris:words:v1';
 const questKey = 'nuit-a-paris:bakery:v1';
@@ -21,12 +22,12 @@ export function createLesson(bakery, player, audio, minimap, openWord) {
 
   try {
     const saved = JSON.parse(localStorage.getItem(notebookKey) || '[]');
-    if (Array.isArray(saved)) saved.filter((key) => Object.hasOwn(words, key)).forEach((key) => found.add(key));
+    if (Array.isArray(saved)) saved.filter((key) => entryFor(key)).forEach((key) => found.add(key));
     if (localStorage.getItem(questKey) === 'done') state = 'done';
   } catch { /* браузер может запретить хранение */ }
 
   function addWord(key) {
-    const [term, , , translation] = words[key];
+    const { term, translation } = entryFor(key);
     const item = document.createElement('li');
     const button = document.createElement('button');
     button.type = 'button';

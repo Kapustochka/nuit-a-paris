@@ -9,6 +9,7 @@ import { loadStreetProps } from './street-props.js';
 import { installWordInspector } from './word-inspector.js';
 import { createFrenchAudio } from './french-audio.js';
 import { createLesson } from './lesson.js';
+import { createFallingStars } from './falling-star.js';
 import { loadPasserby, placePasserby, placeCircularPasserby, passerbyBlocksStep } from './passerby.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
@@ -89,11 +90,12 @@ const blocked = (x, z) => world.blocked(x, z) || passersby.some((actor) => passe
 const audio = createFrenchAudio();
 const lesson = createLesson(world.bakery, heroine.root.position, audio, minimap, (key) => inspector.show(key));
 const inspector = installWordInspector(renderer.domElement, scene, camera, world.sky.moonDirection, audio, lesson.inspect);
+const stars = createFallingStars(scene, camera, world, inspector);
 loading.remove();
 
 const debug = new URLSearchParams(location.search).has('debug');
 if (debug) addDebugPanel();
-window.__game = { heroine, world, mapData, camera, controls, renderer, get bloom() { return composer !== null; } };
+window.__game = { heroine, world, stars, mapData, camera, controls, renderer, get bloom() { return composer !== null; } };
 
 // ── Движение ─────────────────────────────────────────────────
 const MAX_WALK = 1.45, MAX_RUN = 3.8, MAX_BACK = 0.95; // м/с
@@ -157,6 +159,7 @@ renderer.setAnimationLoop(() => {
 
   world.update(dt, p.x, p.z, camera);
   for (const actor of passersby) actor.update(dt);
+  stars.update(dt, p.x, p.z, facing);
 
   // Название улицы
   streetTick -= dt;
