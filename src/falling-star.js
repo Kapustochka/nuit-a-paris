@@ -9,7 +9,9 @@ const FIRST_AFTER = 3;       // первая звезда падает почт�
 const LOST_AFTER = 3;        // секунд вне кадра, после которых звезда считается потерянной
 const LOST_DISTANCE = 30;    // дальше этого расстояния звезду уже не разглядеть
 const FALL_TIME = 1.7, HOVER = 0.55;
-const KIND_ODDS = [['word', 0.62], ['phrase', 0.2], ['story', 0.12], ['song', 0.06]];   // фиолетовые — редкие
+const KIND_ODDS = [['word', 0.5], ['phrase', 0.2], ['story', 0.15], ['song', 0.15]];   // фиолетовые — пореже
+// Для отладки: ?star=song (или word, phrase, story) — падают звёзды только этого вида.
+const FORCED_KIND = new URLSearchParams(location.search).get('star');
 const seenKey = 'nuit-a-paris:stars:v1';
 
 export function createFallingStars(scene, camera, world, inspector) {
@@ -87,7 +89,9 @@ export function createFallingStars(scene, camera, world, inspector) {
     if (!Object.keys(starKeys).some((kind) => fresh(kind).length)) seen.clear();
     let roll = Math.random(), kind = 'word';
     for (const [name, odds] of KIND_ODDS) { if (roll < odds) { kind = name; break; } roll -= odds; }
+    if (starKeys[FORCED_KIND]) kind = FORCED_KIND;
     let pool = fresh(kind);
+    if (!pool.length && starKeys[FORCED_KIND]) pool = starKeys[kind];
     if (!pool.length) pool = Object.keys(starKeys).flatMap(fresh);
     return pool[Math.floor(Math.random() * pool.length)];
   }

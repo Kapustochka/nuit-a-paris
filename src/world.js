@@ -323,24 +323,41 @@ function buildTrees(scene, look, flat, inside, rnd, groundAt) {
   const list = [];
   for (let i = 0; i < flat.length; i += 2) if (!inside(flat[i], flat[i + 1])) list.push([flat[i], flat[i + 1]]);
   if (!list.length) return;
-  const B = new Builder(), crowns = [], bark = [0.62, 0.56, 0.5];
-  for (const [x, z] of list) {
-    const y = groundAt(x, z), lean = [(rnd() - 0.5) * 0.25, (rnd() - 0.5) * 0.25];
-    const ring = [];
-    for (let k = 0; k <= 4; k++) { const t = k / 4; ring.push([x + lean[0] * t * t * 3, y + t * 3.6, z + lean[1] * t * t * 3, 0.2 * (1 - t * 0.5)]); }
-    for (let k = 0; k < 4; k++) {
+  const B = new Builder(), crowns = [], bark = [0.55, 0.49, 0.42];
+  // Трубка по точкам [x, y, z, радиус]: ствол и ветви.
+  const tube = (ring, sides) => {
+    for (let k = 0; k < ring.length - 1; k++) {
       const [ax, ay, az, ar] = ring[k], [bx, by, bz, br] = ring[k + 1];
-      for (let s = 0; s < 7; s++) {
-        const a0 = s / 7 * Math.PI * 2, a1 = (s + 1) / 7 * Math.PI * 2;
+      for (let s = 0; s < sides; s++) {
+        const a0 = s / sides * Math.PI * 2, a1 = (s + 1) / sides * Math.PI * 2;
         B.quad([ax + Math.cos(a0) * ar, ay, az + Math.sin(a0) * ar], [ax + Math.cos(a1) * ar, ay, az + Math.sin(a1) * ar],
           [bx + Math.cos(a1) * br, by, bz + Math.sin(a1) * br], [bx + Math.cos(a0) * br, by, bz + Math.sin(a0) * br], bark, K.BARK);
       }
     }
-    const [tx, ty, tz] = ring[4];
-    crowns.push([tx, ty + 1.7, tz, 1.9 + rnd() * 0.4]);
-    for (let k = 0; k < 3; k++) {
-      const a = rnd() * Math.PI * 2, r = 1.2 + rnd() * 0.5;
-      crowns.push([tx + Math.cos(a) * 1.3, ty + 0.6 + rnd() * 1.4, tz + Math.sin(a) * 1.3, r]);
+  };
+  for (const [x, z] of list) {
+    // платан: стройный ствол с лёгким изгибом и корневым наплывом, на ~2.5 м — развилка из 3–4 ветвей в крону
+    const y = groundAt(x, z), fork = 2.3 + rnd() * 0.6;
+    const bend = [(rnd() - 0.5) * 0.3, (rnd() - 0.5) * 0.3], phase = rnd() * 6;
+    const ring = [];
+    for (let k = 0; k <= 6; k++) {
+      const t = k / 6, wob = Math.sin(t * 3 + phase) * 0.05;
+      ring.push([x + bend[0] * t * t + wob, y - 0.1 + t * (fork + 0.1), z + bend[1] * t * t - wob,
+        0.15 * (1 - t * 0.35) + 0.09 * Math.max(0, 1 - t * 6)]);
+    }
+    tube(ring, 7);
+    const [fx, fy, fz] = ring[6], branches = 3 + (rnd() < 0.5 ? 1 : 0), turn = rnd() * Math.PI * 2;
+    crowns.push([fx, fy + 2.4, fz, 1.7 + rnd() * 0.4]);
+    for (let b = 0; b < branches; b++) {
+      const a = turn + b / branches * Math.PI * 2 + (rnd() - 0.5) * 0.8, reach = 1.1 + rnd() * 0.5, rise = 1.4 + rnd() * 0.8;
+      const limb = [];
+      for (let k = 0; k <= 3; k++) {
+        const t = k / 3, out = reach * Math.sqrt(t);
+        limb.push([fx + Math.cos(a) * out, fy - 0.15 + rise * t, fz + Math.sin(a) * out, 0.095 * (1 - t * 0.6)]);
+      }
+      tube(limb, 5);
+      const [ex, ey, ez] = limb[3];
+      crowns.push([ex + Math.cos(a) * 0.3, ey + 0.5 + rnd() * 0.4, ez + Math.sin(a) * 0.3, 1.2 + rnd() * 0.45]);
     }
   }
   const trunk = new THREE.Mesh(B.geometry(0, Math.PI / 3), paintMaterial(look));
