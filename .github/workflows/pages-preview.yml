@@ -1,23 +1,35 @@
-name: Publish game and PR preview to GitHub Pages
+name: Publish game and PR previews to GitHub Pages
+
+# GitHub Pages has one site per repository, and every deploy replaces it completely.
+# That is why each run rebuilds the whole site from scratch:
+#   /                  — the game from main
+#   /previews/pr-N/    — every open pull request from this repository
+#   /previews/         — a list of the current previews
+# A pull request event (open, new commit, close) or a push to main starts a new build,
+# so previews update on every push and disappear once a PR is closed or merged.
+#
+# pull_request_target runs in the context of main, so the github-pages environment allows
+# the deploy. PR files are only copied as static files; nothing from a PR is executed here.
 
 on:
   push:
     branches: [main]
+  pull_request_target:
+    types: [opened, reopened, synchronize, closed]
   workflow_dispatch:
-    inputs:
-      pr_number:
-        description: 'PR number to preview (default 4)'
-        required: false
-        default: '4'
 
 permissions:
   contents: read
   pages: write
   id-token: write
+  pull-requests: write
 
 concurrency:
   group: pages
   cancel-in-progress: false
+
+env:
+  MAX_PREVIEWS: 8   # each copy of the game is ~80 MB; Pages allows 1 GB per site
 
 jobs:
   publish:
@@ -31,25 +43,58 @@ jobs:
         with:
           ref: main
           path: production
+          fetch-depth: 1
 
-      - name: Check out preview PR
-        uses: actions/checkout@v4
-        with:
-          ref: refs/pull/${{ inputs.pr_number || '4' }}/head
-          path: preview
-
-      - name: Assemble site without changing main
+      - name: Assemble main and all open PR previews
+        id: assemble
         shell: bash
         env:
-          PR_NUMBER: ${{ inputs.pr_number || '4' }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SITE_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}
         run: |
           set -euo pipefail
-          mkdir -p _site/previews/"pr-${PR_NUMBER}"
+          mkdir -p _site/previews
           rsync -a --exclude='.git' --exclude='.github' production/ _site/
-          rsync -a --exclude='.git' --exclude='.github' preview/ "_site/previews/pr-${PR_NUMBER}/"
           test -f _site/index.html
-          test -f "_site/previews/pr-${PR_NUMBER}/index.html"
+
+          # Open PRs from this repository (not forks), most recently updated first
+          gh api "repos/$REPO/pulls?state=open&sort=updated&direction=desc&per_page=100" \
+            --jq ".[] | select(.head.repo.full_name == \"$REPO\") | [.number, .title] | @tsv" \
+            | head -n "$MAX_PREVIEWS" > prs.tsv || true
+
+          {
+            echo '<!doctype html><html lang="ru"><head><meta charset="utf-8">'
+            echo '<meta name="viewport" content="width=device-width, initial-scale=1">'
+            echo '<title>Nuit à Paris · превью</title>'
+            echo '<style>body{margin:0;padding:24px 16px;background:#14103a;color:#f4e9d8;font:16px system-ui,sans-serif}'
+            echo 'a{color:#ffdfa2}li{margin:10px 0}h1{font:italic 600 24px Georgia,serif}</style></head><body>'
+            echo '<h1>Nuit à Paris · превью PR</h1><ul>'
+            echo '<li><a href="../">main — основная игра</a></li>'
+          } > _site/previews/index.html
+
+          cd production
+          while IFS=$'\t' read -r number title; do
+            [ -n "$number" ] || continue
+            if ! git fetch --depth=1 -q origin "pull/$number/head:pr-$number"; then
+              echo "::warning::PR #$number could not be fetched"; continue
+            fi
+            dest="../_site/previews/pr-$number"
+            mkdir -p "$dest"
+            git archive "pr-$number" | tar -x -C "$dest"
+            rm -rf "$dest/.github"
+            if [ -f "$dest/index.html" ]; then
+              # Small label so it is clear which PR is open
+              safe_title=$(printf '%s' "$title" | sed 's/[&<>"]/ /g')
+              sed -i "s#<body>#<body><a href=\"https://github.com/$REPO/pull/$number\" style=\"position:fixed;right:8px;top:max(8px,env(safe-area-inset-top));z-index:50;font:600 12px system-ui,sans-serif;color:\#14103a;background:\#ffdfa2;padding:4px 9px;border-radius:999px;text-decoration:none;opacity:.85\">PR \#$number</a>#" "$dest/index.html"
+              echo "<li><a href=\"pr-$number/\">#$number · $safe_title</a></li>" >> ../_site/previews/index.html
+              echo "Preview: $SITE_URL/previews/pr-$number/"
+            fi
+          done < ../prs.tsv
+          cd ..
+          echo '</ul></body></html>' >> _site/previews/index.html
           touch _site/.nojekyll
+          du -sh _site
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
@@ -62,3 +107,15 @@ jobs:
       - name: Deploy
         id: deployment
         uses: actions/deploy-pages@v4
+
+      - name: Comment the preview link on a new PR
+        if: github.event_name == 'pull_request_target' && (github.event.action == 'opened' || github.event.action == 'reopened') && github.event.pull_request.head.repo.full_name == github.repository
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          NUMBER: ${{ github.event.pull_request.number }}
+          SITE_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}
+        run: |
+          gh api "repos/$REPO/issues/$NUMBER/comments" \
+            -f body="Превью этого PR: $SITE_URL/previews/pr-$NUMBER/ (обновляется после каждого коммита, пропадает после закрытия). Все превью: $SITE_URL/previews/"
