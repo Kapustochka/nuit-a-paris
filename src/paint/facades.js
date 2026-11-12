@@ -30,6 +30,10 @@ const WORDS = { [K.WALL]: 'wall', [K.ROOF]: 'roof', [K.TRIM]: 'wall', [K.GLASS]:
   [K.AWNING]: 'awning', [K.IRON]: 'balcony', [K.DOOR]: 'door', [K.PAINT]: 'shopWindow' };
 const pick = (r, a) => a[Math.floor(r() * a.length)];
 const clamp01 = (v) => Math.max(0, Math.min(1, v));
+// Optional A/B comparison without touching Claude's paint pipeline:
+// add ?no-architecture to the game URL to hide these near-LOD accents.
+const ARCHITECTURE_ACCENTS = typeof window === 'undefined'
+  || !new URLSearchParams(window.location.search).has('no-architecture');
 
 // ── План: всё, что нужно и дальнему, и ближнему слою (детерминированно, от seed) ──────────────
 // pending: [{ p (по часовой), n, H, tint }], open(x, z) — смотрит ли точка на улицу
@@ -269,6 +273,22 @@ function buildFar(h, F, deform, shops) {
   }
 }
 
+// Лёгкая рисованная каменная арка над некоторыми окнами.
+// Только геометрия: тот же K.TRIM, та же NPR-материя и тот же ближний LOD.
+// Пологий сегментный изгиб сохраняет место до карниза следующего этажа.
+function softWindowArch(B, xa, xb, y, trim) {
+  const x0 = xa - 0.1, width = xb - xa + 0.2, count = 6;
+  const curve = (t) => y + 0.12 + Math.sin(t * Math.PI) * 0.08;
+  for (let i = 0; i < count; i++) {
+    const a = i / count, b = (i + 1) / count, xa0 = x0 + width * a, xb0 = x0 + width * b;
+    B.quad([xa0, curve(a), 0.16], [xb0, curve(b), 0.16],
+      [xb0, curve(b) + 0.1, 0.16], [xa0, curve(a) + 0.1, 0.16],
+      shadeOf(trim, i % 2 ? 0.97 : 1.04), K.TRIM);
+  }
+  const cx = (xa + xb) / 2;
+  B.box(cx - 0.095, y + 0.16, 0.1, cx + 0.095, y + 0.31, 0.2, shadeOf(trim, 1.04), K.TRIM);
+}
+
 // Ближний слой: ниши, подоконники, перемычки, ставни, балконы, маркизы, ящики с цветами, слуховые окна
 function buildNear(h, N, Rl, planters, deform, shops) {
   const R = h.roofType === 'mansard' ? roofRings(h) : null;
@@ -298,6 +318,14 @@ function buildNear(h, N, Rl, planters, deform, shops) {
         if (door) {
           B.quad([xa, ya, zb], [xb, ya, zb], [xb, yb, zb], [xa, yb, zb], shutter.map((v) => v * 0.75), K.DOOR, [0, 0, 1, 1], 0.5);
           B.box(xa - 0.16, yb, -0.02, xb + 0.16, yb + 0.28, 0.08, trim, K.TRIM);
+          // Выборочные каменные входные порталы: две пилястры, верхняя полка и замковый блок.
+          if (ARCHITECTURE_ACCENTS && (seg.seed + Math.round(xa * 3)) % 3 === 0) {
+            const stone = shadeOf(trim, 0.93), mid = (xa + xb) / 2;
+            B.box(xa - 0.19, ya, -0.03, xa - 0.04, yb + 0.22, 0.18, stone, K.TRIM);
+            B.box(xb + 0.04, ya, -0.03, xb + 0.19, yb + 0.22, 0.18, stone, K.TRIM);
+            B.box(xa - 0.23, yb + 0.19, -0.04, xb + 0.23, yb + 0.32, 0.22, trim, K.TRIM);
+            B.box(mid - 0.16, yb + 0.28, -0.03, mid + 0.16, yb + 0.41, 0.2, shadeOf(trim, 1.03), K.TRIM);
+          }
           continue;
         }
         if (type === 'shop') {
@@ -317,7 +345,12 @@ function buildNear(h, N, Rl, planters, deform, shops) {
         const c = (xa + xb) / 2;
         B.box(xa - 0.09, ya - 0.11, -0.02, xb + 0.09, ya + 0.01, 0.14, trim, K.TRIM);                     // подоконник
         B.box(xa - 0.13, yb, -0.02, xb + 0.13, yb + 0.2, 0.06, trim, K.TRIM);                             // перемычка
-        if (!fl.top) B.box(c - 0.11, yb - 0.04, -0.02, c + 0.11, yb + 0.3, 0.1, trim, K.TRIM);              // замковый камень
+        // 1 из ~4 окон получает слегка изогнутый декоративный сандрик вместо прямого блока.
+        if (ARCHITECTURE_ACCENTS && f > 0 && !fl.top && (seg.seed + f * 17 + Math.round(c * 3)) % 4 === 1) {
+          softWindowArch(B, xa, xb, yb, trim);
+        } else if (!fl.top) {
+          B.box(c - 0.11, yb - 0.04, -0.02, c + 0.11, yb + 0.3, 0.1, trim, K.TRIM); // замковый камень
+        }
         if (Lo.shutters && f > 0 && !fl.top) {
           const sw = (xb - xa) / 2 + 0.04, open = 0.12 + r() * 0.1;
           B.quad([xa - sw, ya, open], [xa - 0.02, ya, 0.04], [xa - 0.02, yb, 0.04], [xa - sw, yb, open], shutter, K.SHUTTER, [0, 0, 1, yb - ya]);
@@ -348,6 +381,13 @@ function buildNear(h, N, Rl, planters, deform, shops) {
       if (f < Lo.nUp) B.box(seg.x0 - 0.04, y1 - 0.2, -0.02, seg.x1 + 0.04, y1 + 0.02, 0.15, trim, K.TRIM);  // карниз между этажами
     }
     B.box(seg.x0 - 0.06, h.E - 0.4, -0.02, seg.x1 + 0.06, h.E - 0.18, 0.24, trim, K.TRIM);                     // главный карниз
+    // Небольшие консоли под карнизом только на отдельных домах — силуэт ритмичный, но не повторяется везде.
+    if (ARCHITECTURE_ACCENTS && seg.x1 - seg.x0 > 5.2 && seg.seed % 3 === 1) {
+      for (let x = seg.x0 + 0.8; x < seg.x1 - 0.55; x += 1.8) {
+        B.box(x - 0.1, h.E - 0.69, -0.02, x + 0.1, h.E - 0.38, 0.31, shadeOf(trim, 0.91), K.TRIM);
+        B.box(x - 0.15, h.E - 0.46, -0.03, x + 0.15, h.E - 0.33, 0.34, trim, K.TRIM);
+      }
+    }
     // слуховые окна на мансарде
     if (R && R.low > 0.45) {
       const slope = (y) => { const s = clamp01((y - h.E - 0.04) / (R.yLow - h.E - 0.04)); return -R.low * s * s; };
