@@ -237,6 +237,7 @@ export function buildParis(scene, renderer, data, city, props = {}) {
 
   return {
     blocked, inside, streetAt, freeSpot, update, sky, night, look, paint, facades, lightHeroine, heightAt: (x, z) => standAt(x, z),
+    soundSpots: shopFronts.filter((s) => ['cafe', 'restaurant', 'bar', 'pub'].includes(s.kind)),
     stats: { stairs: stairs.count, buildings: polys.length, lamps: lamps.length, detailedLamps, benches: benches.length, pigeons, ...streetLife },
   };
 }
@@ -432,7 +433,7 @@ function buildShops(scene, pois, polys, inside, rnd, props = {}, propRandom = rn
         terraces.push({ x, z, cos: Math.cos(turn), sin: Math.sin(turn), halfWidth: 0.85, halfDepth: 0.35 });
       }
     }
-    shopFronts.push({ x: s.x, z: s.z, w, nx: s.nx, nz: s.nz, name: s.name });
+    shopFronts.push({ x: s.x, z: s.z, w, nx: s.nx, nz: s.nz, name: s.name, kind: s.kind });
     // ящик с яблоками у булочной и у каждой третьей лавки
     if (s === bakery || i % 3 === 1) {
       const off = w / 2 + 0.95;

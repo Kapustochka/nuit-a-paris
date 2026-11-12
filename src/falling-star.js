@@ -14,7 +14,7 @@ const KIND_ODDS = [['word', 0.62], ['phrase', 0.2], ['story', 0.12], ['song', 0.
 const FORCED_KIND = new URLSearchParams(location.search).get('star');
 const seenKey = 'nuit-a-paris:stars:v1';
 
-export function createFallingStars(scene, camera, world, inspector) {
+export function createFallingStars(scene, camera, world, inspector, review) {
   const seen = new Set();
   try {
     const saved = JSON.parse(localStorage.getItem(seenKey) || '[]');
@@ -66,6 +66,7 @@ export function createFallingStars(scene, camera, world, inspector) {
   let state = 'none';        // none → falling → resting → opened → none
   let key = null, time = 0, walked = STEPS_BETWEEN - FIRST_AFTER, unseen = 0, lost = false;
   let lastX = null, lastZ = null, enabled = true;
+  let drops = 0, reviewing = false;
   const kindOf = (k) => Object.keys(starKeys).find((kind) => starKeys[kind].includes(k)) || 'word';
   function tint(name) {
     const p = PALETTES[name];
@@ -75,9 +76,12 @@ export function createFallingStars(scene, camera, world, inspector) {
 
   hit.userData.onInspect = (x, y) => {
     if (state !== 'resting' && state !== 'falling') return;
-    seen.add(key);
-    try { localStorage.setItem(seenKey, JSON.stringify([...seen])); } catch { /* нет доступа к записи */ }
-    inspector.show(key, x, y, hit);
+    if (reviewing) inspector.showReview(key, x, y, hit);
+    else {
+      seen.add(key);
+      try { localStorage.setItem(seenKey, JSON.stringify([...seen])); } catch { /* нет доступа к записи */ }
+      inspector.show(key, x, y, hit);
+    }
     state = 'opened';
     time = 0;
     walked = 0;
@@ -114,7 +118,10 @@ export function createFallingStars(scene, camera, world, inspector) {
     const spot = landing(px, pz, facing);
     if (!spot) return false;
     if (state !== 'none') inspector.removeTarget(hit);
-    key = pick();
+    const reviewKey = ((!FORCED_KIND && drops % 4 === 3) || FORCED_KIND === 'review') ? review?.pick() : null;
+    reviewing = Boolean(reviewKey);
+    key = reviewKey || pick();
+    drops++;
     tint({ story: 'blue', phrase: 'green', song: 'violet' }[kindOf(key)] || 'gold');
     const groundY = world.heightAt?.(spot[0], spot[1]) ?? 0;
     to.set(spot[0], groundY + HOVER, spot[1]);
@@ -213,6 +220,7 @@ export function createFallingStars(scene, camera, world, inspector) {
     get enabled() { return enabled; },
     get state() { return state; },
     get key() { return key; },
+    get reviewing() { return reviewing; },
     get position() { return group.position; },
   };
 }
