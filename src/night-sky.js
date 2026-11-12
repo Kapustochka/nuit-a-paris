@@ -9,6 +9,7 @@ export function createNightSky(scene) {
     uHorizon: { value: new THREE.Color(0x3e365f) },
     uCloudColor: { value: new THREE.Color(0x58618e) },
     uCloudOpacity: { value: 0.38 },
+    uCityGlow: { value: 0.22 },
     uStarIntensity: { value: 0.68 },
     uMoonDirection: { value: moonDirection },
   };
@@ -27,7 +28,7 @@ export function createNightSky(scene) {
       }
     `,
     fragmentShader: /* glsl */ `
-      uniform float uTime, uCloudOpacity, uStarIntensity;
+      uniform float uTime, uCloudOpacity, uStarIntensity, uCityGlow;
       uniform vec3 uZenith, uMidSky, uHorizon, uCloudColor, uMoonDirection;
       varying vec3 vDirection;
 
@@ -69,6 +70,12 @@ export function createNightSky(scene) {
         vec3 color = mix(uHorizon, uMidSky, smoothstep(0.0, 0.32, height));
         color = mix(color, uZenith, smoothstep(0.12, 0.98, height));
 
+        // Мягкий свет Парижа над горизонтом: неон не нужен, только приглушённый янтарь.
+        // Небольшие широкие пятна не дают небу выглядеть как равномерный градиент.
+        float horizonBand = exp(-height * 13.0);
+        float cityVariation = 0.7 + 0.3 * noise(direction.xz * 3.5 + vec2(4.0, 9.0));
+        color += vec3(0.24, 0.105, 0.095) * horizonBand * cityVariation * uCityGlow;
+
         vec2 p = direction.xz / (height + 0.40) * vec2(2.6, 5.5);
         p += vec2(0.0045, -0.0018) * uTime;
         float sweep = noise(p * 0.65);
@@ -92,7 +99,9 @@ export function createNightSky(scene) {
         color += vec3(0.50, 0.66, 1.0) * stars * 0.52;
         color += vec3(0.31, 0.28, 0.19) * halo * 0.24;
         color = mix(color, vec3(0.88, 0.78, 0.57), disk * cut * moonMask);
-        color = mix(color, uCloudColor * (0.66 + 0.40 * halo), cloud);
+        // Облака сохраняют цвет ночи, а не становятся серыми непрозрачными пятнами.
+        vec3 cloudTint = mix(uCloudColor * 0.72, uCloudColor * 1.04, halo);
+        color = mix(color, cloudTint, cloud * 0.78);
         color += (hash(gl_FragCoord.xy) - 0.5) * 0.0012;
         gl_FragColor = vec4(max(color, 0.0), 1.0);
         #include <colorspace_fragment>
