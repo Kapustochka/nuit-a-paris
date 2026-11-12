@@ -93,16 +93,17 @@ export function createFallingStars(scene, camera, world, inspector) {
     if (!spot) return false;
     if (state !== 'none') inspector.removeTarget(hit);
     key = pick();
-    to.set(spot[0], HOVER, spot[1]);
+    const groundY = world.heightAt?.(spot[0], spot[1]) ?? 0;
+    to.set(spot[0], groundY + HOVER, spot[1]);
     // Летит издалека навстречу героине: так весь след виден в небе над улицей.
     const side = (Math.random() < 0.5 ? 1 : -1) * (4 + Math.random() * 8);
-    from.set(to.x + Math.cos(facing) * side + Math.sin(facing) * 55, 25, to.z - Math.sin(facing) * side + Math.cos(facing) * 55);
+    from.set(to.x + Math.cos(facing) * side + Math.sin(facing) * 55, groundY + 25, to.z - Math.sin(facing) * side + Math.cos(facing) * 55);
     group.position.copy(from);
     group.scale.setScalar(1);
     group.visible = true;
     bodyMaterial.opacity = 1;
     halo.material.opacity = 0.85;
-    ground.position.set(to.x, 0.03, to.z);
+    ground.position.set(to.x, groundY + 0.03, to.z);
     ground.visible = true;
     ground.material.opacity = 0;
     inspector.addTarget(hit);
@@ -141,7 +142,7 @@ export function createFallingStars(scene, camera, world, inspector) {
       if (k >= 1) { state = 'resting'; time = 0; }
     } else if (state === 'resting') {
       const settle = Math.exp(-time * 3.2);
-      group.position.y = HOVER + Math.sin(time * 2.1) * 0.07 + Math.abs(Math.sin(time * 9)) * 0.45 * settle;
+      group.position.y = to.y + Math.sin(time * 2.1) * 0.07 + Math.abs(Math.sin(time * 9)) * 0.45 * settle;
       // Покачивается лицом к камере, чтобы не поворачиваться ребром.
       body.rotation.set(0, Math.atan2(camera.position.x - to.x, camera.position.z - to.z) + Math.sin(time * 1.5) * 0.75, Math.sin(time * 1.3) * 0.12);
       const pulse = 0.5 + 0.5 * Math.sin(time * 3.3);

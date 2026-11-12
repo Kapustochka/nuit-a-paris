@@ -35,6 +35,8 @@ The “Ночное небо” (Night sky) section controls cloud density, star
 - `src/world.js` — Montmartre from OpenStreetMap: buildings, street lamps, trees, Sacré-Cœur
 - `assets/city/` — building facades and Sacré-Cœur baked from Meshy models
 - `src/night-sky.js` — procedural night sky
+- `src/night-light.js` — one light map for the whole city: lamp light pools, sidewalks and shade at the foot of walls
+- `src/terrain.js`, `assets/terrain.json` — the real slopes of the Montmartre hill (4 m height grid), built by `scripts/build-terrain.py`
 - `assets/street/` — lightweight in-game copies of Meshy street models
 - `assets/people/` — lightweight copies of passer-by models
 - `assets/voice/` — French voice-over for word cards and the bakery order, [voice source and build](assets/voice/README.md)
@@ -46,4 +48,4 @@ The “Ночное небо” (Night sky) section controls cloud density, star
 - `src/controls.js` — keyboard, joystick, camera
 - `src/main.js` — game loop
 
-Map data © OpenStreetMap contributors (ODbL).
+Map data © OpenStreetMap contributors (ODbL). Elevation: AWS Terrain Tiles (Mapzen terrarium; includes SRTM and other public sources).

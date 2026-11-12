@@ -11,7 +11,7 @@ const MAX_SIZE = 2048;
 const SIDEWALK = 1.7;        // ширина тротуара, м
 const LAMP_R = 8.5;          // радиус пятна под фонарём, м
 
-export function createNightLight(bounds) {
+export function createNightLight(bounds, terrain = null) {
   const w = bounds.maxX - bounds.minX, h = bounds.maxZ - bounds.minZ;
   const k = Math.min(PX_PER_M, MAX_SIZE / Math.max(w, h));
   const W = Math.ceil(w * k), H = Math.ceil(h * k);
@@ -27,7 +27,9 @@ export function createNightLight(bounds) {
     uNightMap: { value: texture },
     uNightBounds: { value: new THREE.Vector4(bounds.minX, bounds.minZ, 1 / w, 1 / h) },
     uLampColor: { value: new THREE.Color(1.0, 0.62, 0.3) },
+    ...(terrain?.uniforms || {}),
   };
+  const defines = terrain?.uniforms ? { NIGHT_TERRAIN: '' } : {};
 
   // Тротуары и тень у стен: обводим контуры домов
   function buildings(polys) {
@@ -55,7 +57,7 @@ export function createNightLight(bounds) {
     for (let i = -1; i <= 1; i++) light(x + nz * width * 0.3 * i + nx * 1.2, z - nx * width * 0.3 * i + nz * 1.2, 3.6, 0.55);
   }
   const done = () => { texture.needsUpdate = true; };
-  return { uniforms, buildings, light, shopSpill, done, canvas: c };
+  return { uniforms, defines, buildings, light, shopSpill, done, canvas: c };
 }
 
 const COMMON = /* glsl */ `
@@ -64,14 +66,26 @@ const COMMON = /* glsl */ `
   uniform vec3 uLampColor;
   varying vec3 vNightPos;
   vec4 nightSample(vec2 xz) { return texture2D(uNightMap, (xz - uNightBounds.xy) * uNightBounds.zw); }
+  #ifdef NIGHT_TERRAIN
+    uniform sampler2D uHeightMap;
+    uniform vec4 uHeightBounds;
+    uniform vec2 uHeightTexel;
+    float groundAt(vec2 xz) {
+      vec2 uv = clamp((xz - uHeightBounds.xy) * uHeightBounds.zw, 0.0, 1.0);
+      return texture2D(uHeightMap, mix(uHeightTexel, 1.0 - uHeightTexel, uv)).r;
+    }
+  #else
+    float groundAt(vec2 xz) { return 0.0; }
+  #endif
   float nHash(vec2 p) { vec3 q = fract(vec3(p.xyx) * 0.1031); q += dot(q, q.yzx + 33.33); return fract((q.x + q.y) * q.z); }
   float nNoise(vec2 p) {
     vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
     return mix(mix(nHash(i), nHash(i + vec2(1, 0)), f.x), mix(nHash(i + vec2(0, 1)), nHash(i + 1.0), f.x), f.y);
   }
 `;
-function addWorldPos(shader, uniforms) {
+function addWorldPos(shader, uniforms, defines = {}) {
   Object.assign(shader.uniforms, uniforms);
+  shader.defines = { ...(shader.defines || {}), ...defines };
   shader.vertexShader = shader.vertexShader
     .replace('#include <common>', '#include <common>\nvarying vec3 vNightPos;')
     .replace('#include <project_vertex>', `#include <project_vertex>
@@ -86,7 +100,7 @@ function addWorldPos(shader, uniforms) {
 // Брусчатка: плиты тротуара, бордюр, тень у стен, лужи и тёплые пятна фонарей
 export function nightGround(material, light, sidewalkMap) {
   material.onBeforeCompile = (shader) => {
-    addWorldPos(shader, { ...light.uniforms, uWalk: { value: sidewalkMap } });
+    addWorldPos(shader, { ...light.uniforms, uWalk: { value: sidewalkMap } }, light.defines);
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', '#include <common>\nuniform sampler2D uWalk;\nvec4 nightCell; float nightWet;')
       .replace('#include <map_fragment>', `#include <map_fragment>
@@ -112,13 +126,13 @@ export function nightGround(material, light, sidewalkMap) {
 // Фасады-открытки (MeshBasicMaterial): ночь темнее, у фонарей — тёплое пятно, окна светятся как прежде
 export function nightFacade(material, light, key) {
   material.onBeforeCompile = (shader) => {
-    addWorldPos(shader, light.uniforms);
+    addWorldPos(shader, light.uniforms, light.defines);
     shader.fragmentShader = shader.fragmentShader.replace('#include <map_fragment>', `#include <map_fragment>
       {
         vec3 c = diffuseColor.rgb;
         float glow = smoothstep(0.4, 0.68, c.g) * smoothstep(0.6, 0.85, c.r);   // светящиеся окна и витрины
         vec4 cell = nightSample(vNightPos.xz);
-        float y = vNightPos.y;
+        float y = vNightPos.y - groundAt(vNightPos.xz);
         float lamp = cell.r * exp(-max(y - 1.5, 0.0) * 0.28);
         float shade = mix(0.4, 0.6, smoothstep(14.0, 2.0, y));         // верх домов уходит в ночь
         shade *= 1.0 - 0.35 * (1.0 - smoothstep(0.0, 0.6, y));           // тень у самого тротуара

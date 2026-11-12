@@ -8,6 +8,7 @@ import { buildBakeryCounter } from './bakery.js';
 import { addPropInstances, placeBenches, placePigeons } from './street-props.js';
 import { placeStreetLife, terraceSet } from './street-life.js';
 import { createNightLight, nightGround, nightFacade } from './night-light.js';
+import { createTerrain, groundGeometry, liftToGround } from './terrain.js';
 
 const FLOOR = 3.2;            // высота этажа, м
 const ROOF = 2.8;             // высота мансарды
@@ -16,6 +17,8 @@ const CELL = 24;              // ячейка сетки для столкнов
 const BURGUNDY = 0x7a1730;
 
 export function buildParis(scene, renderer, data, city, props = {}) {
+  const firstChild = scene.children.length;
+  const terrain = city.terrain || createTerrain(null), heightAt = terrain.heightAt;
   const sky = createNightSky(scene);
   scene.fog = new THREE.FogExp2(0x333858, 0.009);
 
@@ -40,14 +43,13 @@ export function buildParis(scene, renderer, data, city, props = {}) {
     t.repeat.set(1400 / 1.1, 1400 / 1.1);
     t.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
   }
-  const night = createNightLight(b);
+  const night = createNightLight(b, terrain);
   const groundMat = new THREE.MeshStandardMaterial({
     map: cob.map, normalMap: cob.normal, normalScale: new THREE.Vector2(0.65, 0.65),
     color: 0x9a9da5, roughness: 0.82, envMap: wetEnvironment(renderer), envMapIntensity: 0.4,
   });
   nightGround(groundMat, night, sidewalkTexture(renderer));
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(1400, 1400), groundMat);
-  ground.rotation.x = -Math.PI / 2;
+  const ground = new THREE.Mesh(groundGeometry(terrain, b), groundMat);
   ground.receiveShadow = true;
   ground.userData.word = 'cobble';
   scene.add(ground);
@@ -55,7 +57,7 @@ export function buildParis(scene, renderer, data, city, props = {}) {
   // ── Дома: нарисованные фасады (из моделей Meshy) на настоящих контурах ──
   const rnd = mulberry(7);
   const polys = [];                       // для столкновений
-  const cards = newBuf(), caps = newBuf();
+  const cards = newBuf(), body = newBuf(), plinth = newBuf();
   const wallSpots = [];
   const SACRE = toXZ(48.88672, 2.34306);
   const FAC = Object.entries(city.facades).map(([name, f]) => ({ name, ...f }));
@@ -139,13 +141,31 @@ export function buildParis(scene, renderer, data, city, props = {}) {
       UNITS.push(u); if (full) UNITS.push(u, u);            // целые фасады встречаются чаще
     }
   }
+  // Каждый кусок фасада стоит на своей высоте: на склоне улица получается ступенчатой, как на Монмартре
   function addCard(f, x0, z0, x1, z1, H, nx, nz, tint, uA = 0, uB = 1) {
     facadeTiles.push(f);
+    const h0 = heightAt(x0, z0), h1 = heightAt(x1, z1), y = terrain.flat ? 0 : Math.max(h0, h1) - 0.25;
     const hs = H * SPLIT, du = f.u1 - f.u0, dg = f.gu1 - f.gu0;
-    quad(cards, x0, z0, x1, z1, 0, hs, nx, nz, f.gu0 + dg * uA, f.gu0 + dg * uB, f.gv0, f.gv1, tint, tint);
-    quad(upper, x0, z0, x1, z1, hs, H, nx, nz, f.u0 + du * uA, f.u0 + du * uB, f.v0 + (f.v1 - f.v0) * SPLIT, f.v1, tint, tint);
+    quad(cards, x0, z0, x1, z1, y, y + hs, nx, nz, f.gu0 + dg * uA, f.gu0 + dg * uB, f.gv0, f.gv1, tint, tint);
+    quad(upper, x0, z0, x1, z1, y + hs, y + H, nx, nz, f.u0 + du * uA, f.u0 + du * uB, f.v0 + (f.v1 - f.v0) * SPLIT, f.v1, tint, tint);
+    if (y - Math.min(h0, h1) > 0.05) addPlinth(x0, z0, x1, z1, h0, h1, y, nx, nz);
+  }
+  const plinthLow = [0.4, 0.34, 0.32], plinthTop = [0.78, 0.66, 0.56];
+  function addPlinth(ax, az, bx, bz, ha, hb, top, nx, nz) {   // каменный цоколь до земли; блок 0.8 × 0.4 м
+    const y0 = Math.min(ha, hb) - 0.6, v = (yy) => (yy - y0) / 1.6, u1 = Math.hypot(bx - ax, bz - az) / 3.2;
+    const i0 = plinth.pos.length / 3;
+    plinth.pos.push(ax, ha - 0.6, az, bx, hb - 0.6, bz, bx, top + 0.02, bz, ax, top + 0.02, az);
+    for (let q = 0; q < 4; q++) plinth.nor.push(nx, 0, nz);
+    plinth.uv.push(0, v(ha - 0.6), u1, v(hb - 0.6), u1, v(top + 0.02), 0, v(top + 0.02));
+    plinth.col.push(...plinthLow, ...plinthLow, ...plinthTop, ...plinthTop);
+    plinth.idx.push(i0, i0 + 1, i0 + 2, i0, i0 + 2, i0 + 3);
   }
   for (const { p, n, H, tint } of pending) {
+    // На склоне дом стоит на верхней точке контура, снизу — каменный цоколь до земли
+    let top0 = -Infinity, low0 = Infinity;
+    for (let i = 0; i < n; i++) { const h = heightAt(p[i * 2], p[i * 2 + 1]); top0 = Math.max(top0, h); low0 = Math.min(low0, h); }
+    const base = terrain.flat ? 0 : top0 - 0.3, foot = terrain.flat ? 0 : low0 - 0.6 - base;
+    const mark = body.pos.length;
     const fit = UNITS.filter((u) => H / u.f.h > 0.72 && H / u.f.h < 1.3);
     const units = fit.length ? fit : UNITS;
     for (let i = 0; i < n; i++) {
@@ -190,28 +210,55 @@ export function buildParis(scene, renderer, data, city, props = {}) {
         }
       }
     }
-    // тёмная крышка — закрывает дом сверху
-    const contour = [];
-    for (let i = 0; i < n; i++) contour.push(new THREE.Vector2(p[i * 2], p[i * 2 + 1]));
-    const base = caps.pos.length / 3, capY = H * 0.6;
-    for (const v of contour) { caps.pos.push(v.x, capY, v.y); caps.nor.push(0, 1, 0); caps.uv.push(0, 0); caps.col.push(1, 1, 1); }
-    for (const t of THREE.ShapeUtils.triangulateShape(contour, [])) {
-      const [a, c2, d2] = t.map((k) => contour[k]);
-      const up = (c2.x - a.x) * (d2.y - a.y) - (c2.y - a.y) * (d2.x - a.x) < 0;
-      caps.idx.push(base + t[0], base + (up ? t[1] : t[2]), base + (up ? t[2] : t[1]));
+    // Сплошной объём за «открытками»: стены чуть глубже фасада и мансарда до верха дома.
+    // Закрывает просветы в вырезанных силуэтах крыш, короткие грани и стыки с соседями.
+    const roofY = H * 0.76, k = 0.55;
+    let cx = 0, cz = 0;
+    for (let i = 0; i < n; i++) { cx += p[i * 2]; cz += p[i * 2 + 1]; }
+    cx /= n; cz /= n;
+    const inset = (i, d) => {                              // точка контура, сдвинутая к центру на d метров
+      const x = p[i * 2], z = p[i * 2 + 1], L = Math.hypot(cx - x, cz - z) || 1, t = Math.min(d / L, 0.4);
+      return [x + (cx - x) * t, z + (cz - z) * t];
+    };
+    const wallTop = [0.2, 0.18, 0.22], wallLow = [0.12, 0.1, 0.11], slate = [0.2, 0.22, 0.32], ridge = [0.13, 0.14, 0.22];
+    const top = [];
+    for (let i = 0; i < n; i++) top.push([cx + (p[i * 2] - cx) * k, cz + (p[i * 2 + 1] - cz) * k]);
+    for (let i = 0; i < n; i++) {
+      const j = (i + 1) % n, [ax, az] = inset(i, 0.12), [bx, bz] = inset(j, 0.12);
+      const L = Math.hypot(bx - ax, bz - az); if (L < 0.01) continue;
+      const nx = (bz - az) / L, nz = -(bx - ax) / L;      // наружу (контур уже повернут по часовой)
+      quad4(body, [ax, foot, az], [bx, foot, bz], [bx, roofY, bz], [ax, roofY, az], [nx, 0, nz], 0, 1, 0, 1, wallLow, wallTop);
+      const [tax, taz] = top[i], [tbx, tbz] = top[j];
+      const run = Math.hypot((ax + bx) / 2 - (tax + tbx) / 2, (az + bz) / 2 - (taz + tbz) / 2), rise = H - roofY;
+      const rl = Math.hypot(run, rise) || 1;
+      quad4(body, [ax, roofY, az], [bx, roofY, bz], [tbx, H, tbz], [tax, H, taz], [nx * rise / rl, run / rl, nz * rise / rl], 0, 1, 0, 1, slate, ridge);
     }
+    const contour = top.map(([x, z]) => new THREE.Vector2(x, z));
+    const base0 = body.pos.length / 3;
+    for (const v of contour) { body.pos.push(v.x, H, v.y); body.nor.push(0, 1, 0); body.uv.push(0, 0); body.col.push(...ridge); }
+    for (const t of THREE.ShapeUtils.triangulateShape(contour, [])) {
+      const [a, c2, d2] = t.map((q) => contour[q]);
+      const up = (c2.x - a.x) * (d2.y - a.y) - (c2.y - a.y) * (d2.x - a.x) < 0;
+      body.idx.push(base0 + t[0], base0 + (up ? t[1] : t[2]), base0 + (up ? t[2] : t[1]));
+    }
+    for (let q = mark + 1; q < body.pos.length; q += 3) body.pos[q] += base;
   }
   const cardMat = (map, key) => {
-    const m = new THREE.MeshBasicMaterial({ map, alphaTest: 0.5, vertexColors: true });
+    const m = new THREE.MeshBasicMaterial({ map, alphaTest: 0.5, vertexColors: true, side: THREE.DoubleSide });
     nightFacade(m, night, key);
     return m;
   };
   const cardMesh = new THREE.Mesh(toGeo(cards), cardMat(city.groundTex, 'ground'));
   const upperMesh = new THREE.Mesh(toGeo(upper), cardMat(city.facadeTex, 'upper'));
-  const capMesh = new THREE.Mesh(toGeo(caps), new THREE.MeshBasicMaterial({ color: 0x15173a }));
+  const capMesh = new THREE.Mesh(toGeo(body), new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }));
   cardMesh.userData.word = ({ faceIndex, uv }) => facadeWord(facadeTiles[Math.floor(faceIndex / 2)], uv, true, SPLIT);
   upperMesh.userData.word = ({ faceIndex, uv }) => facadeWord(facadeTiles[Math.floor(faceIndex / 2)], uv, false, SPLIT);
   capMesh.userData.word = 'roof';
+  if (plinth.pos.length) {
+    const plinthMesh = new THREE.Mesh(toGeo(plinth), new THREE.MeshLambertMaterial({ map: ashlarTexture(renderer), vertexColors: true }));
+    plinthMesh.userData.word = 'roof';
+    scene.add(plinthMesh);
+  }
   scene.add(cardMesh, upperMesh, capMesh);
 
   // ── Фонари вдоль настоящих улиц ───────────────────────────
@@ -266,7 +313,13 @@ export function buildParis(scene, renderer, data, city, props = {}) {
 
   // ── Сакре-Кёр, Эйфелева башня и огни вдали ─────────────────
   buildSacreCards(scene, SACRE[0], SACRE[1], city);
-  buildFarParis(scene);
+  buildFarParis(scene, terrain.flat ? 0 : terrain.heightAt(1e4, 1e4));
+
+  // Всё, что выше расставлено на ровном полу, встаёт на склон холма
+  if (!terrain.flat) {
+    for (const object of scene.children.slice(firstChild)) liftToGround(object, heightAt);
+    for (const l of lampLights) l.y += heightAt(l.x, l.z);
+  }
 
   // Названия улиц
   const named = data.roads.filter((r) => r.n);
@@ -294,9 +347,10 @@ export function buildParis(scene, renderer, data, city, props = {}) {
   let tick = 0;
   function update(dt, hx, hz, camera) {
     sky.update(dt);
-    moon.target.position.set(hx, 0, hz);
+    const hy = heightAt(hx, hz);
+    moon.target.position.set(hx, hy, hz);
     moon.position.copy(moon.target.position).add(moonOffset);
-    fill.position.set(hx + (camera.position.x - hx) * 0.35, 2.3, hz + (camera.position.z - hz) * 0.35);
+    fill.position.set(hx + (camera.position.x - hx) * 0.35, hy + 2.3, hz + (camera.position.z - hz) * 0.35);
     tick -= dt;
     if (tick <= 0) {
       tick = 0.25;
@@ -308,7 +362,7 @@ export function buildParis(scene, renderer, data, city, props = {}) {
   }
 
   return {
-    blocked, inside, streetAt, freeSpot, update, sky, bakery, night,
+    blocked, inside, streetAt, freeSpot, update, sky, bakery, night, heightAt,
     stats: { buildings: polys.length, lamps: lamps.length, detailedLamps, benches: benches.length, pigeons, ...streetLife },
   };
 }
@@ -395,6 +449,30 @@ function cobbleTextures() {
   }
   ng.putImageData(img, 0, 0);
   return { map: tex(c), normal: tex(nc, false) };
+}
+
+// Каменный цоколь домов на склоне: тёсаные блоки со швами
+function ashlarTexture(renderer) {
+  const S = 256, [c, g] = canvas(S, S), rnd = mulberry(17);
+  g.fillStyle = '#3a3532'; g.fillRect(0, 0, S, S);
+  const rows = 4, rh = S / rows;
+  for (let r = 0; r < rows; r++) {
+    let x = -(r % 2) * 32;
+    while (x < S) {
+      const w = 52 + Math.floor(rnd() * 3) * 6, l = 46 + rnd() * 12;
+      const grd = g.createLinearGradient(0, r * rh, 0, r * rh + rh);
+      grd.addColorStop(0, `hsl(${28 + rnd() * 14},${8 + rnd() * 8}%,${l + 6}%)`); grd.addColorStop(1, `hsl(${28 + rnd() * 14},${8 + rnd() * 8}%,${l - 8}%)`);
+      g.fillStyle = grd; g.fillRect(x + 2, r * rh + 2, w - 4, rh - 4);
+      for (let k = 0; k < 18; k++) {
+        g.fillStyle = `rgba(${rnd() < 0.5 ? '255,245,230' : '30,20,20'},0.06)`;
+        g.beginPath(); g.ellipse(x + rnd() * w, r * rh + rnd() * rh, 2 + rnd() * 9, 1 + rnd() * 4, rnd() * 3, 0, 6.3); g.fill();
+      }
+      x += w;
+    }
+  }
+  const t = wrap(tex(c));
+  t.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+  return t;
 }
 
 // Тротуар: крупные светлые плиты, 2 × 2 м на текстуру
@@ -914,7 +992,7 @@ function buildSacreCoeur(scene, x, z) {
 }
 
 // ═══ Эйфелева башня и огни города ═══════════════════════════
-function buildFarParis(scene) {
+function buildFarParis(scene, drop = 0) {
   const rnd = mulberry(21);
   const [ec, eg] = canvas(128, 384);                                      // Эйфелева башня на юго-западе
   eg.strokeStyle = '#ffc266'; eg.fillStyle = '#ffb347'; eg.shadowColor = '#ff9a30'; eg.shadowBlur = 12; eg.lineWidth = 5;
@@ -922,16 +1000,16 @@ function buildFarParis(scene) {
   for (const [y, w] of [[300, 80], [220, 46], [110, 18]]) eg.fillRect(64 - w / 2, y, w, 8);
   eg.lineWidth = 2; for (let y = 40; y < 380; y += 22) { const w = 6 + (y / 380) ** 2 * 50; eg.beginPath(); eg.moveTo(64 - w, y); eg.lineTo(64 + w, y + 22); eg.moveTo(64 + w, y); eg.lineTo(64 - w, y + 22); eg.stroke(); }
   const eiffel = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex(ec), fog: false, depthWrite: false, transparent: true }));
-  eiffel.position.set(-1050, 78, 1050); eiffel.scale.set(55, 165, 1); eiffel.userData.word = 'eiffel'; scene.add(eiffel);
+  eiffel.position.set(-1050, 78 + drop, 1050); eiffel.userData.noLift = true; eiffel.scale.set(55, 165, 1); eiffel.userData.word = 'eiffel'; scene.add(eiffel);
 
   const m = 500, lp = new Float32Array(m * 3);                            // огни города на горизонте
-  for (let i = 0; i < m; i++) { const a = rnd() * Math.PI * 2, r = 700 + rnd() * 700; lp.set([Math.cos(a) * r, 4 + rnd() * 22, Math.sin(a) * r], i * 3); }
+  for (let i = 0; i < m; i++) { const a = rnd() * Math.PI * 2, r = 700 + rnd() * 700; lp.set([Math.cos(a) * r, drop + 4 + rnd() * 22, Math.sin(a) * r], i * 3); }
   const lg = new THREE.BufferGeometry(); lg.setAttribute('position', new THREE.BufferAttribute(lp, 3));
   const lights = new THREE.Points(lg, new THREE.PointsMaterial({
     map: glowTexture('rgba(255,228,174,0.8)', 'rgba(255,205,133,0.40)'),
     size: 3, sizeAttenuation: false, fog: false, transparent: true, depthWrite: false, opacity: 0.65,
   }));
-  lights.frustumCulled = false; scene.add(lights);
+  lights.frustumCulled = false; lights.userData.noLift = true; scene.add(lights);
 }
 
 // ═══ Столбики вдоль улиц ═════════════════════════════════════
