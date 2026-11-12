@@ -36,7 +36,7 @@ def synthesize(text, path):
 
 built = 0
 if args.only != "star":
-    clips = {"bakery-order": lesson["bakeryOrder"]}
+    clips = {}
     for key, (term, _ipa, _reading, _translation, example, _meaning) in lesson["words"].items():
         clips[f"{key}-term"] = term + "."
         clips[f"{key}-example"] = example

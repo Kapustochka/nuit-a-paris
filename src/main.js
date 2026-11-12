@@ -69,9 +69,10 @@ world.lightHeroine(heroine.root);
 world.paint(scene);                 // прохожие и всё остальное — в живописный свет
 const blocked = (x, z) => world.blocked(x, z) || passersby.some((actor) => passerbyBlocksStep(actor, player, x, z));
 const audio = createFrenchAudio();
-const lesson = createLesson(world.bakery, heroine.root.position, audio, minimap, (key) => inspector.show(key));
+const lesson = createLesson((key) => inspector.show(key));
 const inspector = installWordInspector(renderer.domElement, scene, camera, world.sky.moonDirection, audio, lesson.inspect);
 const stars = createFallingStars(scene, camera, world, inspector);
+installStarToggle(stars);
 loading.remove();
 
 const debug = new URLSearchParams(location.search).has('debug');
@@ -149,7 +150,6 @@ renderer.setAnimationLoop(() => {
   if (streetTick <= 0) {
     streetTick = 0.4;
     const s = world.streetAt(p.x, p.z);
-    lesson.update();
     if (s !== lastStreet) { lastStreet = s; streetEl.textContent = s; streetEl.style.opacity = s ? 1 : 0; }
   }
 
@@ -171,6 +171,20 @@ renderer.setAnimationLoop(() => {
   }
   if (painter) painter.render(scene, camera); else renderer.render(scene, camera);
 });
+
+// Галочка «Падающие звёзды»: выбор запоминается в браузере
+function installStarToggle(stars) {
+  const box = document.querySelector('#star-toggle input');
+  const KEY = 'nuit-a-paris:stars-on';
+  let on = true;
+  try { on = localStorage.getItem(KEY) !== '0'; } catch { /* нет доступа к хранилищу */ }
+  box.checked = on; stars.setEnabled(on);
+  box.addEventListener('change', () => {
+    stars.setEnabled(box.checked);
+    try { localStorage.setItem(KEY, box.checked ? '1' : '0'); } catch { /* не страшно */ }
+    box.blur();
+  });
+}
 
 // ── Отладка (открой игру с ?debug) ──────────────────────────────
 async function addDebugPanel() {

@@ -2,7 +2,7 @@
 
 Finish the route from Place du Tertre to the bakery entrance. Three layers should read clearly along it: cobblestones and objects next to the heroine, shop windows and warm light at eye level, and roofs and haze above the street. Check the route from the camera's height on a PC and in a portrait phone window.
 
-The next learning step is a notebook of discovered words. After a walk the player sees the words they have already found and can listen to the phrases again. Then add a short task in the bakery where those words are useful in a dialogue. For example, the player hears “Je voudrais une baguette, s’il vous plaît” and picks the baguette in the shop window.
+The notebook of discovered words is done. The first bakery quest (hear an order, pick the baguette) was removed on 2026-11-12 because it felt random. New quests still need to be designed.
 
 ## What to look for in Meshy
 

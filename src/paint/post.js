@@ -77,8 +77,11 @@ export function createPainter(renderer, { radius = 3, scale = 1 } = {}) {
         float zL = lin(texture2D(tDepth, c - dx).r), zR = lin(texture2D(tDepth, c + dx).r);
         float zD = lin(texture2D(tDepth, c - dy).r), zU = lin(texture2D(tDepth, c + dy).r);
         float dn = length(nL - nR) + length(nU - nD);
-        float dz = (abs(zL - zR) + abs(zU - zD)) / max(zC, 0.1);
-        float e = max(smoothstep(0.45, 0.95, dn) * (1.0 - real), smoothstep(0.035, 0.11, dz) * mix(1.0, 0.6, real));   // на героине — только силуэт
+        // скачок глубины: вторая производная 1/z — у ровной плоскости под любым углом она ноль, поэтому
+        // мостовая и стены вдали не покрываются ложными линиями-рябью
+        float iC = 1.0 / zC;
+        float dz = (abs(1.0 / zL + 1.0 / zR - 2.0 * iC) + abs(1.0 / zU + 1.0 / zD - 2.0 * iC)) / iC;
+        float e = max(smoothstep(0.45, 0.95, dn) * (1.0 - real), smoothstep(0.04, 0.12, dz) * mix(1.0, 0.6, real));   // на героине — только силуэт
         e *= (1.0 - leaf) * (1.0 - 0.85 * smoothstep(14.0, 70.0, zC)) * uEdges;
         e *= mix(0.55, 1.0, smoothstep(0.25, 0.5, vnoise(sp / 7.0 + 5.0)));
         vec3 ink = mix(col * vec3(0.35, 0.3, 0.55), uInk, 0.5);

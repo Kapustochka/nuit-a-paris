@@ -20,7 +20,6 @@ Windows may ask about the firewall — allow access on private networks.
 - Phone: left half of the screen — joystick (push to the edge to run), right half — camera, two fingers — zoom.
 - Double-click (or double-tap) an object to open a word card with pronunciation, translation and an example. The word is saved to the notebook in this browser. Close the card with × or Escape.
 - About every ten steps a glowing star falls in front of the heroine. Double-click it to get a random French word, phrase, short story or fun fact with a Russian translation and voice-over. The next star falls only after the current one is opened, or once it has dropped out of view.
-- The “Булочная” (Bakery) button opens the map with a gold marker. Walk up to the counter, press “Послушать заказ” (Listen to the order) and double-tap the right pastry.
 
 The plan for the next walk and the list of models to look for in Meshy are in [NEXT-STEPS.md](NEXT-STEPS.md).
 
@@ -46,7 +45,7 @@ The “Ночное небо” (Night sky) section controls cloud density, star
 - `src/viewpoint.js` — the balustrade and telescopes in front of Sacré-Cœur, city lights at the foot of the hill and the mist above them
 - `assets/street/` — lightweight in-game copies of Meshy street models
 - `assets/people/` — lightweight copies of passer-by models
-- `assets/voice/` — French voice-over for word cards and the bakery order, [voice source and build](assets/voice/README.md)
+- `assets/voice/` — French voice-over for word cards, [voice source and build](assets/voice/README.md)
 - `src/falling-star.js` — the falling star; its dictionary lives in `src/star-words.js` (voice clips in `assets/voice/star/`)
 - `src/street-props.js` — loading and placing street models
 - `src/street-life.js` — the kiosk, bins, bicycles, scooters, flower pots, cats, rats and newspapers along the streets, plus the café terrace chairs

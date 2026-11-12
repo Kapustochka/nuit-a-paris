@@ -54,4 +54,3 @@ export const words = {
   crate: ['la cagette', 'la kaʒɛt', 'ла кажэт', 'ящик для фруктов', 'La cagette est pleine de pommes.', 'Ящик полон яблок.'],
 };
 
-export const bakeryOrder = 'Je voudrais une baguette, s’il vous plaît.';

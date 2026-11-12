@@ -3,7 +3,6 @@
 import * as THREE from 'three';
 import { toXZ } from './osm.js';
 import { createNightSky } from './night-sky.js';
-import { buildBakeryCounter } from './bakery.js';
 import { addPropInstances, placeBenches, placePigeons } from './street-props.js';
 import { placeStreetLife, terraceSet } from './street-life.js';
 import { createNightLight } from './night-light.js';
@@ -90,7 +89,7 @@ export function buildParis(scene, renderer, data, city, props = {}) {
     return false;
   };
   const R = 0.35;
-  let benches = [], bakery = null;
+  let benches = [];
   const solids = [];                       // киоск, урны, велосипеды, скутеры, горшки
   const hitsBox = (x, z, box) => {
     const dx = x - box.x, dz = z - box.z;
@@ -100,7 +99,7 @@ export function buildParis(scene, renderer, data, city, props = {}) {
   const blocked = (x, z) =>
     x < b.minX + 8 || x > b.maxX - 8 || z < b.minZ + 8 || z > b.maxZ - 8 ||
     inside(x, z) || inside(x + R, z) || inside(x - R, z) || inside(x, z + R) || inside(x, z - R) ||
-    (bakery?.blocks(x, z) ?? false) || benches.some((bench) => hitsBox(x, z, bench)) || solids.some((box) => hitsBox(x, z, box));
+    benches.some((bench) => hitsBox(x, z, bench)) || solids.some((box) => hitsBox(x, z, box));
 
   // ── Рисованные дома: план фасадов (сами дома строятся ниже, когда известны витрины) ──
   const plan = planFacades(pending, heightAt, inside, terrain.flat);
@@ -141,8 +140,7 @@ export function buildParis(scene, renderer, data, city, props = {}) {
 
   // ── Кафе, бистро, булочные (настоящие названия) ───────────
   const shopFronts = [], terraces = [];
-  const shop = buildShops(scene, data.pois, polys, inside, rnd, props, propRandom, shopFronts, terraces);
-  bakery = buildBakeryCounter(scene, shop, blocked, props.croissant);
+  buildShops(scene, data.pois, polys, inside, rnd, props, propRandom, shopFronts, terraces);
   for (const s of shopFronts) night.shopSpill(s.x, s.z, s.nx, s.nz, s.w);
   night.done();
   const facades = buildFacades(scene, look, plan, shopFronts);
@@ -238,7 +236,7 @@ export function buildParis(scene, renderer, data, city, props = {}) {
   }
 
   return {
-    blocked, inside, streetAt, freeSpot, update, sky, bakery, night, look, paint, facades, lightHeroine, heightAt: (x, z) => standAt(x, z),
+    blocked, inside, streetAt, freeSpot, update, sky, night, look, paint, facades, lightHeroine, heightAt: (x, z) => standAt(x, z),
     stats: { stairs: stairs.count, buildings: polys.length, lamps: lamps.length, detailedLamps, benches: benches.length, pigeons, ...streetLife },
   };
 }

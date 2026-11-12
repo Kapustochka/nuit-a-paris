@@ -138,39 +138,60 @@
 }
 .lesson-button:hover { background: linear-gradient(#f6dfe266, #f6dfe266), var(--paper); }
 .lesson-button:disabled { cursor: default; color: var(--ink-soft); }
-#open-notebook, #bakery-quest {
+#open-notebook {
   position: fixed;
   z-index: 7;
   top: max(65px, calc(env(safe-area-inset-top) + 60px));
 }
 #open-notebook { left: max(12px, env(safe-area-inset-left)); }
-#bakery-quest {
-  right: max(12px, env(safe-area-inset-right));
+/* галочка «Падающие звёзды» — бумажный ярлычок с нарисованным квадратиком */
+.paper-toggle {
+  position: fixed;
+  z-index: 7;
+  top: max(110px, calc(env(safe-area-inset-top) + 105px));
+  left: max(12px, env(safe-area-inset-left));
   display: flex;
-  width: min(270px, calc(100vw - 140px));
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 6px;
-  color: #f7e3c4;
-  font-size: 13px;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px 6px 9px;
+  border-radius: 3px 8px 3px 9px / 8px 3px 9px 3px;
+  color: var(--ink);
+  background: var(--paper);
+  box-shadow: 0 3px 12px #130d2973, var(--paper-edge);
+  font: italic 600 15px/1.1 var(--serif);
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
 }
-#bakery-quest[hidden], #bakery-quest [hidden] { display: none; }
-#bakery-quest p { margin: 0; }
-#bakery-quest > p:not(:empty), #bakery-quest details {
-  box-sizing: border-box;
-  width: fit-content;
-  max-width: 100%;
-  background: #1e1834f2;
-  padding: 7px 10px;
-  border-radius: 5px;
+.paper-toggle input { position: absolute; opacity: 0; pointer-events: none; }
+.paper-toggle .tick {
+  position: relative;
+  width: 15px;
+  height: 15px;
+  border: 1.6px solid var(--ink);
+  border-radius: 2px 4px 2px 5px;
+  background: #fff8ec99;
+  transform: rotate(-3deg);
 }
-#bakery-quest details summary { cursor: pointer; }
-#bakery-quest details p[lang="fr"] { margin-top: 8px; font: italic 17px/1.2 Georgia, serif; }
-#bakery-quest details p[lang="ru"] { margin-top: 4px; color: #e0cbac; }
+.paper-toggle input:checked + .tick::after {
+  content: '';
+  position: absolute;
+  left: 3px;
+  top: -5px;
+  width: 6px;
+  height: 13px;
+  border: solid var(--ink-rose);
+  border-width: 0 2.6px 2.6px 0;
+  border-radius: 0 0 3px 0;
+  transform: rotate(40deg);
+}
+.paper-toggle input:focus-visible + .tick { outline: 2px solid var(--ink-rose); outline-offset: 2px; }
+.paper-toggle:has(input:not(:checked)) { opacity: .78; }
+
 #notebook {
   box-sizing: border-box;
   position: fixed;
-  top: max(110px, calc(env(safe-area-inset-top) + 105px));
+  top: max(152px, calc(env(safe-area-inset-top) + 147px));
   left: max(12px, env(safe-area-inset-left));
   z-index: 12;
   width: min(330px, calc(100vw - 24px));
@@ -221,6 +242,7 @@
 #notebook li button [lang="fr"] { font: italic 600 19px var(--serif); }
 #notebook li button span:last-child { font-size: 12px; text-align: right; }
 @media (max-width: 490px) {
-  #open-notebook, #bakery-quest { top: max(88px, calc(env(safe-area-inset-top) + 78px)); }
-  #notebook { top: max(132px, calc(env(safe-area-inset-top) + 122px)); }
+  #open-notebook { top: max(88px, calc(env(safe-area-inset-top) + 78px)); }
+  .paper-toggle { top: max(132px, calc(env(safe-area-inset-top) + 122px)); }
+  #notebook { top: max(174px, calc(env(safe-area-inset-top) + 164px)); }
 }

@@ -1,29 +1,18 @@
-import { bakeryOrder } from './french-words.js';
 import { entryFor } from './entries.js';
 
 const notebookKey = 'nuit-a-paris:words:v1';
-const questKey = 'nuit-a-paris:bakery:v1';
-const orderTranslation = 'Я хотел бы багет, пожалуйста.';
 
-export function createLesson(bakery, player, audio, minimap, openWord) {
+// Блокнот найденных слов (квест в булочной убран — позже придумаем другие задания)
+export function createLesson(openWord) {
   const notebook = document.querySelector('#notebook');
   const bookButton = document.querySelector('#open-notebook');
   const list = notebook.querySelector('ul');
   const empty = notebook.querySelector('[data-empty]');
-  const quest = document.querySelector('#bakery-quest');
-  const questButton = quest.querySelector('button');
-  const status = quest.querySelector('[role="status"]');
-  const progress = quest.querySelector('[data-bakery-progress]');
-  progress.querySelector('[lang="fr"]').textContent = bakeryOrder;
-  progress.querySelector('[lang="ru"]').textContent = orderTranslation;
   const found = new Set();
-  let state = 'travel';
-  let closeEnough = false;
 
   try {
     const saved = JSON.parse(localStorage.getItem(notebookKey) || '[]');
     if (Array.isArray(saved)) saved.filter((key) => entryFor(key)).forEach((key) => found.add(key));
-    if (localStorage.getItem(questKey) === 'done') state = 'done';
   } catch { /* браузер может запретить хранение */ }
 
   function addWord(key) {
@@ -64,55 +53,14 @@ export function createLesson(bakery, player, audio, minimap, openWord) {
     if (event.key === 'Escape' && !notebook.hidden) toggleNotebook(false);
   });
 
-  function inspect(key, object) {
+  function inspect(key) {
     if (!found.has(key)) {
       found.add(key);
       addWord(key);
       refreshBook();
       try { localStorage.setItem(notebookKey, JSON.stringify([...found])); } catch { /* нет доступа к записи */ }
     }
-    if (state !== 'choosing' || !closeEnough || !object?.userData.bakeryChoice) return;
-    if (key !== 'baguette') {
-      status.textContent = 'Посмотри название на карточке и попробуй ещё раз.';
-      return;
-    }
-    state = 'done';
-    status.textContent = 'Très bien ! Ты выбрал багет.';
-    minimap.setGoal(null);
-    try { localStorage.setItem(questKey, 'done'); } catch { /* нет доступа к записи */ }
-    update();
   }
 
-  if (bakery) {
-    quest.hidden = false;
-    if (state !== 'done') minimap.setGoal(bakery);
-    questButton.addEventListener('click', () => {
-      if (!closeEnough) {
-        minimap.toggleBig(true);
-        return;
-      }
-      if (state === 'travel') {
-        state = 'choosing';
-        status.textContent = 'Послушай заказ и дважды нажми на нужную выпечку.';
-        update();
-      }
-      audio.play('bakery-order', bakeryOrder, (message) => {
-        status.textContent = message + ' ' + orderTranslation;
-      });
-    });
-  }
-
-  function update() {
-    if (!bakery) return;
-    const distance = Math.hypot(bakery.x - player.x, bakery.z - player.z);
-    closeEnough = distance <= 4.2;
-    const label = state === 'done' ? '✓ Заказ выполнен' : !closeEnough ? `Булочная · ${Math.ceil(distance)} м`
-      : state === 'choosing' ? '▶ Повторить заказ' : '▶ Послушать заказ';
-    if (questButton.textContent !== label) questButton.textContent = label;
-    questButton.disabled = state === 'done';
-    progress.hidden = state !== 'choosing' || !closeEnough;
-  }
-
-  update();
-  return { inspect, update };
+  return { inspect };
 }
