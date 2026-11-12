@@ -189,25 +189,76 @@ export function sky(look) {
   return m;
 }
 
-// Силуэт Сакре-Кёр на вершине холма: нарисованная карточка в дымке
-export function sacreCard() {
-  const [c, g] = canvas(512, 384);
-  const body = '#d9cbe0', shade = 'rgba(120,100,170,0.35)';
-  const dome = (x, y, r, h) => {
-    g.fillStyle = body; g.beginPath(); g.moveTo(x - r, y); g.bezierCurveTo(x - r, y - h * 0.7, x - r * 0.25, y - h, x, y - h * 1.05); g.bezierCurveTo(x + r * 0.25, y - h, x + r, y - h * 0.7, x + r, y); g.fill();
-    g.fillRect(x - r * 0.9, y, r * 1.8, r * 0.9);
-    g.fillRect(x - r * 0.12, y - h * 1.3, r * 0.24, h * 0.3); g.beginPath(); g.arc(x, y - h * 1.32, r * 0.16, 0, Math.PI * 2); g.fill();
-    g.fillStyle = shade; g.beginPath(); g.moveTo(x + r * 0.2, y - h * 0.98); g.bezierCurveTo(x + r * 0.6, y - h * 0.8, x + r, y - h * 0.5, x + r, y); g.lineTo(x + r * 0.3, y); g.fill();
+// Лестница как на рю Фуайатье: каменные ступени во всю ширину, два поручня посередине
+export function stairs(S, R, x0, x1, y0, steep, half) {
+  const rise = 0.16, tread = rise / steep, n = Math.round((x1 - x0) / tread);
+  for (let k = 0; k < n; k++) {
+    const xa = x0 + k * tread, top = y0 + (k + 1) * rise, v = 0.95 + (k % 3) * 0.03;
+    S.box(xa, top - 0.7, -half, xa + tread + 0.01, top, half, [0.86 * v, 0.82 * v, 0.78 * v], K.TRIM);
+    if (k % 8 === 0) S.box(xa, top - 0.7, -half - 0.6, xa + tread * 8, top + 0.55 + (Math.min(k + 8, n) - k) * rise * 0.5, -half, [0.8, 0.76, 0.72], K.TRIM);   // боковые стенки
+    if (k % 8 === 0) S.box(xa, top - 0.7, half, xa + tread * 8, top + 0.55 + (Math.min(k + 8, n) - k) * rise * 0.5, half + 0.6, [0.8, 0.76, 0.72], K.TRIM);
+  }
+  const iron = [0.2, 0.19, 0.3];
+  for (const z of [-0.45, 0.45]) {
+    const yRail = (x) => y0 + (x - x0) * steep + 0.95;
+    bar(R, [x0 + 0.3, yRail(x0 + 0.3), z], [x1 - 0.3, yRail(x1 - 0.3), z], 0.035, iron);
+    for (let x = x0 + 0.3; x < x1; x += 1.8) { const t = Math.floor((x - x0) / tread) + 1; R.box(x - 0.025, y0 + t * rise, z - 0.025, x + 0.025, yRail(x), z + 0.025, iron, K.IRON); }
+  }
+}
+// Площадь перед базиликой: плиты, низкая балюстрада по краю, газоны
+export function parvis(S, x0, x1, y, halfZ) {
+  for (let x = x0; x < x1; x += 2) for (let z = -halfZ; z < halfZ; z += 2) {
+    S.quad([x, y, z + 2], [x + 2, y, z + 2], [x + 2, y, z], [x, y, z], [0.8, 0.77, 0.74], K.PAVING);
+  }
+  for (const sz of [-1, 1]) {
+    S.box(x0, y - 4, sz * halfZ - 0.3, x1, y + 0.75, sz * halfZ + 0.3, [0.88, 0.84, 0.78], K.TRIM);
+    S.box(x0 + 6, y, sz * 9 - 3, x0 + 26, y + 0.2, sz * 9 + 3, [0.42, 0.58, 0.4], K.PAINT);      // газоны
+  }
+  S.box(x0, y - 8, -halfZ, x0 + 0.5, y + 0.02, -4.6, [0.82, 0.78, 0.74], K.TRIM);                 // подпорная стена по бокам лестницы
+  S.box(x0, y - 8, 4.6, x0 + 0.5, y + 0.02, halfZ, [0.82, 0.78, 0.74], K.TRIM);
+}
+function bar(B, a, b, r, col) {
+  const dx = b[0] - a[0], dz = b[2] - a[2], l = Math.hypot(dx, dz) || 1, sx = -dz / l * r, sz = dx / l * r;
+  const A = (u, v) => [a[0] + sx * u, a[1] + r * v, a[2] + sz * u], Bp = (u, v) => [b[0] + sx * u, b[1] + r * v, b[2] + sz * u];
+  B.quad(A(-1, 1), A(1, 1), Bp(1, 1), Bp(-1, 1), col, K.IRON);
+  B.quad(A(1, -1), A(-1, -1), Bp(-1, -1), Bp(1, -1), col, K.IRON);
+  B.quad(A(1, 1), A(1, -1), Bp(1, -1), Bp(1, 1), col, K.IRON);
+  B.quad(A(-1, -1), A(-1, 1), Bp(-1, 1), Bp(-1, -1), col, K.IRON);
+}
+
+// Сакре-Кёр в том же живописном стиле: белый камень, яйцевидные купола, кампанила.
+// Фасад смотрит в −x (вниз по улице). Подсвечен ночью и меньше тонет в дымке.
+export function basilicaMesh(material) {
+  const B = new Builder(), W = [0.97, 0.94, 0.88], Wd = [0.9, 0.86, 0.8], dark = [0.3, 0.26, 0.42];
+  const dome = (x, y, z, r, h, seg = 14) => {
+    const prof = [];
+    for (let k = 0; k <= 8; k++) { const t = k / 8; prof.push([r * Math.sin((1 - t) * Math.PI / 2) ** 0.8 * (1 + 0.08 * Math.sin(t * Math.PI)), h * (1 - Math.cos(t * Math.PI / 2)) ** 0.9]); }
+    prof[prof.length - 1][0] = 0;
+    B.lathe(x, y, z, prof, seg, W, 16);
+    B.lathe(x, y + h, z, [[r * 0.16, 0], [r * 0.16, r * 0.45], [r * 0.24, r * 0.5], [r * 0.12, r * 0.75], [0.02, r * 0.95]], 8, W, 16);
   };
-  g.fillStyle = body; g.fillRect(60, 250, 392, 134);
-  dome(256, 170, 70, 120); dome(150, 250, 36, 60); dome(362, 250, 36, 60); dome(100, 290, 22, 36); dome(412, 290, 22, 36);
-  g.fillRect(420, 120, 34, 180); dome(437, 120, 20, 36);
-  g.fillStyle = 'rgba(255,214,150,0.8)';
-  for (let i = 0; i < 9; i++) g.fillRect(90 + i * 38, 320, 8, 18);
-  const t = tex(c);
-  const m = new THREE.Mesh(new THREE.PlaneGeometry(64, 48), new THREE.MeshBasicMaterial({ map: t, transparent: true, depthWrite: false, fog: false, opacity: 0.6, color: 0xc8bcd8 }));
-  t.colorSpace = THREE.NoColorSpace;
-  m.layers.set(1);
+  const drum = (x, y, z, r, h, seg = 14) => {
+    B.lathe(x, y, z, [[r, 0], [r, h], [r * 1.08, h + 0.3], [r * 0.98, h + 0.5]], seg, W, 16);
+    for (let s = 0; s < seg; s += 1) {                                     // окна барабана
+      const a = (s + 0.5) / seg * Math.PI * 2, wx = x + Math.cos(a) * (r + 0.02), wz = z + Math.sin(a) * (r + 0.02), tx = -Math.sin(a) * 0.45, tz = Math.cos(a) * 0.45;
+      B.quad([wx - tx, y + h * 0.25, wz - tz], [wx + tx, y + h * 0.25, wz + tz], [wx + tx, y + h * 0.8, wz + tz], [wx - tx, y + h * 0.8, wz - tz], [0.93, 0.9, 0.84], 3, [0, 0, 1, 1], s % 3 ? 0.2 : 0.9);
+    }
+  };
+  B.box(-16, 0, -14, 16, 15, 14, W, 16);                                       // тело
+  B.box(-20.5, 0, -10, -16, 12, 10, Wd, 16);                                   // портик
+  for (const z of [-6, 0, 6]) {                                                 // три арки портика
+    B.quad([-20.52, 0.5, z - 2], [-20.52, 0.5, z + 2], [-20.52, 7, z + 2], [-20.52, 7, z - 2], dark, 13);
+    for (let s = 0; s < 8; s++) {
+      const a0 = s / 8 * Math.PI, a1 = (s + 1) / 8 * Math.PI;
+      B.tri([-20.52, 7, z], [-20.52, 7 + Math.sin(a0) * 2, z + Math.cos(a0) * 2], [-20.52, 7 + Math.sin(a1) * 2, z + Math.cos(a1) * 2], dark, 13);
+    }
+  }
+  B.box(-21, 12, -10.5, -15.5, 13, 10.5, W, 16);
+  drum(0, 15, 0, 8, 7); dome(0, 22.5, 0, 8.4, 13);
+  for (const [x, z] of [[-11, -9], [-11, 9], [10, -10], [10, 10]]) { drum(x, 15, z, 2.6, 3, 10); dome(x, 18.5, z, 2.8, 4.6, 10); }
+  for (const z of [-11.5, 11.5]) { drum(-18, 12, z, 1.6, 2.5, 8); dome(-18, 14.8, z, 1.7, 3, 8); }
+  B.box(16, 0, -4, 24, 30, 4, W, 16); drum(20, 30, 0, 3.4, 3, 10); dome(20, 33.5, 0, 3.6, 6, 10);   // кампанила
+  const m = new THREE.Mesh(B.geometry(0, Math.PI / 5), material);
   return m;
 }
 

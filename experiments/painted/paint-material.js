@@ -187,7 +187,14 @@ const FRAG = /* glsl */ `
     if (is(10.0)) { gl_FragColor = vec4(1.0, 0.86, 0.55, 1.0); return; }
 
     float dist = distance(vWorld, cameraPosition);
-    col = mix(col, uFogCol, smoothstep(uFog.x, uFog.y, dist) * 0.88);
+    float fogK = 0.88;
+    if (is(16.0)) {                                    // базилика: ночью подсвечена снизу, в дымке тонет меньше
+      float flood = smoothstep(0.4, 0.6, uWindowsOn) * (0.95 - 0.3 * smoothstep(12.0, 50.0, h));
+      vec3 lamp = base * mix(vec3(1.0, 0.9, 0.76), vec3(0.92, 0.9, 1.0), smoothstep(15.0, 45.0, h)) * (0.92 + 0.2 * lit + (strokes - 0.5) * 0.12);
+      col = mix(col, lamp, flood);
+      fogK = 0.3;
+    }
+    col = mix(col, uFogCol, smoothstep(uFog.x, uFog.y, dist) * fogK);
     gl_FragColor = vec4(col, alpha);
   }
 `;

@@ -148,7 +148,13 @@ export function buildHouse(o) {
         B.quad([xa - sw, ya, zf + open], [xa - 0.02, ya, zf + 0.04], [xa - 0.02, yb, zf + 0.04], [xa - sw, yb, zf + open], shutter, K.SHUTTER, [0, 0, 1, (yb - ya)]);
         B.quad([xb + 0.02, ya, zf + 0.04], [xb + sw, ya, zf + open], [xb + sw, yb, zf + open], [xb + 0.02, yb, zf + 0.04], shutter, K.SHUTTER, [0, 0, 1, (yb - ya)]);
       }
-      if (f !== o.balconyFloor && rnd() < 0.55) {                                                              // французский балкончик
+      if (f !== o.balconyFloor && f > 0 && rnd() < 0.18) {                                                     // маленький балкон на консолях
+        B.box(xa - 0.25, ya - 0.08, zf - 0.02, xb + 0.25, ya + 0.06, zf + 0.55, trim, K.TRIM);
+        for (const bx of [xa - 0.1, xb + 0.1]) B.box(bx - 0.06, ya - 0.34, zf - 0.02, bx + 0.06, ya - 0.08, zf + 0.4, shadeOf(trim, 0.9), K.TRIM);
+        rails.quad([xa - 0.25, ya + 0.06, zf + 0.53], [xb + 0.25, ya + 0.06, zf + 0.53], [xb + 0.25, ya + 0.95, zf + 0.53], [xa - 0.25, ya + 0.95, zf + 0.53], IRON_COL, K.IRON, [0, 0, (xb - xa + 0.5) / 0.9, 0.95]);
+        for (const bx of [xa - 0.24, xb + 0.24]) rails.quad([bx, ya + 0.06, zf], [bx, ya + 0.06, zf + 0.53], [bx, ya + 0.95, zf + 0.53], [bx, ya + 0.95, zf], IRON_COL, K.IRON, [0, 0, 0.55, 0.95]);
+        if (rnd() < 0.7) planters.push([xb + 0.05, ya + 0.35, zf + 0.35, 0.8, 'pot']);
+      } else if (f !== o.balconyFloor && rnd() < 0.55) {                                                              // французский балкончик
         rails.quad([xa - 0.05, ya, zf + 0.16], [xb + 0.05, ya, zf + 0.16], [xb + 0.05, ya + 0.85, zf + 0.16], [xa - 0.05, ya + 0.85, zf + 0.16], IRON_COL, K.IRON, [0, 0, (xb - xa + 0.1) / 0.9, 0.95]);
       } else if (f !== o.balconyFloor && rnd() < 0.6) {
         B.box(xa - 0.02, ya + 0.01, zf + 0.02, xb + 0.02, ya + 0.22, zf + 0.3, [0.62, 0.36, 0.3], K.PAINT);       // ящик с цветами
@@ -180,36 +186,59 @@ export function buildHouse(o) {
   B.box(-0.2, H - 0.18, zt - 0.02, W + 0.2, H + 0.02, zt + 0.36, shadeOf(trim, 1.02), K.TRIM);
 
   // цоколь до склона улицы
-  B.box(-0.02, -1.8, -0.4, W + 0.02, 0.42, 0.06, o.stone, K.TRIM);
+  B.box(-0.02, -(o.plinth || 1.8), -0.4, W + 0.02, 0.42, 0.06, o.stone, K.TRIM);
 
-  // ── мансарда-«колокол» ──
-  const roofY = H + 0.02, zFront = zt + 0.34, rise = 2.3 + rnd() * 0.5, pitch = 0.55 + rnd() * 0.3;
-  const zMid = (zFront - D) / 2, low = 1.0 + rnd() * 0.25;
-  const prof = [];
-  for (let k = 0; k <= 6; k++) { const s = k / 6; prof.push([zFront - low * s * s, roofY + rise * s]); }
-  const top = prof[prof.length - 1];
-  for (let k = 1; k <= 3; k++) { const s = k / 3; prof.push([top[0] + (zMid - top[0]) * s, top[1] + pitch * Math.sin(s * Math.PI / 2)]); }
-  for (let k = prof.length - 2; k >= 0; k--) prof.push([2 * zMid - prof[k][0], prof[k][1]]);
-  let acc = 0;
-  for (let k = 0; k + 1 < prof.length; k++) {
-    const [za, ya] = prof[k], [zb, yb] = prof[k + 1], l = Math.hypot(zb - za, yb - ya);
-    const nx = Math.max(1, Math.ceil((W + 0.3) / 1.4));
-    for (let i = 0; i < nx; i++) {
-      const xa = -0.15 + (W + 0.3) * i / nx, xb = -0.15 + (W + 0.3) * (i + 1) / nx;
-      B.quad([xa, ya, za], [xb, ya, za], [xb, yb, zb], [xa, yb, zb], o.roof, K.ROOF, [xa, acc, xb, acc + l]);
+  // ── крыша: мансарда-«колокол», черепичная двускатная или плоская терраса ──
+  const roofType = o.roofType || 'mansard';
+  const roofY = H + 0.02, zFront = zt + 0.34, zMid = (zFront - D) / 2;
+  let prof = [], top, ridge;
+  const rise = 2.3 + rnd() * 0.5, pitch = 0.55 + rnd() * 0.3, low = 1.0 + rnd() * 0.25;
+  if (roofType === 'mansard') {
+    for (let k = 0; k <= 6; k++) { const s = k / 6; prof.push([zFront - low * s * s, roofY + rise * s]); }
+    top = prof[prof.length - 1];
+    for (let k = 1; k <= 3; k++) { const s = k / 3; prof.push([top[0] + (zMid - top[0]) * s, top[1] + pitch * Math.sin(s * Math.PI / 2)]); }
+    ridge = top[1] + pitch;
+  } else if (roofType === 'gable') {                       // черепица: скаты слегка прогнуты, свес над карнизом
+    const r2 = (zFront + 0.35 - zMid) * (0.62 + rnd() * 0.15);
+    for (let k = 0; k <= 5; k++) { const s = k / 5; prof.push([zFront + 0.35 + (zMid - zFront - 0.35) * s, roofY - 0.12 + r2 * (s - 0.12 * Math.sin(s * Math.PI))]); }
+    top = prof[0]; ridge = prof[prof.length - 1][1];
+  }
+  if (prof.length) {
+    for (let k = prof.length - 2; k >= 0; k--) prof.push([2 * zMid - prof[k][0], prof[k][1]]);
+    let acc = 0;
+    for (let k = 0; k + 1 < prof.length; k++) {
+      const [za, ya] = prof[k], [zb, yb] = prof[k + 1], l = Math.hypot(zb - za, yb - ya);
+      const nx = Math.max(1, Math.ceil((W + 0.3) / 1.4));
+      for (let i = 0; i < nx; i++) {
+        const xa = -0.15 + (W + 0.3) * i / nx, xb = -0.15 + (W + 0.3) * (i + 1) / nx;
+        B.quad([xa, ya, za], [xb, ya, za], [xb, yb, zb], [xa, yb, zb], o.roof, K.ROOF, [xa, acc, xb, acc + l]);
+      }
+      acc += l;
     }
-    acc += l;
+    for (const x of [-0.15, W + 0.15]) {                                                                       // торцы крыши
+      const cen = [x, (roofY + ridge) / 2, zMid];
+      for (let k = 0; k + 1 < prof.length; k++) B.tri(cen, [x, prof[k][1], prof[k][0]], [x, prof[k + 1][1], prof[k + 1][0]], shadeOf(wall, 0.8), K.WALL);
+      B.tri(cen, [x, prof[prof.length - 1][1], prof[prof.length - 1][0]], [x, prof[0][1], prof[0][0]], shadeOf(wall, 0.8), K.WALL);
+    }
+    B.box(-0.18, ridge - 0.04, zMid - 0.12, W + 0.18, ridge + 0.1, zMid + 0.12, roofType === 'gable' ? shadeOf(o.roof, 0.85) : [0.62, 0.66, 0.78], K.TRIM);
+  } else {                                                  // плоская крыша-терраса с парапетом, будкой и кадками
+    ridge = roofY + 0.25; top = [zFront, roofY];
+    B.box(-0.1, roofY - 0.05, -D, W + 0.1, roofY + 0.12, zFront, shadeOf(o.stone, 0.9), K.TRIM);
+    B.box(-0.12, roofY, zFront - 0.25, W + 0.12, roofY + 0.5, zFront, trim, K.TRIM);
+    rails.quad([0, roofY + 0.5, zFront - 0.12], [W, roofY + 0.5, zFront - 0.12], [W, roofY + 1.3, zFront - 0.12], [0, roofY + 1.3, zFront - 0.12], IRON_COL, K.IRON, [0, 0, W / 0.9, 0.95]);
+    const sx = W * (0.55 + rnd() * 0.2);
+    B.box(sx - 1.1, roofY, -D + 1.2, sx + 1.1, roofY + 2.2, -D + 3.6, shadeOf(wall, 0.95), K.WALL);
+    B.quad([sx - 0.4, roofY, -D + 3.61], [sx + 0.4, roofY, -D + 3.61], [sx + 0.4, roofY + 1.9, -D + 3.61], [sx - 0.4, roofY + 1.9, -D + 3.61], shutter, K.DOOR, [0, 0, 1, 1], 0.5);
+    for (let k = 0; k < 6; k++) { const yy = roofY + 2.2 + Math.sin(k / 5 * Math.PI) * 0.5; B.box(sx - 1.25 + k * 0.42, roofY + 2.2, -D + 1.0, sx - 0.83 + k * 0.42, yy, -D + 3.8, o.roof, K.ROOF); }
+    for (let x = 0.6; x < W - 0.4; x += 1.4 + rnd()) {
+      B.lathe(x, roofY + 0.12, zFront - 0.7, [[0.18, 0], [0.24, 0.42], [0.26, 0.46]], 8, [0.72, 0.42, 0.32], K.PAINT);
+      planters.push([x, roofY + 0.75, zFront - 0.7, 1.4, 'shrub']);
+    }
   }
-  for (const x of [-0.15, W + 0.15]) {                                                                         // торцы мансарды
-    const cen = [x, roofY + rise * 0.5, zMid];
-    for (let k = 0; k + 1 < prof.length; k++) B.tri(cen, [x, prof[k][1], prof[k][0]], [x, prof[k + 1][1], prof[k + 1][0]], shadeOf(wall, 0.8), K.WALL);
-    B.tri(cen, [x, prof[prof.length - 1][1], prof[prof.length - 1][0]], [x, prof[0][1], prof[0][0]], shadeOf(wall, 0.8), K.WALL);
-  }
-  B.box(-0.18, top[1] + pitch - 0.04, zMid - 0.12, W + 0.18, top[1] + pitch + 0.1, zMid + 0.12, [0.62, 0.66, 0.78], K.TRIM);  // цинковый конёк
 
   // слуховые окна с арочным верхом
   const slopeZ = (y) => { for (let k = 0; k < 6; k++) if (prof[k + 1][1] >= y) { const t = (y - prof[k][1]) / (prof[k + 1][1] - prof[k][1]); return prof[k][0] + (prof[k + 1][0] - prof[k][0]) * t; } return top[0]; };
-  centers.forEach((c, i) => {
+  if (roofType === 'mansard') centers.forEach((c, i) => {
     if (o.dormerSkip === i) return;
     const dw = 1.2, half = dw / 2, yb = roofY + 0.25, yt = roofY + 1.5, zd = slopeZ(yb) + 0.06, back = top[0] - 0.4;
     const gw = 0.72, g0 = c - gw / 2, g1 = c + gw / 2, gb = yb + 0.25, gt = yt - 0.02, dp = 0.14;
@@ -233,7 +262,6 @@ export function buildHouse(o) {
   });
 
   // трубы: чуть кривые, с керамическими горшками
-  const ridge = top[1] + pitch;
   for (const cx of o.chimneys) {
     const C = new Builder(), hgt = 1.1 + rnd() * 0.7;
     C.box(-0.32, -1.0, -0.24, 0.32, hgt, 0.24, o.chimney, K.WALL);
@@ -254,7 +282,6 @@ export function buildHouse(o) {
     const [ze, ye] = at(1);
     B.quad([x0, ye - 0.24, ze + 0.02], [x1, ye - 0.24, ze + 0.02], [x1, ye, ze + 0.02], [x0, ye, ze + 0.02], o.awning, K.AWNING, [x0, 0.86, x1, 1.0]);
   }
-  if (o.ivy) ivy.push(...o.ivy);
 
   // ── «оживляем» дом: наклон, выпуклость, волнистые этажи, просевший конёк ──
   const leanX = (rnd() - 0.5) * 0.022, leanZ = 0.004 + rnd() * 0.006, bulge = 0.05 + rnd() * 0.05;
@@ -270,5 +297,5 @@ export function buildHouse(o) {
     return [nx, ny, nz];
   };
   B.transform(deform); rails.transform(deform); sign.transform(deform);
-  return { B, rails, sign, planters: planters.map(([x, y, z, w]) => [...deform([x, y, z]), w]), ivy, height: H, deform };
+  return { B, rails, sign, planters: planters.map(([x, y, z, w, t]) => [...deform([x, y, z]), w, t]), ivy, height: H, deform };
 }
