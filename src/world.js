@@ -55,7 +55,7 @@ export function buildParis(scene, renderer, data, city, props = {}) {
   // ── Дома: нарисованные фасады (из моделей Meshy) на настоящих контурах ──
   const rnd = mulberry(7);
   const polys = [];                       // для столкновений
-  const cards = newBuf(), caps = newBuf();
+  const cards = newBuf(), body = newBuf();
   const wallSpots = [];
   const SACRE = toXZ(48.88672, 2.34306);
   const FAC = Object.entries(city.facades).map(([name, f]) => ({ name, ...f }));
@@ -190,25 +190,46 @@ export function buildParis(scene, renderer, data, city, props = {}) {
         }
       }
     }
-    // тёмная крышка — закрывает дом сверху
-    const contour = [];
-    for (let i = 0; i < n; i++) contour.push(new THREE.Vector2(p[i * 2], p[i * 2 + 1]));
-    const base = caps.pos.length / 3, capY = H * 0.6;
-    for (const v of contour) { caps.pos.push(v.x, capY, v.y); caps.nor.push(0, 1, 0); caps.uv.push(0, 0); caps.col.push(1, 1, 1); }
+    // Сплошной объём за «открытками»: стены чуть глубже фасада и мансарда до верха дома.
+    // Закрывает просветы в вырезанных силуэтах крыш, короткие грани и стыки с соседями.
+    const roofY = H * 0.76, k = 0.55;
+    let cx = 0, cz = 0;
+    for (let i = 0; i < n; i++) { cx += p[i * 2]; cz += p[i * 2 + 1]; }
+    cx /= n; cz /= n;
+    const inset = (i, d) => {                              // точка контура, сдвинутая к центру на d метров
+      const x = p[i * 2], z = p[i * 2 + 1], L = Math.hypot(cx - x, cz - z) || 1, t = Math.min(d / L, 0.4);
+      return [x + (cx - x) * t, z + (cz - z) * t];
+    };
+    const wallTop = [0.2, 0.18, 0.22], wallLow = [0.12, 0.1, 0.11], slate = [0.2, 0.22, 0.32], ridge = [0.13, 0.14, 0.22];
+    const top = [];
+    for (let i = 0; i < n; i++) top.push([cx + (p[i * 2] - cx) * k, cz + (p[i * 2 + 1] - cz) * k]);
+    for (let i = 0; i < n; i++) {
+      const j = (i + 1) % n, [ax, az] = inset(i, 0.12), [bx, bz] = inset(j, 0.12);
+      const L = Math.hypot(bx - ax, bz - az); if (L < 0.01) continue;
+      const nx = (bz - az) / L, nz = -(bx - ax) / L;      // наружу (контур уже повернут по часовой)
+      quad4(body, [ax, 0, az], [bx, 0, bz], [bx, roofY, bz], [ax, roofY, az], [nx, 0, nz], 0, 1, 0, 1, wallLow, wallTop);
+      const [tax, taz] = top[i], [tbx, tbz] = top[j];
+      const run = Math.hypot((ax + bx) / 2 - (tax + tbx) / 2, (az + bz) / 2 - (taz + tbz) / 2), rise = H - roofY;
+      const rl = Math.hypot(run, rise) || 1;
+      quad4(body, [ax, roofY, az], [bx, roofY, bz], [tbx, H, tbz], [tax, H, taz], [nx * rise / rl, run / rl, nz * rise / rl], 0, 1, 0, 1, slate, ridge);
+    }
+    const contour = top.map(([x, z]) => new THREE.Vector2(x, z));
+    const base = body.pos.length / 3;
+    for (const v of contour) { body.pos.push(v.x, H, v.y); body.nor.push(0, 1, 0); body.uv.push(0, 0); body.col.push(...ridge); }
     for (const t of THREE.ShapeUtils.triangulateShape(contour, [])) {
-      const [a, c2, d2] = t.map((k) => contour[k]);
+      const [a, c2, d2] = t.map((q) => contour[q]);
       const up = (c2.x - a.x) * (d2.y - a.y) - (c2.y - a.y) * (d2.x - a.x) < 0;
-      caps.idx.push(base + t[0], base + (up ? t[1] : t[2]), base + (up ? t[2] : t[1]));
+      body.idx.push(base + t[0], base + (up ? t[1] : t[2]), base + (up ? t[2] : t[1]));
     }
   }
   const cardMat = (map, key) => {
-    const m = new THREE.MeshBasicMaterial({ map, alphaTest: 0.5, vertexColors: true });
+    const m = new THREE.MeshBasicMaterial({ map, alphaTest: 0.5, vertexColors: true, side: THREE.DoubleSide });
     nightFacade(m, night, key);
     return m;
   };
   const cardMesh = new THREE.Mesh(toGeo(cards), cardMat(city.groundTex, 'ground'));
   const upperMesh = new THREE.Mesh(toGeo(upper), cardMat(city.facadeTex, 'upper'));
-  const capMesh = new THREE.Mesh(toGeo(caps), new THREE.MeshBasicMaterial({ color: 0x15173a }));
+  const capMesh = new THREE.Mesh(toGeo(body), new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }));
   cardMesh.userData.word = ({ faceIndex, uv }) => facadeWord(facadeTiles[Math.floor(faceIndex / 2)], uv, true, SPLIT);
   upperMesh.userData.word = ({ faceIndex, uv }) => facadeWord(facadeTiles[Math.floor(faceIndex / 2)], uv, false, SPLIT);
   capMesh.userData.word = 'roof';
