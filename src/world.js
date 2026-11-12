@@ -209,6 +209,7 @@ export function buildParis(scene, renderer, data, city, props = {}) {
   };
   function update(dt, hx, hz, camera) {
     sky.update(dt);
+    look.uLookTime.value += dt;
     const gy = standAt(hx, hz);
     air.groundY = air.started ? air.groundY + (gy - air.groundY) * (1 - Math.exp(-dt * 2)) : gy;
     air.started = true;
@@ -259,7 +260,7 @@ export function buildParis(scene, renderer, data, city, props = {}) {
   }
 
   return {
-    blocked, inside, streetAt, freeSpot, update, sky, night, look, air, paint, facades, lightHeroine, heightAt: (x, z) => standAt(x, z),
+    blocked, inside, streetAt, freeSpot, update, sky, night, look, air, houses: plan.houses, paint, facades, lightHeroine, heightAt: (x, z) => standAt(x, z),
     soundSpots: shopFronts.filter((s) => ['cafe', 'restaurant', 'bar', 'pub'].includes(s.kind)),
     stats: { stairs: stairs.count, buildings: polys.length, lamps: lamps.length, detailedLamps, benches: benches.length, pigeons, ...streetLife },
   };
@@ -495,6 +496,7 @@ function buildShops(scene, pois, polys, inside, rnd, props = {}, propRandom = rn
   });
   const cg = new THREE.BufferGeometry(); cg.setAttribute('position', new THREE.BufferAttribute(candles, 3));
   const candleGlow = new THREE.Points(cg, new THREE.PointsMaterial({ map: glowTexture(), size: 0.48, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, color: 0xffd795, opacity: 0.75 }));
+  candleGlow.name = 'Terrace candles';                  // над этими столиками поднимается пар от кофе (ambient.js)
   tableTop.userData.word = tableLeg.userData.word = 'table';
   for (const m of [tableTop, tableLeg, candle, candleGlow]) { m.frustumCulled = false; scene.add(m); }
   addPropInstances(scene, props['bistro-table'], terrace.tables);

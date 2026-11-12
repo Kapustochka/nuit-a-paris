@@ -71,7 +71,7 @@ export const AIR_GLSL = /* glsl */ `
 
     // ── фонари: ореол и конус света с лучами ──
     #if SHAFTS > 0
-    float jitter = 0.5 + (hash(floor(sp)) - 0.5) * 0.6;     // мягкая зернистость вместо полос от шагов
+    float jitter = 0.5 + (hash(floor(sp)) - 0.5) * 0.35;     // мягкая зернистость вместо полос от шагов
     vec3 glow = vec3(0.0);
     for (int i = 0; i < SHAFTS; i++) {
       vec4 L = uShaftPos[i];
@@ -91,7 +91,7 @@ export const AIR_GLSL = /* glsl */ `
         float rays = 0.4 + 1.1 * vnoise(q.xz / (r + 0.05) * 2.8 + L.xz + uTime * 0.04);
         beam += cone * rays / (1.0 + 0.22 * dot(q, q));
       }
-      glow += uShaftCol * beam * dt * 0.3 * L.w * uShaft;
+      glow += uShaftCol * beam * dt * 0.24 * L.w * uShaft;
     }
     col += glow * (1.0 - 0.35 * col);
     #endif

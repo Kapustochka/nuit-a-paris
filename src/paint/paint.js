@@ -30,6 +30,7 @@ export function createLook(night, moonDirection) {
     uFogCol: { value: new THREE.Color().setRGB(0.21, 0.19, 0.4, THREE.LinearSRGBColorSpace) },
     uFogDensity: { value: 0.0075 },
     uWindowsOn: { value: 0.6 },
+    uLookTime: { value: 0 },                               // секунды: окна зажигаются и гаснут, за стёклами ходят люди
     uLightPos: { value: Array.from({ length: MAX_LIGHTS }, () => new THREE.Vector4(0, -100, 0, 0.01)) },
     uLightCol: { value: Array.from({ length: MAX_LIGHTS }, () => new THREE.Color(0, 0, 0)) },
   };
@@ -37,7 +38,7 @@ export function createLook(night, moonDirection) {
 
 const LOOK_GLSL = /* glsl */ `
   uniform vec3 uKeyDir, uKeyCol, uShadeCol, uSkyCol, uFogCol, uLampColor;
-  uniform float uFogDensity, uWindowsOn;
+  uniform float uFogDensity, uWindowsOn, uLookTime;
   uniform sampler2D uNightMap; uniform vec4 uNightBounds;
   #ifdef NIGHT_TERRAIN
     uniform sampler2D uHeightMap; uniform vec4 uHeightBounds; uniform vec2 uHeightTexel;
@@ -100,6 +101,14 @@ const FRAG = /* glsl */ `
   varying vec3 vWorld; varying vec3 vNormal; varying vec3 vColor; varying vec2 vUv;
   varying float vKind; varying float vRand;
   bool is(float k) { return abs(vKind - k) < 0.5; }
+  // силуэт человека за стеклом: голова и плечи; p — от середины груди, s — рост
+  float figure(vec2 p, float s) {
+    p /= s;
+    float head = smoothstep(0.076, 0.066, length(p - vec2(0.0, 0.155)));
+    vec2 q = abs(p - vec2(0.0, -0.22)) - vec2(0.03, 0.15);                      // плечи: прямоугольник со скруглением
+    float body = smoothstep(0.1, 0.09, length(max(q, 0.0)) + min(max(q.x, q.y), 0.0));
+    return max(head, body);
+  }
   vec3 cells(vec2 p) {
     vec2 i = floor(p), f = fract(p); float f1 = 9.0, f2 = 9.0; vec2 id = vec2(0);
     for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) {
@@ -148,15 +157,57 @@ const FRAG = /* glsl */ `
 
     vec3 col = paintShade(base, n, vWorld, strokes, h);
 
-    if (is(3.0) || is(8.0)) {                            // нарисованные окна и витрины
+    if (is(3.0) || is(8.0)) {                            // живые окна и витрины
       vec2 u = vUv;
-      bool on = vRand < uWindowsOn || is(8.0);
+      // число окна округляем: между вершинами оно чуть «плывёт», а hash превращает это в рябь
+      float wr = floor(vRand * 2048.0 + 0.5) / 2048.0;
+      float r2 = hash(vec2(wr * 311.0, 1.7)), r3 = hash(vec2(wr * 173.0, 5.1)), r4 = hash(vec2(wr * 97.0, 9.3));
+      // свет в квартирах время от времени зажигается и гаснет — у каждого окна свой ритм
+      float turn = floor(uLookTime / (45.0 + 150.0 * r3) + r4 * 9.0);
+      bool flip = hash(vec2(wr * 517.0, turn)) < 0.2;
+      bool on = ((vRand < uWindowsOn) != flip) || is(8.0);
       vec3 glow = mix(vec3(1.0, 0.52, 0.2), vec3(1.0, 0.86, 0.55), smoothstep(0.0, 1.0, u.y + (strokes - 0.5) * 0.5));
       if (is(3.0)) {
-        float cw = 0.2 + 0.05 * sin(u.y * 16.0 + vRand * 40.0);
+        // у каждой квартиры своя лампа: янтарная, сливочная, розовая, зелёный абажур, синий телевизор
+        float tv = step(0.93, r2);
+        vec3 tint = r2 < 0.5 ? vec3(1.0) : r2 < 0.7 ? vec3(1.0, 1.12, 1.25) : r2 < 0.84 ? vec3(1.0, 0.86, 1.05) : r2 < 0.93 ? vec3(0.86, 1.1, 0.95) : vec3(0.42, 0.7, 1.9);
+        glow *= tint * mix(0.72, 1.05, r3);
+        float flick = floor(vnoise(vec2(uLookTime * 5.0, wr * 50.0)) * 4.0) / 4.0;             // телевизор мигает ступенями
+        glow *= mix(1.0, 0.6 + 0.6 * flick, tv);
+        if (r4 < 0.4) glow += vec3(0.22, 0.17, 0.08) * smoothstep(0.26, 0.0, length((u - vec2(0.28 + 0.44 * r3, 0.6)) * vec2(0.6, 1.0))) * (1.0 - tv);   // пятно абажура
+        float cw = 0.2 + 0.05 * sin(u.y * 16.0 + wr * 40.0);
         float curtain = 1.0 - smoothstep(cw - 0.03, cw + 0.03, min(u.x, 1.0 - u.x));
         glow = mix(glow, glow * vec3(0.92, 0.55, 0.45), curtain * 0.85);
-        if (fract(vRand * 7.0) < 0.2) glow *= 1.0 - smoothstep(0.35, 0.3, length((u - vec2(0.62, 0.32)) * vec2(1.0, 0.7))) * 0.6;
+        // силуэты: кто-то проходит по комнате, кто-то стоит у окна, на подоконнике сидит кошка
+        float who = hash(vec2(wr * 61.0, 3.3)), shade = 0.0;
+        if (who < 0.26) {
+          float px = 0.5 + 0.75 * sin(uLookTime * 0.11 * (0.5 + r3) + r4 * 40.0);
+          shade = figure((u - vec2(px, 0.5)) * vec2(0.55, 1.0), 1.0);
+        } else if (who < 0.38) {
+          shade = figure((u - vec2(0.36 + 0.3 * r3, 0.46 + 0.012 * sin(uLookTime * 0.7 + r4 * 9.0))) * vec2(0.55, 1.0), 1.0);
+        } else if (who < 0.45) {
+          vec2 c = (u - vec2(0.3 + 0.4 * r3, 0.07)) * vec2(0.55, 1.0);
+          float ears = max(0.0, 0.035 - abs(abs(c.x - 0.045) - 0.022) * 1.6 - abs(c.y - 0.115) * 0.9);
+          float tail = smoothstep(0.012, 0.006, abs(length(c - vec2(-0.075, 0.03 + 0.012 * sin(uLookTime * 1.3 + r4 * 20.0))) - 0.045)) * step(c.x, -0.06);
+          shade = max(max(smoothstep(0.075, 0.065, length(c * vec2(1.0, 1.25))), smoothstep(0.04, 0.032, length(c - vec2(0.045, 0.085)))), max(step(0.001, ears), tail));
+        }
+        glow *= 1.0 - shade * 0.62;
+      } else if (hash(floor(vWorld.xz / 7.0) + 3.0) < 0.5) {
+        // кафе: тёплый зал, подвесные лампы, гости за столиками и официант, который ходит по залу
+        vec2 c = vec2(u.x * 1.5, u.y);
+        glow = mix(vec3(0.96, 0.5, 0.24), vec3(1.0, 0.8, 0.5), smoothstep(0.1, 0.9, u.y + (strokes - 0.5) * 0.4));
+        float seat = floor(c.x * 2.6), sx = fract(c.x * 2.6) - 0.5, sr = hash(vec2(seat, floor(vWorld.x / 7.0)));
+        float guest = figure(vec2(sx / 2.6 + 0.01 * sin(uLookTime * 0.6 + sr * 30.0), u.y - 0.47), 0.78) * step(0.38, sr);
+        float table = step(abs(u.y - 0.27), 0.012) * step(abs(sx), 0.34) + step(abs(sx), 0.02) * step(u.y, 0.27);
+        float wx = fract(uLookTime * 0.02 + hash(floor(vWorld.xz / 7.0))) * 2.1 - 0.3;
+        float waiter = figure(vec2(c.x - wx, u.y - 0.6), 1.15);
+        float lampX = fract(c.x * 1.3) - 0.5;
+        float bulb = smoothstep(0.06, 0.02, length(vec2(lampX / 1.3, u.y - 0.82)));
+        float cone = smoothstep(0.55, 0.1, abs(lampX) / max(0.82 - u.y, 0.02) * 0.6) * step(u.y, 0.82) * 0.16;
+        glow += vec3(0.3, 0.24, 0.12) * cone;
+        glow = mix(glow, vec3(0.3, 0.15, 0.13), max(max(guest, waiter), min(table, 1.0)) * 0.72);
+        glow = mix(glow, vec3(1.0, 0.95, 0.8), bulb);
+        glow = mix(glow, vec3(0.3, 0.17, 0.14), step(abs(lampX), 0.006) * step(0.84, u.y) * 0.7);
       } else {
         float mull = step(abs(fract(u.x * 3.0) - 0.5), 0.02) + step(abs(u.y - 0.78), 0.012);
         float shelf = step(abs(fract(u.y * 2.6 + 0.2) - 0.5), 0.03) * step(u.y, 0.74);
