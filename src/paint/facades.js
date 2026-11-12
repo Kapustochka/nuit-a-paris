@@ -13,6 +13,9 @@ import { toCreasedNormals } from 'three/addons/utils/BufferGeometryUtils.js';
 import { Builder, K, mulberry, X, Y, IRON_COL, shadeOf } from './builder.js';
 import { paintMaterial } from './paint.js';
 import { leafTexture, railTexture, signTexture, foliage } from './props.js';
+import { roofAccent, buildRoofAccent } from './roof-accents.js';
+
+const STREET_DETAILS = !new URLSearchParams(location.search).has('no-street-details');
 
 const GF = 3.7;            // первый этаж
 const CHUNK = 64;          // квартал для отсечения и подгрузки
@@ -230,6 +233,16 @@ function buildShell(h, S, deform) {
       S.append(C, ([px, py, pz]) => [x + px * ca - pz * sa + py * lean, y + py, z + px * sa + pz * ca]);
     }
   }
+  // Фронтоны видны издалека и не добавляют draw calls: это часть того же shell.
+  h.accentCount = 0;
+  if (STREET_DETAILS) for (const e of h.edges) for (const seg of e.segs) {
+    const accent = roofAccent(seg, h, R);
+    if (!accent) continue;
+    const B = new Builder();
+    buildRoofAccent(B, accent, seg.wall, h.roof);
+    S.append(B, edgeFrame(e, seg, h.E, (p) => p));
+    h.accentCount++;
+  }
   S.transform(deform);
 }
 
@@ -275,6 +288,7 @@ function buildNear(h, N, Rl, planters, deform, shops) {
   for (const e of h.edges) for (const seg of e.segs) {
     const shop = shops.get(seg), Lo = layout(seg, h.E, shop), to = edgeFrame(e, seg, h.E, deform);
     const r = mulberry(seg.seed * 7 + 3);
+    const accent = STREET_DETAILS ? roofAccent(seg, h, R) : null;
     const B = new Builder(), rails = new Builder(), pl = [];
     const trim = TRIM, wall = seg.wall, shutter = Lo.shutter;
     for (const fl of Lo.floors) {
@@ -344,6 +358,11 @@ function buildNear(h, N, Rl, planters, deform, shops) {
         for (let x = xa + 0.3; x < xb; x += 1.1) B.box(x - 0.08, y0 - 0.38, -0.02, x + 0.08, y0 - 0.06, 0.5, shadeOf(trim, 0.9), K.TRIM);
         rails.quad([xa, y0 + 0.1, 0.7], [xb, y0 + 0.1, 0.7], [xb, y0 + 1.05, 0.7], [xa, y0 + 1.05, 0.7], IRON_COL, K.IRON, [0, 0, (xb - xa) / 0.9, 0.95]);
         for (const x of [xa + 0.02, xb - 0.02]) rails.quad([x, y0 + 0.1, 0], [x, y0 + 0.1, 0.7], [x, y0 + 1.05, 0.7], [x, y0 + 1.05, 0], IRON_COL, K.IRON, [0, 0, 0.8, 0.95]);
+        if (STREET_DETAILS && xb - xa > 3.5) {
+          const c = (xa + xb) / 2, w = Math.min(1.6, (xb - xa) * 0.3);
+          B.box(c - w / 2, y0 + 0.54, 0.57, c + w / 2, y0 + 0.78, 0.83, [0.62, 0.36, 0.3], K.PAINT);
+          pl.push([c, y0 + 0.84, 0.7, w]);
+        }
       }
       if (f < Lo.nUp) B.box(seg.x0 - 0.04, y1 - 0.2, -0.02, seg.x1 + 0.04, y1 + 0.02, 0.15, trim, K.TRIM);  // карниз между этажами
     }
@@ -353,6 +372,7 @@ function buildNear(h, N, Rl, planters, deform, shops) {
       const slope = (y) => { const s = clamp01((y - h.E - 0.04) / (R.yLow - h.E - 0.04)); return -R.low * s * s; };
       for (const c of Lo.centers) {
         if (c < 1.1 || c > e.L - 1.1 || r() < 0.25) continue;
+        if (accent && Math.abs(c - accent.center) < accent.half + 0.7) continue;
         const half = 0.6, yb = h.E + 0.25, yt = Math.min(h.E + 1.5, R.yLow - 0.15), zd = slope(yb) + 0.06, back = -R.low - 0.3;
         const gw = 0.72, g0 = c - gw / 2, g1 = c + gw / 2, gb = yb + 0.25, gt = yt - 0.02, dp = 0.14;
         B.panel([c - half, yb, zd], X, Y, g0 - (c - half), yt - yb, trim, K.TRIM, 2);
@@ -472,7 +492,7 @@ export function buildFacades(scene, look, plan, shopFronts) {
     for (const c of want) { if (built++ >= budget) break; buildChunk(c); }
     for (const c of list) if (c.near && (c.x - x) ** 2 + (c.z - z) ** 2 > FAR * FAR) dropChunk(c);
   }
-  return { update, stats: () => ({ houses: houses.length, chunks: list.length, near: list.filter((c) => c.near).length, baseTris: tris }) };
+  return { update, stats: () => ({ houses: houses.length, chunks: list.length, near: list.filter((c) => c.near).length, roofAccents: houses.reduce((sum, h) => sum + (h.accentCount || 0), 0), baseTris: tris }) };
 }
 
 // быстрые «плоские» нормали без поиска соседей — для фасадов из множества мелких граней
