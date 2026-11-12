@@ -15,6 +15,7 @@ import { createCityAudio } from './city-audio.js';
 import { loadPasserby, placePasserby, placeCircularPasserby, passerbyBlocksStep } from './passerby.js';
 import { createPainter } from './paint/post.js';
 import { createPeople } from './people.js';
+import { createAmbient } from './ambient.js';
 
 const loading = document.getElementById('loading');
 const streetEl = document.getElementById('street');
@@ -83,12 +84,14 @@ const stars = createFallingStars(scene, camera, world, inspector, lesson.review)
 installStarToggle(stars);
 // Живые улицы: нарисованные прохожие из кода (people.js). ?no-people — без них, для сравнения.
 if (!new URLSearchParams(location.search).has('no-people')) people = createPeople(scene, world, mapData, { count: phone ? 10 : 18, inspector, camera, player });
+// Мелкая жизнь в воздухе: листья, лепестки, светлячки, пар над кофе, дым из труб. ?no-ambient — без неё.
+const ambient = new URLSearchParams(location.search).has('no-ambient') ? null : createAmbient(scene, world, { phone });
 loading.remove();
 performance.mark('paris-ready');
 
 const debug = new URLSearchParams(location.search).has('debug');
 if (debug) addDebugPanel();
-window.__game = { heroine, passersby, get people() { return people; }, world, stars, inspector, mapData, camera, controls, renderer, cityAudio, get painted() { return painter !== null; }, get painter() { return painter; } };
+window.__game = { ambient, heroine, passersby, get people() { return people; }, world, stars, inspector, mapData, camera, controls, renderer, cityAudio, get painted() { return painter !== null; }, get painter() { return painter; } };
 
 // ── Движение ─────────────────────────────────────────────────
 const MAX_WALK = 1.45, MAX_RUN = 3.8, MAX_BACK = 0.95; // м/с
@@ -159,6 +162,7 @@ renderer.setAnimationLoop(() => {
   }
   for (const actor of passersby) actor.update(dt);
   people?.update(dt);
+  ambient?.update(dt, camera, world.air.groundY);
   stars.update(dt, p.x, p.z, facing);
   cityAudio.update(dt, p.x, p.z, yaw, heroine.busy !== 'jump');
 
