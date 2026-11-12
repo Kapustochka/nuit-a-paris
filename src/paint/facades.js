@@ -8,14 +8,12 @@
 //   • shell — крыши, глухие стены, цоколи (всегда, по кварталам 64 м);
 //   • far — фасады попроще: окна, двери, ставни нарисованы на плоской стене (всегда, кроме ближних кварталов);
 //   • near — настоящие ниши окон, подоконники, балконы, маркизы, цветы — строятся вокруг героини на ходу.
+import { roofAccent, buildRoofAccent } from './roof-accents.js';
 import * as THREE from 'three';
 import { toCreasedNormals } from 'three/addons/utils/BufferGeometryUtils.js';
 import { Builder, K, mulberry, X, Y, IRON_COL, shadeOf } from './builder.js';
 import { paintMaterial } from './paint.js';
 import { leafTexture, railTexture, signTexture, foliage } from './props.js';
-import { roofAccent, buildRoofAccent } from './roof-accents.js';
-
-const STREET_DETAILS = !new URLSearchParams(location.search).has('no-street-details');
 
 const GF = 3.7;            // первый этаж
 const CHUNK = 64;          // квартал для отсечения и подгрузки
@@ -33,6 +31,7 @@ const WORDS = { [K.WALL]: 'wall', [K.ROOF]: 'roof', [K.TRIM]: 'wall', [K.GLASS]:
   [K.AWNING]: 'awning', [K.IRON]: 'balcony', [K.DOOR]: 'door', [K.PAINT]: 'shopWindow' };
 const pick = (r, a) => a[Math.floor(r() * a.length)];
 const clamp01 = (v) => Math.max(0, Math.min(1, v));
+const STREET_DETAILS = !new URLSearchParams(location.search).has('no-street-details');
 
 // ── План: всё, что нужно и дальнему, и ближнему слою (детерминированно, от seed) ──────────────
 // pending: [{ p (по часовой), n, H, tint }], open(x, z) — смотрит ли точка на улицу
@@ -492,7 +491,7 @@ export function buildFacades(scene, look, plan, shopFronts) {
     for (const c of want) { if (built++ >= budget) break; buildChunk(c); }
     for (const c of list) if (c.near && (c.x - x) ** 2 + (c.z - z) ** 2 > FAR * FAR) dropChunk(c);
   }
-  return { update, stats: () => ({ houses: houses.length, chunks: list.length, near: list.filter((c) => c.near).length, roofAccents: houses.reduce((sum, h) => sum + (h.accentCount || 0), 0), baseTris: tris }) };
+  return { update, stats: () => ({ houses: houses.length, chunks: list.length, near: list.filter((c) => c.near).length, baseTris: tris }) };
 }
 
 // быстрые «плоские» нормали без поиска соседей — для фасадов из множества мелких граней
