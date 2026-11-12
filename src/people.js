@@ -13,7 +13,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { words } from './french-words.js';
 
 // Что говорят прохожие (ключи карточек из french-words.js; голос — assets/voice/people/<ключ>-f|m.mp3)
-const GREETINGS = ['bonsoir', 'bonsoirMademoiselle', 'bonneSoiree', 'salut', 'belleNuit', 'ilFaitFrais', 'bonneNuit', 'pardon'];
+const GREETINGS = ['bonsoirStreet', 'bonsoirMademoiselle', 'bonneSoiree', 'salut', 'belleNuit', 'ilFaitFrais', 'bonneNuit', 'pardon'];
 
 // По каким дорогам ходят и как далеко от оси дороги их тротуар (м)
 const WALK_OFFSET = { footway: [0.45, 0], path: [0.4, 0], steps: [0.45, 0], pedestrian: [2.4, 1.4, 0.6], living_street: [2.4, 1.4, 0.6], residential: [3.6, 2.8, 2, 1.2] };
@@ -336,7 +336,7 @@ export function createPeople(scene, world, mapData, { count = 16, inspector, cam
       if (dist < 3.4 && facingHero > 0.35 && greetCooldown <= 0 && now - person.greeted > 90000 && dist > 0.9) {
         person.greeted = now;
         let key = GREETINGS[Math.floor(rnd() * (GREETINGS.length - 1))];
-        if (key === lastGreeting) key = 'bonsoir';
+        if (key === lastGreeting) key = 'bonsoirStreet';
         say(person, dist < 1.4 ? 'pardon' : key);
       }
 

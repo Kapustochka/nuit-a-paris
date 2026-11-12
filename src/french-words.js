@@ -51,7 +51,7 @@ export const words = {
   crate: ['la cagette', 'la kaʒɛt', 'ла кажэт', 'ящик для фруктов', 'La cagette est pleine de pommes.', 'Ящик полон яблок.'],
   passant: ['le passant', 'lə pasɑ̃', 'лё паса̃', 'прохожий', 'Un passant me souhaite une bonne soirée.', 'Прохожий желает мне хорошего вечера.'],
   // Что говорят прохожие на улице (облачко над головой; двойной клик по облачку или прохожему — карточка)
-  bonsoir: ['Bonsoir !', 'bɔ̃swaʁ', 'бо̃суар', 'Добрый вечер!', 'Bonsoir, madame. Bonsoir, monsieur.', 'Добрый вечер, мадам. Добрый вечер, месье.'],
+  bonsoirStreet: ['Bonsoir !', 'bɔ̃swaʁ', 'бо̃суар', 'Добрый вечер!', 'Bonsoir, madame. Bonsoir, monsieur.', 'Добрый вечер, мадам. Добрый вечер, месье.'],
   bonsoirMademoiselle: ['Bonsoir, mademoiselle !', 'bɔ̃swaʁ madmwazɛl', 'бо̃суар, мадмуазэль', 'Добрый вечер, девушка!', 'Bonsoir, mademoiselle, vous cherchez quelque chose ?', 'Добрый вечер, девушка, вы что-то ищете?'],
   bonneSoiree: ['Bonne soirée !', 'bɔn swaʁe', 'бон суарэ', 'Хорошего вечера!', 'Merci, et bonne soirée à vous !', 'Спасибо, и вам хорошего вечера!'],
   salut: ['Salut !', 'saly', 'салю', 'Привет! (по-дружески)', 'Salut, ça va ?', 'Привет, как дела?'],
