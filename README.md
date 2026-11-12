@@ -1,37 +1,43 @@
 # Nuit à Paris
 
-3D-игра для изучения французского: ночной Париж, аниме-стиль, Three.js.
+A 3D game for learning French: night-time Paris in an anime style, built with Three.js.
 
-## Запуск
-Двойной клик по `start.bat` — откроется браузер на http://localhost:8080.
-(Просто открыть index.html нельзя: браузер не даёт загрузить модель с диска.)
+**Play online:** https://kapustochka.github.io/nuit-a-paris/
 
-На macOS запусти в папке игры `python3 -m http.server 8080 --bind 127.0.0.1` и открой http://127.0.0.1:8080.
+## Running locally
+Double-click `start.bat` (Windows) — a browser opens at http://localhost:8080.
+(Opening `index.html` directly does not work: browsers block loading 3D models from disk.)
 
-Телефон в той же Wi-Fi: открой `http://<IP компьютера>:8080` (IP пишется в окне start.bat).
-Windows может спросить про брандмауэр — разреши для частной сети.
+On macOS, run `python3 -m http.server 8080 --bind 127.0.0.1` in the game folder and open http://127.0.0.1:8080.
 
-## Управление
-- Компьютер: WASD / стрелки — идти, Shift — бежать, мышь — камера, колесо — приближение.
-- Телефон: левая половина экрана — джойстик (до края — бег), правая — камера, два пальца — приближение.
-- Двойной клик по предмету или двойное касание открывает карточку со словом, произношением, переводом и примером. Слово сохраняется в блокноте этого браузера. Закрыть карточку можно через × или Escape.
-- «Булочная» открывает карту с золотой меткой. Подойди к прилавку, нажми «Послушать заказ» и дважды нажми на нужную выпечку.
+From a phone on the same Wi-Fi network, open `http://<computer IP>:8080` (the IP is shown in the `start.bat` window).
+Windows may ask about the firewall — allow access on private networks.
 
-План следующей прогулки и список моделей для Meshy — в [NEXT-STEPS.md](NEXT-STEPS.md).
+## Controls
+- Computer: WASD / arrow keys — walk, Shift — run, Space — jump, F — punch, M — big map, mouse — camera, wheel — zoom.
+- Phone: left half of the screen — joystick (push to the edge to run), right half — camera, two fingers — zoom.
+- Double-click (or double-tap) an object to open a word card with pronunciation, translation and an example. The word is saved to the notebook in this browser. Close the card with × or Escape.
+- The “Булочная” (Bakery) button opens the map with a gold marker. Walk up to the counter, press “Послушать заказ” (Listen to the order) and double-tap the right pastry.
 
-## Настройка героини
-Открой `http://localhost:8080/?debug` — появятся ползунки для рук, ног и темпа шага.
-Подобранные значения перенеси в `TUNING` в `src/heroine.js`.
-В разделе «Ночное небо» можно настроить плотность облаков, яркость звёзд и дальнюю дымку.
+The plan for the next walk and the list of models to look for in Meshy are in [NEXT-STEPS.md](NEXT-STEPS.md).
 
-## Файлы
-- `assets/heroine_mobile.glb` — героиня (5 МБ, анимации Idle_11, Walking_Woman, Run_02 и др.)
-- `src/heroine.js` — загрузка, анимации, поправки рук/ног
-- `src/world.js` — площадь, дома, фонари, башня
-- `src/night-sky.js` — процедурное ночное небо
-- `assets/street/` — облегчённые игровые копии моделей Meshy
-- `assets/people/` — облегчённые копии моделей прохожих
-- `assets/voice/` — французская озвучка карточек и заказа, [источник голоса и сборка](assets/voice/README.md)
-- `src/street-props.js` — загрузка и размещение уличных моделей
-- `src/controls.js` — клавиатура, джойстик, камера
-- `src/main.js` — игровой цикл
+## Tuning the heroine
+Open `http://localhost:8080/?debug` to get sliders for the arms, legs and walking pace.
+Copy the values you like into `TUNING` in `src/heroine.js`.
+The “Ночное небо” (Night sky) section controls cloud density, star brightness and distant haze.
+
+## Files
+- `assets/mixamo/` — the heroine: Mixamo rig (`base.fbx`), animations (idle, walk, run, walk back, jump, punch) and her textures from the original Meshy model
+- `src/heroine.js` — loading the heroine, animations, arm/leg adjustments
+- `src/world.js` — Montmartre from OpenStreetMap: buildings, street lamps, trees, Sacré-Cœur
+- `assets/city/` — building facades and Sacré-Cœur baked from Meshy models
+- `src/night-sky.js` — procedural night sky
+- `assets/street/` — lightweight in-game copies of Meshy street models
+- `assets/people/` — lightweight copies of passer-by models
+- `assets/voice/` — French voice-over for word cards and the bakery order, [voice source and build](assets/voice/README.md)
+- `src/street-props.js` — loading and placing street models
+- `src/minimap.js` — minimap and the big map (M)
+- `src/controls.js` — keyboard, joystick, camera
+- `src/main.js` — game loop
+
+Map data © OpenStreetMap contributors (ODbL).

@@ -1,7 +1,7 @@
-# Французская озвучка
+# French voice-over
 
-Файлы WAV сгенерированы для Nuit à Paris локально, с помощью Piper и французского голоса [fr_FR-siwis-medium](https://huggingface.co/rhasspy/piper-voices/blob/main/fr/fr_FR/siwis/medium/MODEL_CARD). Игра загружает отдельную запись по кнопке озвучки. Для воспроизведения модель Piper и доступ к облачному синтезу не требуются.
+The WAV files were generated locally for Nuit à Paris with Piper and the French voice [fr_FR-siwis-medium](https://huggingface.co/rhasspy/piper-voices/blob/main/fr/fr_FR/siwis/medium/MODEL_CARD). The game loads a separate recording when the voice button is pressed. Playback needs neither the Piper model nor any cloud speech synthesis.
 
-Источник данных для голоса — Junichi Yamagishi, Pierre-Edouard Honnet, Philip Garner, Alexandros Lazaridis. *The SIWIS French Speech Synthesis Database, 2016*. University of Edinburgh, The Centre for Speech Technology Research, 2017. [DOI](https://doi.org/10.7488/ds/1705) · [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)
+Voice data source: Junichi Yamagishi, Pierre-Edouard Honnet, Philip Garner, Alexandros Lazaridis. *The SIWIS French Speech Synthesis Database, 2016*. University of Edinburgh, The Centre for Speech Technology Research, 2017. [DOI](https://doi.org/10.7488/ds/1705) · [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)
 
-Чтобы пересобрать записи после добавления слов, установи `piper-tts` в Python-окружение, скачай модель ONNX и её файл настроек с тем же именем и суффиксом `.json`, затем запусти из корня проекта `python scripts/build-french-audio.py /путь/к/fr_FR-siwis-medium.onnx`. Для чтения словаря скрипт использует Node.js.
+To rebuild the recordings after adding words, install `piper-tts` in a Python environment, download the ONNX model and its settings file with the same name and a `.json` suffix, then run from the project root: `python scripts/build-french-audio.py /path/to/fr_FR-siwis-medium.onnx`. The script uses Node.js to read the dictionary.
