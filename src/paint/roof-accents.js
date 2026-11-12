@@ -5,9 +5,9 @@ const TRIM = [0.94, 0.9, 0.82];
 // Один фронтон на выбранный фасадный сегмент, внутри исходной высоты крыши.
 export function roofAccent(seg, h, roof) {
   const span = seg.x1 - seg.x0;
-  if (h.roofType !== 'mansard' || !roof || roof.low < 0.65 || span < 6.8) return null;
+  if (h.roofType !== 'mansard' || !roof || roof.low < 0.65 || span < 4.8) return null;
   const r = mulberry(seg.seed * 13 + 7631);
-  if (r() > 0.34) return null;
+  if (r() > 0.25) return null;
   const shoulder = h.E + Math.min(1.7, roof.yLow - h.E - 0.3);
   const peak = Math.min(roof.capY - 0.15, shoulder + 1.15);
   if (peak - shoulder < 0.55) return null;

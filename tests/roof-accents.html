@@ -1,0 +1,33 @@
+<!doctype html><meta charset="utf-8"><title>Roof accent bounds</title><pre>Running…</pre>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"}}</script>
+<script type="module">
+import { Builder } from '../src/paint/builder.js';
+import { roofAccent, buildRoofAccent } from '../src/paint/roof-accents.js';
+const assert = (value, message) => { if (!value) throw Error(message); };
+try {
+  const h = { roofType: 'mansard', E: 10, width: 8 }, roof = { low: 1, yLow: 13, capY: 13.8 };
+  let built = 0, rounded = 0;
+  for (let seed = 0; seed < 1000; seed++) {
+    const seg = { x0: 3, x1: 7.8 + seed % 8, seed }, original = JSON.stringify(seg);
+    const a = roofAccent(seg, h, roof);
+    assert(JSON.stringify(a) === JSON.stringify(roofAccent(seg, h, roof)), 'deterministic choice');
+    assert(JSON.stringify(seg) === original, 'source footprint/segment unchanged');
+    if (!a) continue;
+    built++; rounded += Number(a.rounded);
+    const B = new Builder(); buildRoofAccent(B, a, [0.9, 0.8, 0.7], [0.4, 0.43, 0.6]);
+    assert(B.pos.every(Number.isFinite), 'finite vertices');
+    for (let i = 0; i < B.pos.length; i += 3) {
+      assert(B.pos[i] >= seg.x0 && B.pos[i] <= seg.x1, 'inside own facade segment');
+      assert(B.pos[i + 1] <= roof.capY && B.pos[i + 1] >= h.E - 0.25, 'inside existing roof height');
+      assert(B.pos[i + 2] >= -h.width * 0.5, 'bounded roof depth');
+    }
+    assert(B.pos.length / 9 <= 120, 'bounded geometry cost');
+  }
+  assert(built > 100 && rounded > 0 && rounded < built, 'both profiles exercised');
+  assert(!roofAccent({ x0: 0, x1: 3, seed: 1 }, h, roof), 'narrow facade skipped');
+  assert(!roofAccent({ x0: 0, x1: 9, seed: 1 }, { ...h, roofType: 'flat' }, roof), 'flat roofs preserved');
+  assert(!roofAccent({ x0: 0, x1: 9, seed: 1 }, h, { ...roof, low: 0.2 }), 'shallow roofs preserved');
+  window.__testResults = { passed: true, seeds: 1000, built, rounded };
+} catch (error) { window.__testResults = { error: error.stack }; }
+document.querySelector('pre').textContent = JSON.stringify(window.__testResults, null, 2);
+</script>
