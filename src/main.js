@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { loadHeroine, TUNING } from './heroine.js';
 import { loadMapData, clearMapCache } from './osm.js';
 import { buildParis } from './world.js';
+import { loadTerrain } from './terrain.js';
 import { createControls } from './controls.js';
 import { createMinimap } from './minimap.js';
 import { loadStreetProps } from './street-props.js';
@@ -81,6 +82,7 @@ const passerbyAssets = Promise.all([
   loadPasserby('sporty-walking.glb', 'Walking'),
   loadPasserby('athletic-walk-in-circle.glb', 'Walk In Circle'),
 ]);
+const terrainLoad = loadTerrain();
 const mapData = await loadMapData((t) => { loading.textContent = t; }).catch(fail);
 // Нарисованные фасады домов и Сакре-Кёр (запечены из моделей Meshy)
 const tl = new THREE.TextureLoader();
@@ -90,7 +92,7 @@ const [facadeTex, groundTex, facadeMeta, sacreTex, sacre] = await Promise.all([
   cityTex('assets/city/sacre.webp'), fetch('assets/city/sacre.json').then((r) => r.json()),
 ]).catch(fail);
 const world = buildParis(scene, renderer, mapData, {
-  facadeTex, groundTex, facades: facadeMeta.facades, split: facadeMeta.split, sacreTex, sacre,
+  facadeTex, groundTex, facades: facadeMeta.facades, split: facadeMeta.split, sacreTex, sacre, terrain: await terrainLoad,
 }, await streetProps);
 const controls = createControls(renderer.domElement);
 controls.state.camDist = 3.6;
@@ -99,7 +101,7 @@ const minimap = createMinimap(document.getElementById('minimap'), mapData);
 loading.textContent = 'Bonsoir…';
 const heroine = await loadHeroine(scene).catch(fail);
 const [sx, sz] = world.freeSpot(0, 6);
-heroine.root.position.set(sx, 0, sz);
+heroine.root.position.set(sx, world.heightAt(sx, sz), sz);
 const [walkingAsset, circleAsset] = await passerbyAssets;
 const player = heroine.root.position;
 const near = (actor, x, z) => actor && Math.hypot(x - actor.position.x, z - actor.position.z) < 0.75;
@@ -122,7 +124,7 @@ const MAX_WALK = 1.45, MAX_RUN = 3.8, MAX_BACK = 0.95; // м/с
 let speed = 0, facing = Math.PI, streetTick = 0, lastStreet = '';
 const moveDir = new THREE.Vector3(), camTarget = new THREE.Vector3(), want = new THREE.Vector3();
 const clock = new THREE.Clock();
-camera.position.set(sx, 3, sz + 5);
+camera.position.set(sx, world.heightAt(sx, sz) + 3, sz + 5);
 
 renderer.setAnimationLoop(() => {
   const dt = Math.min(clock.getDelta(), 0.05);
@@ -162,18 +164,20 @@ renderer.setAnimationLoop(() => {
   else if (!blocked(p.x, p.z + stepZ)) { p.z += stepZ; speed *= 0.9; }
   else speed *= 0.5;
 
+  p.y = world.heightAt(p.x, p.z);
   heroine.setState(speed < -0.2 ? 'back' : speed < 0.25 ? 'idle' : speed > (MAX_WALK + MAX_RUN) / 2 ? 'run' : 'walk');
   heroine.update(dt, speed);
 
   // Камера сзади-сверху; если между ней и героиней стена — придвигаем
-  camTarget.set(p.x, 1.4, p.z);
+  camTarget.set(p.x, p.y + 1.4, p.z);
   const cp = Math.cos(c.camPitch), sp = Math.sin(c.camPitch);
   let dist = c.camDist;
   for (let i = 1; i <= 8; i++) {
     const t = (i / 8) * c.camDist;
     if (world.inside(p.x + Math.sin(yaw) * cp * t, p.z + Math.cos(yaw) * cp * t)) { dist = Math.max(0.6, t - c.camDist / 8 - 0.25); break; }
   }
-  want.set(p.x + Math.sin(yaw) * cp * dist, Math.max(0.45, 1.4 + sp * dist), p.z + Math.cos(yaw) * cp * dist);
+  want.set(p.x + Math.sin(yaw) * cp * dist, 0, p.z + Math.cos(yaw) * cp * dist);
+  want.y = Math.max(world.heightAt(want.x, want.z) + 0.45, p.y + 1.4 + sp * dist);   // камера не уходит под склон
   camera.position.lerp(want, 1 - Math.exp(-dt * 10));
   camera.lookAt(camTarget);
 

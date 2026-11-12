@@ -31,7 +31,7 @@ export function placePasserby(scene, asset, world, player, occupied) {
   const [x, z] = world.freeSpot(anchorX, anchorZ);
   const root = new THREE.Group();
   root.name = 'Passante';
-  root.position.set(x, 0, z);
+  root.position.set(x, world.heightAt?.(x, z) ?? 0, z);
   root.rotation.y = Math.PI / 2;
   asset.model.position.y += 0.021;
   root.add(asset.model);
@@ -85,7 +85,7 @@ export function placePasserby(scene, asset, world, player, occupied) {
     const step = Math.min(distance, WALK_SPEED * dt) * Math.max(0, Math.cos(angle));
     const x = position.x + dx / distance * step, z = position.z + dz / distance * step;
     if (!free(x, z)) { destination = null; return; }
-    position.set(x, 0, z);
+    position.set(x, world.heightAt?.(x, z) ?? 0, z);
     asset.mixer.update(step / WALK_SPEED);
   }
 
@@ -114,7 +114,7 @@ export function placeCircularPasserby(scene, asset, world, player, occupied) {
   if (!start) { console.warn('Не нашлось места для кругового маршрута'); return null; }
 
   model.name = 'Passante en cercle';
-  model.position.set(start[0], 0.004, start[1]);
+  model.position.set(start[0], (world.heightAt?.(start[0] + center.x, start[1] + center.z) ?? 0) + 0.004, start[1]);
   scene.add(model);
   // Сдвигаем начало клипа, чтобы прохожая появилась со стороны камеры.
   let time = duration * 0.75;
@@ -134,6 +134,7 @@ export function placeCircularPasserby(scene, asset, world, player, occupied) {
       }
       time = nextTime;
       position.copy(nextPosition);
+      model.position.y = (world.heightAt?.(position.x, position.z) ?? 0) + 0.004;   // круг по склону
     },
   };
 }
