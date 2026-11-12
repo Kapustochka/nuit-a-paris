@@ -9,14 +9,15 @@
 //   • far — фасады попроще: окна, двери, ставни нарисованы на плоской стене (всегда, кроме ближних кварталов);
 //   • near — настоящие ниши окон, подоконники, балконы, маркизы, цветы — строятся вокруг героини на ходу.
 import * as THREE from 'three';
-import { toCreasedNormals } from 'three/addons/utils/BufferGeometryUtils.js';
 import { Builder, K, mulberry, X, Y, IRON_COL, shadeOf } from './builder.js';
 import { paintMaterial } from './paint.js';
 import { leafTexture, railTexture, signTexture, foliage } from './props.js';
+import { streamGeometry } from './stream-geometry.js';
 
 const GF = 3.7;            // первый этаж
 const CHUNK = 64;          // квартал для отсечения и подгрузки
 const NEAR = 95, FAR = 135; // ближние кварталы строятся ближе NEAR и убираются дальше FAR
+const BUILD_SLICE_MS = 3;   // CPU-бюджет подгрузки за кадр (один фасад может занять дольше)
 
 const WALLS = [[0.96, 0.79, 0.67], [0.95, 0.88, 0.74], [0.93, 0.74, 0.71], [0.97, 0.86, 0.62], [0.82, 0.83, 0.88],
   [0.8, 0.85, 0.76], [0.97, 0.76, 0.58], [0.86, 0.8, 0.9], [0.95, 0.88, 0.74], [0.96, 0.79, 0.67]];
@@ -270,7 +271,7 @@ function buildFar(h, F, deform, shops) {
 }
 
 // Ближний слой: ниши, подоконники, перемычки, ставни, балконы, маркизы, ящики с цветами, слуховые окна
-function buildNear(h, N, Rl, planters, deform, shops) {
+function* buildNear(h, N, Rl, planters, deform, shops) {
   const R = h.roofType === 'mansard' ? roofRings(h) : null;
   for (const e of h.edges) for (const seg of e.segs) {
     const shop = shops.get(seg), Lo = layout(seg, h.E, shop), to = edgeFrame(e, seg, h.E, deform);
@@ -374,11 +375,12 @@ function buildNear(h, N, Rl, planters, deform, shops) {
     }
     N.append(B, to); Rl.append(rails, to);
     for (const [x, y, z, w, t] of pl) planters.push([...to([x, y, z]), w, t]);
+    yield;
   }
 }
 
 // ── Сборка ────────────────────────────────────────────────────────────────
-export function buildFacades(scene, look, plan, shopFronts) {
+export function buildFacades(scene, look, plan, shopFronts, { progressive = false } = {}) {
   const { houses } = plan;
   const material = paintMaterial(look);
   const railMat = paintMaterial(look, { map: railTexture() });
@@ -418,15 +420,33 @@ export function buildFacades(scene, look, plan, shopFronts) {
     scene.add(m);
     return m;
   };
-  for (const c of chunks.values()) {
+  const list = [...chunks.values()];
+  for (const c of list) {
     c.x /= c.houses.length; c.z /= c.houses.length;
+    c.baseReady = false;
+  }
+  function* buildBase(c) {
     const S = new Builder(), F = new Builder();
     for (const h of c.houses) {
       const s = new Builder(); buildShell(h, s, deforms.get(h)); S.append(s);
       buildFar(h, F, deforms.get(h), shops);
+      yield;
     }
-    if (S.pos.length) add(S.geometry(0, Math.PI / 4), material, true);
-    if (F.pos.length) { c.far = add(flatGeometry(F), material, true); }
+    let shell = null, far = null, committed = false;
+    try {
+      if (S.pos.length) shell = yield* streamGeometry(S, true, Math.PI / 4);
+      yield;
+      if (F.pos.length) far = yield* streamGeometry(F, true);
+      if (shell) add(shell, material, true);
+      if (far) c.far = add(far, material, true);
+      c.baseReady = committed = true;
+    } finally {
+      if (!committed) { shell?.dispose(); far?.dispose(); }
+    }
+  }
+  for (const c of list) {
+    // За пределами ближайшего окружения геометрия достраивается уже во время прогулки.
+    if (!progressive || c.x * c.x + c.z * c.z < NEAR * NEAR) for (const _ of buildBase(c)) { /* до первого кадра */ }
   }
   // вывески лавок: золотые буквы на крашеном дереве, над витриной
   for (const { seg, e, h, at, w, name } of shops.values()) {
@@ -437,48 +457,74 @@ export function buildFacades(scene, look, plan, shopFronts) {
     add(B.geometry(0, 0), paintMaterial(look, { map: signTexture(name, Lo.style[0]) }), 'sign');
   }
 
-  // ближние кварталы — строим на ходу, по одному за кадр
-  function buildChunk(c) {
+  // Ближний квартал собирается частями. Дальний фасад остаётся видимым до полной готовности.
+  function* buildChunk(c) {
     const N = new Builder(), Rl = new Builder(), planters = [];
-    for (const h of c.houses) buildNear(h, N, Rl, planters, deforms.get(h), shops);
     const g = new THREE.Group();
-    if (N.pos.length) g.add(new THREE.Mesh(flatGeometry(N), material));
-    if (Rl.pos.length) { const m = new THREE.Mesh(Rl.geometry(0, 0), railMat); m.layers.set(1); g.add(m); }
-    const boxes = planters.filter((q) => !q[4]), pots = planters.filter((q) => q[4]);
-    const leafy = [
-      [boxes.map(([x, y, z, w]) => [x, y + 0.08, z, 0.2 + w * 0.1, true]), [0.42, 0.6, 0.4], leafMat, leafTex],
-      [boxes.map(([x, y, z, w]) => [x, y + 0.16, z, 0.16 + w * 0.09, true]), [0.95, 0.5, 0.55], flowerMat, flowerTex],
-      [pots.map(([x, y, z]) => [x, y, z, 0.3, false]), [0.4, 0.58, 0.38], leafMat, leafTex],
-    ];
-    leafy.forEach(([list, color, mat, map], i) => {
-      if (!list.length) return;
-      const m = new THREE.Mesh(foliage(list, color, 4 + i), mat); m.userData.leafMap = map; g.add(m);
-    });
-    g.traverse((o) => { o.userData.noLift = true; });
-    scene.add(g);
-    c.near = g;
-    if (c.far) c.far.visible = false;
+    let committed = false;
+    try {
+      for (const h of c.houses) yield* buildNear(h, N, Rl, planters, deforms.get(h), shops);
+      if (N.pos.length) g.add(new THREE.Mesh(yield* streamGeometry(N, true), material));
+      if (Rl.pos.length) { const m = new THREE.Mesh(yield* streamGeometry(Rl), railMat); m.layers.set(1); g.add(m); }
+      const boxes = planters.filter((q) => !q[4]), pots = planters.filter((q) => q[4]);
+      const leafy = [
+        [boxes.map(([x, y, z, w]) => [x, y + 0.08, z, 0.2 + w * 0.1, true]), [0.42, 0.6, 0.4], leafMat, leafTex],
+        [boxes.map(([x, y, z, w]) => [x, y + 0.16, z, 0.16 + w * 0.09, true]), [0.95, 0.5, 0.55], flowerMat, flowerTex],
+        [pots.map(([x, y, z]) => [x, y, z, 0.3, false]), [0.4, 0.58, 0.38], leafMat, leafTex],
+      ];
+      for (const [i, [list, color, mat, map]] of leafy.entries()) {
+        if (!list.length) continue;
+        const m = new THREE.Mesh(foliage(list, color, 4 + i), mat); m.userData.leafMap = map; g.add(m);
+        m.geometry.computeBoundingSphere();
+        yield;
+      }
+      g.traverse((o) => { o.userData.noLift = true; });
+      scene.add(g);
+      c.near = g;
+      if (c.far) c.far.visible = false;
+      committed = true;
+    } finally {
+      if (!committed) g.traverse((o) => { if (o.isMesh) o.geometry.dispose(); });
+    }
   }
   function dropChunk(c) {
     c.near.traverse((o) => { if (o.isMesh) o.geometry.dispose(); });
     scene.remove(c.near); c.near = null;
     if (c.far) c.far.visible = true;
   }
-  const list = [...chunks.values()];
+  let pending = null;
   function update(x, z, budget = 1) {
+    const distance2 = (c) => (c.x - x) ** 2 + (c.z - z) ** 2;
+    if (pending?.kind === 'near' && distance2(pending.chunk) > FAR * FAR) {
+      pending.work.return();
+      pending = null;
+    }
+    for (const c of list) if (c.near && distance2(c) > FAR * FAR) dropChunk(c);
+    if (budget <= 0) return;
+    const deadline = budget === Infinity ? Infinity : performance.now() + BUILD_SLICE_MS;
     let built = 0;
-    const want = list.filter((c) => !c.near && (c.x - x) ** 2 + (c.z - z) ** 2 < NEAR * NEAR)
-      .sort((a, b) => ((a.x - x) ** 2 + (a.z - z) ** 2) - ((b.x - x) ** 2 + (b.z - z) ** 2));
-    for (const c of want) { if (built++ >= budget) break; buildChunk(c); }
-    for (const c of list) if (c.near && (c.x - x) ** 2 + (c.z - z) ** 2 > FAR * FAR) dropChunk(c);
+    do {
+      if (!pending) {
+        let nearest = null, d = Infinity;
+        for (const c of list) {
+          const next = distance2(c);
+          if (c.baseReady && (c.near || next >= NEAR * NEAR)) continue;
+          if (next < d) { nearest = c; d = next; }
+        }
+        if (!nearest) break;
+        const kind = nearest.baseReady ? 'near' : 'base';
+        pending = { chunk: nearest, kind, work: kind === 'near' ? buildChunk(nearest) : buildBase(nearest) };
+      }
+      if (pending.work.next().done) { pending = null; built++; }
+    } while (built < budget && performance.now() < deadline);
   }
-  return { update, stats: () => ({ houses: houses.length, chunks: list.length, near: list.filter((c) => c.near).length, baseTris: tris }) };
+  function warmStart(x, z) {
+    if (!list.length) return;
+    if (!progressive) { update(x, z, Infinity); return; }
+    const nearest = list.reduce((a, c) => (c.x - x) ** 2 + (c.z - z) ** 2 < (a.x - x) ** 2 + (a.z - z) ** 2 ? c : a);
+    if (!nearest.baseReady) for (const _ of buildBase(nearest)) { /* ближний город */ }
+    for (const _ of buildChunk(nearest)) { /* ближайшие окна и витрины */ }
+  }
+  return { update, warmStart, stats: () => ({ houses: houses.length, chunks: list.length, base: list.filter((c) => c.baseReady).length,
+    near: list.filter((c) => c.near).length, pending: Number(Boolean(pending)), baseTris: tris }) };
 }
-
-// быстрые «плоские» нормали без поиска соседей — для фасадов из множества мелких граней
-function flatGeometry(B) {
-  const g = B.geometry(0, 0);
-  g.computeVertexNormals();
-  return g;
-}
-void toCreasedNormals;

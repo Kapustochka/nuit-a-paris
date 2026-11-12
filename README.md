@@ -6,6 +6,10 @@ A 3D game for learning French: night-time Paris in an anime style, built with Th
 
 **Pull request previews:** every open PR is published at `https://kapustochka.github.io/nuit-a-paris/previews/pr-<number>/` (list: https://kapustochka.github.io/nuit-a-paris/previews/). The site is rebuilt on every push to main and every PR update.
 
+The compact Montmartre map is bundled in `assets/montmartre.json`, so entering the game does not depend on Overpass. Nearby buildings appear first; distant blocks and near details are built in small batches during the walk. The first passer-by loads after entry, and the second only when approaching Sacré-Cœur. Neither holds the loading screen.
+
+To refresh the OSM snapshot, run `node scripts/cache-map.mjs` (or pass a downloaded raw OSM JSON file). Attribution and ODbL metadata are stored with the snapshot. Runtime fallback to browser cache / Overpass remains available if the file is missing.
+
 ## Running locally
 Double-click `start.bat` (Windows) — a browser opens at http://localhost:8080.
 (Opening `index.html` directly does not work: browsers block loading 3D models from disk.)
@@ -54,3 +58,5 @@ The “Ночное небо” (Night sky) section controls cloud density, star
 - `src/main.js` — game loop
 
 Map data © OpenStreetMap contributors (ODbL). Elevation: AWS Terrain Tiles (Mapzen terrarium; includes SRTM and other public sources).
+
+For streaming regression checks, open `tests/facade-streaming.html` on the local HTTP server. The checks compare exact vertex/normal buffers, incremental and eager builds, cancellation, disposal, and deferred distant chunks. See [PERFORMANCE.md](PERFORMANCE.md) for measurements and remaining bottlenecks.

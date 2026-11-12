@@ -44,7 +44,7 @@ export async function loadMapData(status = () => {}) {
 
 const r1 = (v) => Math.round(v * 10) / 10;
 
-function convert(raw) {
+export function convert(raw) {
   const nodes = new Map(), ways = new Map();
   for (const e of raw.elements) {
     if (e.type === 'node') nodes.set(e.id, e);
