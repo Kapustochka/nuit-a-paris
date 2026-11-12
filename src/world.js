@@ -146,7 +146,8 @@ export function buildParis(scene, renderer, data, city, props = {}) {
   night.done();
   const facades = buildFacades(scene, look, plan, shopFronts);
   // Перпендикулярные кованые вывески только у реальных лавок. Вне коллизий и генератора домов.
-  const hangingSigns = addHangingShopSigns(scene, shopFronts).count;
+  // Крепления рассчитывает facades.js по реальной геометрии простенков и высоте цоколя.
+  const hangingSigns = addHangingShopSigns(scene, facades.signAnchors).count;
   if (props['chair-rattan']) solids.push(...terraces);     // за столики со стульями не заходим
 
   // ── Мелочи улицы из моделей Meshy ──────────────────────────
