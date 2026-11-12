@@ -6,6 +6,7 @@ import { createNightSky } from './night-sky.js';
 import { facadeWord } from './facade-words.js';
 import { buildBakeryCounter } from './bakery.js';
 import { addPropInstances, placeBenches, placePigeons } from './street-props.js';
+import { placeStreetLife, terraceSet } from './street-life.js';
 
 const FLOOR = 3.2;            // высота этажа, м
 const ROOF = 2.8;             // высота мансарды
@@ -104,14 +105,16 @@ export function buildParis(scene, renderer, data, city, props = {}) {
   };
   const R = 0.35;
   let benches = [], bakery = null;
+  const solids = [];                       // киоск, урны, велосипеды, скутеры, горшки
+  const hitsBox = (x, z, box) => {
+    const dx = x - box.x, dz = z - box.z;
+    return Math.abs(dx * box.cos - dz * box.sin) < box.halfWidth + R &&
+           Math.abs(dx * box.sin + dz * box.cos) < box.halfDepth + R;
+  };
   const blocked = (x, z) =>
     x < b.minX + 8 || x > b.maxX - 8 || z < b.minZ + 8 || z > b.maxZ - 8 ||
     inside(x, z) || inside(x + R, z) || inside(x - R, z) || inside(x, z + R) || inside(x, z - R) ||
-    (bakery?.blocks(x, z) ?? false) || benches.some((bench) => {
-      const dx = x - bench.x, dz = z - bench.z;
-      return Math.abs(dx * bench.cos - dz * bench.sin) < bench.halfWidth + R &&
-             Math.abs(dx * bench.sin + dz * bench.cos) < bench.halfDepth + R;
-    });
+    (bakery?.blocks(x, z) ?? false) || benches.some((bench) => hitsBox(x, z, bench)) || solids.some((box) => hitsBox(x, z, box));
 
   // ── Стены-открытки: на каждую грань дома подбираем целые нарисованные фасады ──
   const SPLIT = city.split;                                   // нижняя доля фасада рисуется из чёткой текстуры
@@ -236,8 +239,13 @@ export function buildParis(scene, renderer, data, city, props = {}) {
   buildTrees(scene, data.trees.length ? data.trees : [], inside, rnd);
 
   // ── Кафе, бистро, булочные (настоящие названия) ───────────
-  const shop = buildShops(scene, data.pois, polys, inside, rnd);
-  bakery = buildBakeryCounter(scene, shop, blocked);
+  const shopFronts = [], terraces = [];
+  const shop = buildShops(scene, data.pois, polys, inside, rnd, props, propRandom, shopFronts, terraces);
+  bakery = buildBakeryCounter(scene, shop, blocked, props.croissant);
+  if (props['chair-rattan']) solids.push(...terraces);     // за столики со стульями не заходим
+
+  // ── Мелочи улицы из моделей Meshy ──────────────────────────
+  const streetLife = placeStreetLife(scene, props, { benches, lamps, wallSpots, shopFronts, blocked, solids, random: propRandom });
 
   // ── Площадь Тертр: мольберты художников ───────────────────
   buildEasels(scene, inside, rnd);
@@ -287,7 +295,7 @@ export function buildParis(scene, renderer, data, city, props = {}) {
 
   return {
     blocked, inside, streetAt, freeSpot, update, sky, bakery,
-    stats: { buildings: polys.length, lamps: lamps.length, detailedLamps, benches: benches.length, pigeons },
+    stats: { buildings: polys.length, lamps: lamps.length, detailedLamps, benches: benches.length, pigeons, ...streetLife },
   };
 }
 
@@ -537,7 +545,7 @@ function glowTexture(inner = 'rgba(255,200,120,1)', mid = 'rgba(255,150,60,0.35)
 function buildLamps(scene, lamps, props, random) {
   const n = lamps.length;
   if (!n) return { lights: [], detailed: 0 };
-  const variants = [props['lamp-elegance'], props['lamp-vintage']].filter(Boolean);
+  const variants = [props['lamp-elegance'], props['lamp-vintage'], props['lamp-ornate'], props['lamp-lantern']].filter(Boolean);
   const placements = variants.map(() => []);
   const chosen = new Map();
   if (variants.length) {
@@ -545,7 +553,7 @@ function buildLamps(scene, lamps, props, random) {
       index, rank: Math.hypot(x, z) < 30 ? -1 + random() : random(),
     }));
     candidates.sort((a, b) => a.rank - b.rank);
-    candidates.slice(0, 30).forEach(({ index }, i) => {
+    candidates.slice(0, 60).forEach(({ index }, i) => {
       chosen.set(index, i % variants.length);
     });
   }
@@ -617,7 +625,7 @@ function buildTrees(scene, flat, inside, rnd) {
 }
 
 // ═══ Кафе и булочные ═════════════════════════════════════════
-function buildShops(scene, pois, polys, inside, rnd) {
+function buildShops(scene, pois, polys, inside, rnd, props = {}, propRandom = rnd, shopFronts = [], terraces = []) {
   const spots = [];
   const sorted = [...pois].sort((a, c) => Math.hypot(a.x, a.z) - Math.hypot(c.x, c.z)).slice(0, 36);
   const nearestBakery = sorted.find(({ k }) => k === 'bakery');
@@ -659,6 +667,8 @@ function buildShops(scene, pois, polys, inside, rnd) {
   const Yax = new THREE.Vector3(0, 1, 0), Xax = new THREE.Vector3(1, 0, 0), I = new THREE.Quaternion();
   const PINK = [0xff7fb0, 0xe85a8a, 0xc98be0, 0xff9ac0];
 
+  const terrace = { tables: [], chairs: [] }, crates = [];
+  const ZERO = new THREE.Matrix4().makeScale(0, 0, 0);
   spots.forEach((s, i) => {
     const w = Math.min(6, Math.max(3.2, s.len * 0.7));
     const yaw = Math.atan2(s.nx, s.nz);                // фасад смотрит вдоль нормали
@@ -674,10 +684,24 @@ function buildShops(scene, pois, polys, inside, rnd) {
     scene.add(sign);
     for (let k = 0; k < 2; k++) {
       const off = (k ? 1 : -1) * (s === bakery ? w * 0.47 : w * 0.28), x = s.x + s.nx * 1.9 + tx * off, z = s.z + s.nz * 1.9 + tz * off;
-      tableTop.setMatrixAt(i * 2 + k, M.makeTranslation(x, 0.74, z));
-      tableLeg.setMatrixAt(i * 2 + k, M.makeTranslation(x, 0.36, z));
-      candle.setMatrixAt(i * 2 + k, M.makeTranslation(x, 0.815, z));
-      candles.set([x, 0.89, z], (i * 2 + k) * 3);
+      // У ближних кафе — мраморный столик и плетёные стулья Meshy, дальше — простой столик (ради телефона)
+      const model = i < 14 && props['bistro-table'];
+      const tableHeight = model ? 0.74 : 0.76;
+      tableTop.setMatrixAt(i * 2 + k, model ? ZERO : M.makeTranslation(x, 0.74, z));
+      tableLeg.setMatrixAt(i * 2 + k, model ? ZERO : M.makeTranslation(x, 0.36, z));
+      candle.setMatrixAt(i * 2 + k, M.makeTranslation(x, tableHeight + 0.055, z));
+      candles.set([x, tableHeight + 0.13, z], (i * 2 + k) * 3);
+      if (model) {
+        terraceSet(props, x, z, tx, tz, propRandom, terrace);
+        const turn = Math.atan2(-tz, tx);
+        terraces.push({ x, z, cos: Math.cos(turn), sin: Math.sin(turn), halfWidth: 0.85, halfDepth: 0.35 });
+      }
+    }
+    shopFronts.push({ x: s.x, z: s.z, w });
+    // ящик с яблоками у булочной и у каждой третьей лавки
+    if (s === bakery || i % 3 === 1) {
+      const off = w / 2 + 0.95;
+      crates.push({ x: s.x + s.nx * 0.55 + tx * off, z: s.z + s.nz * 0.55 + tz * off, yaw: yaw + (propRandom() - 0.5) * 0.3 });
     }
     for (let k = 0; k < 6; k++) {                      // гортензии у входа
       const sideS = k < 3 ? -1 : 1, off = sideS * (w / 2 + 0.3);
@@ -692,6 +716,9 @@ function buildShops(scene, pois, polys, inside, rnd) {
   awn.userData.word = 'awning';
   tableTop.userData.word = tableLeg.userData.word = 'table';
   for (const m of [awn, tableTop, tableLeg, candle, candleGlow]) { m.frustumCulled = false; scene.add(m); }
+  addPropInstances(scene, props['bistro-table'], terrace.tables);
+  addPropInstances(scene, props['chair-rattan'], terrace.chairs);
+  addPropInstances(scene, props['fruit-crate'], crates);
   return bakery;
 }
 

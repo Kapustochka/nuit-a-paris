@@ -36,6 +36,8 @@ The “Ночное небо” (Night sky) section controls cloud density, star
 - `assets/people/` — lightweight copies of passer-by models
 - `assets/voice/` — French voice-over for word cards and the bakery order, [voice source and build](assets/voice/README.md)
 - `src/street-props.js` — loading and placing street models
+- `src/street-life.js` — the kiosk, bins, bicycles, scooters, flower pots, cats, rats and newspapers along the streets, plus the café terrace chairs
+- `scripts/optimize-meshy.mjs` — turns a heavy Meshy GLB into a light in-game copy (simplified mesh, WebP textures, meshopt compression); the settings used for each model are listed at the top of the file
 - `src/minimap.js` — minimap and the big map (M)
 - `src/controls.js` — keyboard, joystick, camera
 - `src/main.js` — game loop

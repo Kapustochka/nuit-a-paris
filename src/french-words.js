@@ -37,6 +37,16 @@ export const words = {
   baguette: ['la baguette', 'la baɡɛt', 'ла багэт', 'багет', 'La baguette est encore chaude.', 'Багет ещё тёплый.'],
   croissant: ['le croissant', 'lə kʁwasɑ̃', 'лё круаса̃', 'круассан', 'Je prends un croissant avec mon café.', 'Я беру круассан к кофе.'],
   loaf: ['la miche', 'la miʃ', 'ла миш', 'круглая буханка', 'Nous partageons une miche de pain.', 'Мы делим круглую буханку хлеба.'],
+  chair: ['la chaise', 'la ʃɛz', 'ла шэз', 'стул', 'Je prends une chaise en terrasse.', 'Я сажусь на стул на террасе.'],
+  kiosk: ['le kiosque', 'lə kjɔsk', 'лё кьоск', 'киоск', 'J’achète un journal au kiosque.', 'Я покупаю газету в киоске.'],
+  newspaper: ['le journal', 'lə ʒuʁnal', 'лё журналь', 'газета', 'Le vent emporte un vieux journal.', 'Ветер уносит старую газету.'],
+  bin: ['la poubelle', 'la pubɛl', 'ла пубэль', 'урна, мусорный бак', 'Je jette le papier dans la poubelle.', 'Я выбрасываю бумагу в урну.'],
+  bicycle: ['le vélo', 'lə velo', 'лё вэло', 'велосипед', 'Le vélo est attaché contre le mur.', 'Велосипед пристёгнут у стены.'],
+  scooter: ['le scooter', 'lə skutœʁ', 'лё скутёр', 'скутер', 'Un scooter est garé devant la porte.', 'У двери припаркован скутер.'],
+  cat: ['le chat', 'lə ʃa', 'лё ша', 'кот', 'Le chat dort près du mur.', 'Кот спит у стены.'],
+  rat: ['le rat', 'lə ʁa', 'лё ра', 'крыса', 'Un rat court près de la poubelle.', 'Крыса бегает возле урны.'],
+  flowerpot: ['le pot de fleurs', 'lə po də flœʁ', 'лё по дё флёр', 'цветочный горшок', 'Il y a un pot de fleurs devant la fenêtre.', 'Перед окном стоит горшок с цветами.'],
+  crate: ['la cagette', 'la kaʒɛt', 'ла кажэт', 'ящик для фруктов', 'La cagette est pleine de pommes.', 'Ящик полон яблок.'],
 };
 
 export const bakeryOrder = 'Je voudrais une baguette, s’il vous plaît.';
