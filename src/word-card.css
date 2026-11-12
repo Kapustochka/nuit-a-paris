@@ -61,7 +61,12 @@
 }
 #word-card[data-kind="phrase"] h2 { font-size: clamp(20px, 4vw, 24px); font-style: italic; line-height: 1.2; }
 #word-card[data-kind="story"] h2 { font-size: clamp(21px, 4.2vw, 26px); }
-#word-card[data-kind="story"] { width: min(400px, calc(100vw - 40px)); }
+#word-card[data-kind="story"], #word-card[data-kind="song"] { width: min(400px, calc(100vw - 40px)); }
+#word-card[data-kind="song"] h2 { font-size: clamp(23px, 4.6vw, 29px); }
+#word-card[data-kind="song"] .word-badge { color: #7d5aa6; }
+#word-card[data-kind="song"] .word-lines li { padding: 2px 6px; margin-left: -6px; border-radius: 6px; transition: background .25s; }
+#word-card[data-kind="song"] .word-lines li.singing { background: #d8c3ef80; }
+#word-card[data-kind="song"] .word-lines li.singing [lang="fr"]::before { content: '♪ '; color: #7d5aa6; }
 .word-lines { margin: 14px 0 0; padding: 13px 0 0; border-top: 1px dashed #8a5f6a55; list-style: none; }
 .word-lines li + li { margin-top: 11px; }
 .word-lines [lang="fr"] { font: italic 18px/1.28 var(--serif); }
@@ -118,7 +123,7 @@
 }
 @media (max-width: 620px) {
   #word-card { right: max(10px, env(safe-area-inset-right)); bottom: max(9px, env(safe-area-inset-bottom)); width: min(335px, calc(100vw - 20px)); }
-  #word-card[data-kind="story"] { width: min(400px, calc(100vw - 20px)); }
+  #word-card[data-kind="story"], #word-card[data-kind="song"] { width: min(400px, calc(100vw - 20px)); }
 }
 @media (prefers-reduced-motion: reduce) {
   #word-card { animation: none; }
