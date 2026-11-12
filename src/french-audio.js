@@ -11,7 +11,8 @@ export function createFrenchAudio() {
   function play(clip, text, report = () => {}) {
     stop();
     const attempt = revision;
-    player.src = `assets/voice/${clip}.wav`;
+    // Слова с улицы лежат в WAV, находки из звёзд — в сжатом MP3.
+    player.src = `assets/voice/${clip}.${clip.startsWith('star/') ? 'mp3' : 'wav'}`;
     player.play().catch(() => {
       if (attempt !== revision) return;
       const synth = window.speechSynthesis;

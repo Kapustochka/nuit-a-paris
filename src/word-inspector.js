@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { words } from './french-words.js';
+import { entryFor } from './entries.js';
 
 export function installWordInspector(canvas, scene, camera, moonDirection, audio, onInspect) {
   const card = document.querySelector('#word-card');
@@ -15,6 +15,7 @@ export function installWordInspector(canvas, scene, camera, moonDirection, audio
   sample.width = sample.height = 1;
   const pixels = sample.getContext('2d', { willReadFrequently: true });
   const uv = new THREE.Vector2();
+  const sayButtons = Array.from(card.querySelectorAll('[data-say]'));
   let gesture, lastTap, markerTimer, selected;
 
   function visibleAt({ object, uv: at }) {
@@ -41,22 +42,40 @@ export function installWordInspector(canvas, scene, camera, moonDirection, audio
       return;
     }
     const tag = hit.object.userData.word;
+    if (hit.object.userData.onInspect) { hit.object.userData.onInspect(x, y); return; }
     show(typeof tag === 'function' ? tag(hit) : tag, x, y, hit.object);
   }
 
   function show(word, x, y, object) {
-    const entry = words[word];
+    const entry = entryFor(word);
     if (!entry) return;
     audio.stop();
-    selected = word;
-    const [term, ipa, reading, translation, example, meaning] = entry;
-    fields.term.textContent = term;
-    fields.ipa.textContent = `/${ipa}/`;
-    fields.reading.textContent = reading;
-    fields.translation.textContent = translation;
-    fields.example.textContent = example;
-    fields.meaning.textContent = meaning;
+    selected = entry;
+    card.dataset.kind = entry.kind;
+    fields.badge.textContent = entry.badge;
+    fields.term.textContent = entry.term;
+    fields.ipa.textContent = entry.ipa ? `/${entry.ipa}/` : '';
+    fields.reading.textContent = entry.reading || '';
+    fields.translation.textContent = entry.translation;
+    fields.example.textContent = entry.example || '';
+    fields.meaning.textContent = entry.meaning || '';
+    fields.lines.replaceChildren(...(entry.lines || []).map(([french, russian]) => {
+      const item = document.createElement('li');
+      const original = document.createElement('p');
+      original.lang = 'fr';
+      original.textContent = french;
+      const meaning = document.createElement('p');
+      meaning.textContent = russian;
+      item.append(original, meaning);
+      return item;
+    }));
+    for (const button of sayButtons) {
+      const line = entry.say[button.dataset.say];
+      button.hidden = !line;
+      if (line) button.textContent = line[2];
+    }
     fields.status.textContent = '';
+    card.scrollTop = 0;
     card.hidden = false;
     onInspect(word, object);
     if (x === undefined) return;
@@ -102,12 +121,18 @@ export function installWordInspector(canvas, scene, camera, moonDirection, audio
   }
   card.querySelector('[data-close]').addEventListener('click', close);
   addEventListener('keydown', (event) => { if (event.key === 'Escape' && !card.hidden) close(); });
-  for (const button of card.querySelectorAll('[data-say]')) {
+  for (const button of sayButtons) {
     button.addEventListener('click', () => {
-      const field = button.dataset.say;
+      const [clip, text] = selected.say[button.dataset.say];
       fields.status.textContent = '';
-      audio.play(`${selected}-${field}`, fields[field].textContent, (status) => { fields.status.textContent = status; });
+      audio.play(clip, text, (status) => { fields.status.textContent = status; });
     });
   }
-  return { show, close };
+  // Предметы, которые появляются уже во время прогулки (например, упавшая звезда).
+  const addTarget = (object) => { targets.push(object); };
+  const removeTarget = (object) => {
+    const index = targets.indexOf(object);
+    if (index >= 0) targets.splice(index, 1);
+  };
+  return { show, close, addTarget, removeTarget };
 }
