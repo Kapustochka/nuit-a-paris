@@ -34,7 +34,7 @@ export function createRain(renderer, world, { phone = false, cityAudio = null } 
       void main() {
         float speed = 8.5 + aSeed.w * 3.0;
         vec3 fall = normalize(vec3(uWind.x, -speed, uWind.y));
-        vec3 p = aSeed.xyz * uBox - fall * uTime * speed;
+        vec3 p = aSeed.xyz * uBox + fall * uTime * speed;         // fall смотрит вниз
         vec3 c = cameraPosition + vec3(0.0, 3.0, 0.0);
         p = c + mod(p - c + uBox * 0.5, uBox) - uBox * 0.5;      // ящик капель всегда вокруг камеры
         p -= fall * aEnd * (0.32 + aSeed.w * 0.25);              // хвост штриха
