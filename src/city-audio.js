@@ -41,7 +41,7 @@ export function createCityAudio(cafes = [], square = { x: 0, z: 0 }) {
         air.buffer = noise; air.loop = true; air.connect(filter).connect(wind).connect(master); air.start();
         // Дождь: тот же шум, только шипящий; громкость задаёт rain.js через setRain()
         const hiss = ctx.createBiquadFilter(), soft = ctx.createBiquadFilter();
-        hiss.type = 'highpass'; hiss.frequency.value = 1100; soft.type = 'lowpass'; soft.frequency.value = 5200;
+        hiss.type = 'highpass'; hiss.frequency.value = 900; soft.type = 'lowpass'; soft.frequency.value = 3200;
         rain = ctx.createGain(); rain.gain.value = 0;
         const shower = track(ctx.createBufferSource(), hiss, soft, rain);
         shower.buffer = noise; shower.loop = true; shower.playbackRate.value = 0.93;
@@ -108,10 +108,10 @@ export function createCityAudio(cafes = [], square = { x: 0, z: 0 }) {
         tone(3650, 0.025 * cafeLevel, 0.25, nearest.pan);
       }
     }
-    rain.gain.setTargetAtTime(rainLevel * 0.32, ctx.currentTime, 0.8);
+    rain.gain.setTargetAtTime(rainLevel * 0.09, ctx.currentTime, 0.8);
     if (rainLevel > 0.05 && elapsed >= nextDrip) {                // капли по навесам и подоконникам
-      nextDrip = elapsed + (0.08 + Math.random() * 0.5) / rainLevel;
-      burst(0.05 * rainLevel, 2600 + Math.random() * 2400, 0.04, Math.random() * 1.6 - 0.8);
+      nextDrip = elapsed + (0.4 + Math.random() * 1.6) / rainLevel;
+      burst(0.02 * rainLevel, 2600 + Math.random() * 2400, 0.04, Math.random() * 1.6 - 0.8);
     }
     const at = spatial(square, x, z, yaw, 42);
     musicLevel = at.level;

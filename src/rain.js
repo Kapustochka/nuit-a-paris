@@ -10,7 +10,7 @@ const KEY = 'nuit-a-paris:rain-on';
 const BOX = new THREE.Vector3(26, 16, 26);
 
 export function createRain(renderer, world, { phone = false, cityAudio = null } = {}) {
-  const count = phone ? 1300 : 3200;
+  const count = phone ? 600 : 1400;
   const seeds = new Float32Array(count * 2 * 4), ends = new Float32Array(count * 2);
   for (let i = 0; i < count; i++) {
     const s = [Math.random(), Math.random(), Math.random(), Math.random()];
@@ -39,7 +39,7 @@ export function createRain(renderer, world, { phone = false, cityAudio = null } 
         p = c + mod(p - c + uBox * 0.5, uBox) - uBox * 0.5;      // ящик капель всегда вокруг камеры
         p -= fall * aEnd * (0.32 + aSeed.w * 0.25);              // хвост штриха
         float d = distance(p, cameraPosition);
-        vAlpha = step(aSeed.w, uAmount) * smoothstep(0.7, 2.0, d) * (1.0 - smoothstep(8.0, 12.5, d)) * mix(0.55, 0.15, aEnd);
+        vAlpha = step(aSeed.w, uAmount) * smoothstep(0.7, 2.0, d) * (1.0 - smoothstep(8.0, 12.5, d)) * mix(0.32, 0.08, aEnd);
         gl_Position = projectionMatrix * viewMatrix * vec4(p, 1.0);
       }`,
     fragmentShader: /* glsl */ `
@@ -65,7 +65,7 @@ export function createRain(renderer, world, { phone = false, cityAudio = null } 
       box.blur();
     });
   }
-  let raining = forced, clock = forced ? 1e9 : 50 + Math.random() * 50, level = forced ? 1 : 0, strength = 0.75;
+  let raining = forced, clock = forced ? 1e9 : 240 + Math.random() * 180, level = forced ? 1 : 0, strength = 0.75;
   const sky = world.sky.uniforms, look = world.look;
   const dry = { clouds: sky.uCloudOpacity.value, stars: sky.uStarIntensity.value, fog: look.uFogDensity.value };
 
@@ -75,11 +75,11 @@ export function createRain(renderer, world, { phone = false, cityAudio = null } 
     clock -= dt;
     if (clock <= 0) {
       raining = !raining && allowed;
-      clock = raining ? 80 + Math.random() * 90 : 140 + Math.random() * 160;
-      strength = 0.55 + Math.random() * 0.45;
+      clock = raining ? 60 + Math.random() * 50 : 480 + Math.random() * 420;   // редко: дождик на минуту-две раз в 10–15 минут
+      strength = 0.35 + Math.random() * 0.3;
     }
     if (!allowed && !forced) raining = false;
-    const target = raining ? (forced ? 1 : strength) : 0;
+    const target = raining ? (forced ? 0.6 : strength) : 0;
     level += (target - level) * (1 - Math.exp(-dt / 6));         // дождь набирается и стихает секунд за десять
     if (level < 0.002) level = 0;
     uniforms.uAmount.value = level;
