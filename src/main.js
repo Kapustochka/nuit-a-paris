@@ -14,6 +14,7 @@ import { createFallingStars } from './falling-star.js';
 import { createCityAudio } from './city-audio.js';
 import { loadPasserby, placePasserby, placeCircularPasserby, passerbyBlocksStep } from './passerby.js';
 import { createPainter } from './paint/post.js';
+import { createPeople } from './people.js';
 
 const loading = document.getElementById('loading');
 const streetEl = document.getElementById('street');
@@ -70,19 +71,22 @@ const passersby = [];
 heroine.root.traverse((o) => { o.userData.noPaint = true; o.userData.realistic = true; });
 world.lightHeroine(heroine.root, { clarity: !originalHero });
 world.paint(scene);                 // прохожие и всё остальное — в живописный свет
-const blocked = (x, z) => world.blocked(x, z) || passersby.some((actor) => passerbyBlocksStep(actor, player, x, z));
+let people = null;
+const blocked = (x, z) => world.blocked(x, z) || passersby.some((actor) => passerbyBlocksStep(actor, player, x, z)) || !!people?.blocksStep(x, z);
 const cityAudio = createCityAudio(world.soundSpots);
 const audio = createFrenchAudio({ onActivity: (active) => cityAudio.setDucked(active) });
 const lesson = createLesson((key) => inspector.show(key));
 const inspector = installWordInspector(renderer.domElement, scene, camera, world.sky.moonDirection, audio, lesson.inspect, lesson.review);
 const stars = createFallingStars(scene, camera, world, inspector, lesson.review);
 installStarToggle(stars);
+// Живые улицы: нарисованные прохожие из кода (people.js). ?no-people — без них, для сравнения.
+if (!new URLSearchParams(location.search).has('no-people')) people = createPeople(scene, world, mapData, { count: phone ? 10 : 18, inspector, camera, player });
 loading.remove();
 performance.mark('paris-ready');
 
 const debug = new URLSearchParams(location.search).has('debug');
 if (debug) addDebugPanel();
-window.__game = { heroine, passersby, world, stars, inspector, mapData, camera, controls, renderer, cityAudio, get painted() { return painter !== null; }, get painter() { return painter; } };
+window.__game = { heroine, passersby, get people() { return people; }, world, stars, inspector, mapData, camera, controls, renderer, cityAudio, get painted() { return painter !== null; }, get painter() { return painter; } };
 
 // ── Движение ─────────────────────────────────────────────────
 const MAX_WALK = 1.45, MAX_RUN = 3.8, MAX_BACK = 0.95; // м/с
@@ -152,6 +156,7 @@ renderer.setAnimationLoop(() => {
     afterFrame(() => addPasserby(true));
   }
   for (const actor of passersby) actor.update(dt);
+  people?.update(dt);
   stars.update(dt, p.x, p.z, facing);
   cityAudio.update(dt, p.x, p.z, yaw, heroine.busy !== 'jump');
 
