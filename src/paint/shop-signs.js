@@ -118,62 +118,87 @@ function signTexture(kind) {
   return t;
 }
 
-function tube(parent, points, material, radius = 0.025) {
-  const curve = new THREE.CatmullRomCurve3(points.map(([x, y, z]) => new THREE.Vector3(x, y, z)));
-  parent.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 10, radius, 5, false), material));
-}
+
+const V3 = (x, y, z) => new THREE.Vector3(x, y, z);
+const bracketPath = (vertices, radius) => new THREE.TubeGeometry(
+  new THREE.CatmullRomCurve3(vertices.map((p) => V3(...p))), 10, radius, 5, false
+);
 
 /**
- * Add authentic hanging "enseigne drapeau" perpendicular to the real shopfront.
- * All positions are locally based at ground height (liftToGround handles terrain).
- * Call before the scene's global paintObject pass.
+ * Парижские «enseigne drapeau» перпендикулярно настоящим витринам OSM.
+ * Батчинг: до 5 материалов табличек + 5 инстансированных деталей кронштейна;
+ * около 10 draw calls вместо сотен отдельных Mesh. Все высоты добавит liftToGround.
  */
 export function addHangingShopSigns(scene, shopFronts) {
   if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('no-hanging-signs'))
     return { count: 0 };
 
-  const signs = shopFronts.filter((s) => Number.isFinite(s.x) && Number.isFinite(s.z) &&
+  const shops = shopFronts.filter((s) => Number.isFinite(s.x) && Number.isFinite(s.z) &&
     Number.isFinite(s.nx) && Number.isFinite(s.nz) && s.w >= 3).slice(0, 28);
+  if (!shops.length) return { count: 0 };
+
   const iron = new THREE.MeshStandardMaterial({ color: '#30283d', metalness: 0.14, roughness: 0.84 });
   const bronze = new THREE.MeshStandardMaterial({ color: '#b89469', metalness: 0.24, roughness: 0.74 });
   const paints = {};
-  for (const kind of Object.keys(CATEGORIES)) paints[kind] = new THREE.MeshStandardMaterial({
-    map: signTexture(kind), transparent: true, alphaTest: 0.14, side: THREE.FrontSide,
-    metalness: 0, roughness: 0.96, emissive: '#26150f', emissiveIntensity: 0.1,
+  const byCategory = new Map();
+  for (const kind of Object.keys(CATEGORIES)) {
+    paints[kind] = new THREE.MeshStandardMaterial({
+      map: signTexture(kind), transparent: true, alphaTest: 0.14,
+      side: THREE.FrontSide, metalness: 0, roughness: 0.96,
+      emissive: '#26150f', emissiveIntensity: 0.1,
+    });
+    byCategory.set(kind, []);
+  }
+  const entries = shops.map((s) => {
+    const normal = new THREE.Vector2(s.nx, s.nz).normalize();
+    const nx = normal.x, nz = normal.y;
+    const shift = Math.min(1.8, s.w * 0.31);
+    const x = s.x + nz * shift, z = s.z - nx * shift;
+    const entry = { x, z, nx, nz, yaw: Math.atan2(nx, nz), kind: category(s) };
+    byCategory.get(entry.kind).push(entry);
+    return entry;
   });
 
-  const plane = new THREE.PlaneGeometry(0.98, 1.05);
-  for (let i = 0; i < signs.length; i++) {
-    const s = signs[i], kind = category(s), normal = new THREE.Vector2(s.nx, s.nz).normalize();
-    const nx = normal.x, nz = normal.y, alongX = nz, alongZ = -nx;
-    // У краешка витрины, чуть в стороне от двери. Никаких объектов внутри дома.
-    const posX = s.x + alongX * Math.min(1.8, s.w * 0.31);
-    const posZ = s.z + alongZ * Math.min(1.8, s.w * 0.31);
-    const g = new THREE.Group();
-    g.position.set(posX, 0, posZ);
-    g.userData.word = 'sign';
+  const axis = V3(0, 1, 0), unit = V3(1, 1, 1);
+  const mat = new THREE.Matrix4(), quat = new THREE.Quaternion();
+  const set = (mesh, i, x, y, z, yaw) => {
+    quat.setFromAxisAngle(axis, yaw);
+    mesh.setMatrixAt(i, mat.compose(V3(x, y, z), quat, unit));
+  };
+  const push = (mesh, name) => {
+    mesh.userData.word = name;
+    mesh.instanceMatrix.needsUpdate = true;
+    scene.add(mesh);
+  };
 
-    const boardX = nx * 1.02, boardZ = nz * 1.02, y = 3.42;
-    // Две независимые стороны: текст не зеркалится при взгляде с другого конца улицы.
-    const facing = Math.atan2(alongX, alongZ);
-    for (const signSide of [-1, 1]) {
-      const mesh = new THREE.Mesh(plane, paints[kind]);
-      mesh.rotation.y = facing + (signSide < 0 ? Math.PI : 0);
-      mesh.position.set(boardX + alongX * signSide * 0.015, y, boardZ + alongZ * signSide * 0.015);
-      mesh.userData.word = 'sign';
-      g.add(mesh);
+  // Двусторонняя нарисованная табличка: два экземпляра, каждый читается правильно.
+  const cardGeo = new THREE.PlaneGeometry(0.98, 1.05);
+  for (const [kind, entriesOfKind] of byCategory) {
+    if (!entriesOfKind.length) continue;
+    const signs = new THREE.InstancedMesh(cardGeo, paints[kind], entriesOfKind.length * 2);
+    let i = 0;
+    for (const s of entriesOfKind) for (const side of [-1, 1]) {
+      const tx = s.nz, tz = -s.nx;
+      set(signs, i++, s.x + s.nx * 1.02 + tx * side * 0.015,
+        3.42, s.z + s.nz * 1.02 + tz * side * 0.015,
+        s.yaw + Math.PI / 2 + (side < 0 ? Math.PI : 0));
     }
-
-    // Кованый кронштейн, диагональная распорка и две подвески.
-    tube(g, [[nx*0.04,4.12,nz*0.04],[nx*0.25,4.22,nz*0.25],
-      [nx*0.8,4.20,nz*0.8],[nx*1.51,4.13,nz*1.51]], iron, 0.035);
-    tube(g, [[nx*0.02,3.75,nz*0.02],[nx*0.19,3.99,nz*0.19],[nx*0.58,4.21,nz*0.58]], iron, 0.022);
-    for (const dist of [0.62, 1.42])
-      tube(g, [[nx*dist,4.13,nz*dist],[nx*dist,3.91,nz*dist]], bronze, 0.012);
-
-    const finial = new THREE.Mesh(new THREE.IcosahedronGeometry(0.085, 0), bronze);
-    finial.position.set(nx * 1.51, 4.13, nz * 1.51); g.add(finial);
-    scene.add(g);
+    push(signs, 'sign');
   }
-  return { count: signs.length };
+
+  // Один набор кованых деталей переиспользуется на всех лавках.
+  const parts = [
+    [bracketPath([[0,4.12,0.04],[0,4.22,0.25],[0,4.20,0.80],[0,4.13,1.51]],0.035),iron],
+    [bracketPath([[0,3.75,0.02],[0,3.99,0.19],[0,4.21,0.58]],0.022),iron],
+    [bracketPath([[0,4.13,0.62],[0,3.91,0.62]],0.012),bronze],
+    [bracketPath([[0,4.13,1.42],[0,3.91,1.42]],0.012),bronze],
+    [new THREE.IcosahedronGeometry(0.085,0).translate(0,4.13,1.51),bronze],
+  ];
+  for (const [geometry, material] of parts) {
+    const brackets = new THREE.InstancedMesh(geometry, material, entries.length);
+    for (let i=0;i<entries.length;i++)
+      set(brackets, i, entries[i].x, 0, entries[i].z, entries[i].yaw);
+    push(brackets, 'sign');
+  }
+  return { count: entries.length };
 }
