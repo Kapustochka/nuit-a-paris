@@ -36,6 +36,8 @@ Open `http://localhost:8080/?debug` to get sliders for the arms, legs and walkin
 Copy the values you like into `TUNING` in `src/heroine.js`.
 The “Ночное небо” (Night sky) section controls cloud density, star brightness and distant haze.
 
+The heroine has a separate fine silhouette (configured in CSS pixels) and a slightly more neutral fill light. Her original textures render without the world's brush filter or paper grain. Add `?original-hero` for the previous treatment in the same scene; the debugging panel also exposes **контур героини** separately from the world's line width. `tests/hero-outline.html` checks the marker, thinner edges at multiple DPR/render scales and unchanged world pixels.
+
 ## Files
 - `assets/mixamo/` — the heroine: Mixamo rig (`base.fbx`), animations (idle, walk, run, walk back, jump, punch) and her textures from the original Meshy model
 - `src/heroine.js` — loading the heroine, animations, arm/leg adjustments

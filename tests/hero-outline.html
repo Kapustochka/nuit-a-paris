@@ -1,0 +1,62 @@
+<!doctype html><meta charset="utf-8"><title>Hero outline render checks</title><pre>Running…</pre>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js"}}</script>
+<script type="module">
+import * as THREE from 'three';
+import { createPainter } from '../src/paint/post.js';
+try {
+  const renderer = new THREE.WebGLRenderer({ antialias: false, preserveDrawingBuffer: true });
+  renderer.debug.onShaderError = () => { throw Error('Shader compilation failed'); };
+  const scene = new THREE.Scene(); scene.background = new THREE.Color(0x9493b5);
+  const camera = new THREE.PerspectiveCamera(50, 4 / 3, 0.1, 20); camera.position.set(0, 1, 5); camera.lookAt(0, 1, 0);
+  const hero = new THREE.Mesh(new THREE.BoxGeometry(0.55, 2, 0.4), new THREE.MeshBasicMaterial({ color: 0xf2c4ab }));
+  hero.position.set(-0.6, 1, 0); hero.userData.realistic = true; scene.add(hero);
+  const world = new THREE.Mesh(new THREE.BoxGeometry(0.8, 2, 0.6), new THREE.MeshBasicMaterial({ color: 0x869b73 }));
+  world.position.set(1.35, 1, -0.3); scene.add(world);
+  const painter = createPainter(renderer, { radius: 1 }); painter.uniforms.uPaint.value = 0;
+  const markerScene = new THREE.Scene();
+  markerScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({
+    uniforms: { tNormal: painter.uniforms.tNormal },
+    vertexShader: 'varying vec2 uvAt; void main(){ uvAt=uv; gl_Position=vec4(position.xy,0.,1.); }',
+    fragmentShader: 'uniform sampler2D tNormal; varying vec2 uvAt; void main(){gl_FragColor=vec4(vec3(texture2D(tNormal,uvAt).a),1.);}',
+    depthTest: false, depthWrite: false,
+  })));
+  const results = [];
+  for (const [dpr, scale] of [[1, 1], [1.5, 1], [1, 0.75], [1.5, 0.75]]) {
+    renderer.setPixelRatio(dpr); renderer.setSize(400, 300); painter.setScale(scale);
+    const width = Math.round(400 * dpr), height = Math.round(300 * dpr), gl = renderer.getContext();
+    const render = (style, edges) => {
+      painter.uniforms.uHeroStyle.value = style; painter.uniforms.uEdges.value = edges;
+      painter.render(scene, camera);
+      const pixels = new Uint8Array(width * height * 4); gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, pixels); return pixels;
+    };
+    const oldPlain = render(0, 0), oldInk = render(0, 1), newPlain = render(1, 0), newInk = render(1, 1);
+    renderer.render(markerScene, camera);
+    const marker = new Uint8Array(width * height * 4); gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, marker);
+    if (marker[(Math.round(height / 2) * width + Math.round(width * .4)) * 4] > 5) throw Error('Hero marker is not alpha zero');
+    if (marker[(Math.round(height / 2) * width + Math.round(width * .72)) * 4] < 250) throw Error('World marker changed');
+    const coverage = (plain, ink) => {
+      let total = 0, rows = 0;
+      for (let y = Math.round(height * .42); y < Math.round(height * .58); y++) {
+        rows++;
+        for (let x = Math.round(width * .28); x < Math.round(width * .49); x++) {
+          const i = (y * width + x) * 4;
+          if (Math.max(Math.abs(plain[i] - ink[i]), Math.abs(plain[i + 1] - ink[i + 1]), Math.abs(plain[i + 2] - ink[i + 2])) > 4) total++;
+        }
+      }
+      return total / rows / 2 / dpr;
+    };
+    let worldDifference = 0;
+    for (let y = 0; y < height; y++) for (let x = Math.round(width * .58); x < width; x++) {
+      const i = (y * width + x) * 4;
+      for (let k = 0; k < 3; k++) worldDifference = Math.max(worldDifference, Math.abs(oldInk[i + k] - newInk[i + k]));
+    }
+    const before = coverage(oldPlain, oldInk), after = coverage(newPlain, newInk);
+    if (!(after > 0 && after < before)) throw Error(`Outline not thinner at DPR ${dpr}, scale ${scale}: ${before} → ${after}`);
+    if (worldDifference > 1) throw Error(`World changed: ${worldDifference}`);
+    results.push({ dpr, scale, beforeCssPixels: before, afterCssPixels: after, worldDifference });
+  }
+  window.__testResults = { passed: true, results };
+  renderer.dispose();
+} catch (error) { window.__testResults = { error: error.stack }; }
+document.querySelector('pre').textContent = JSON.stringify(window.__testResults, null, 2);
+</script>
