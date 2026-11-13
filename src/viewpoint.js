@@ -101,8 +101,8 @@ export function buildCityBelow(scene, drop, heightAt, pixelRatio = 1) {
     p.frustumCulled = false; p.userData.noLift = true; p.userData.word = 'city';
     scene.add(p);
   };
-  points(street, streetCol, 3.2);
-  points(windows, windowCol, 2.2);
+  points(street, streetCol, 4.4);
+  points(windows, windowCol, 3.4);
 
   // Полосы тумана у подножия: огни просвечивают сквозь дымку
   const mist = new THREE.SpriteMaterial({ map: mistTexture(), color: 0x7d80aa, opacity: 0.2, transparent: true, depthWrite: false, fog: false });

@@ -205,6 +205,7 @@ export function buildParis(scene, renderer, data, city, props = {}) {
   const air = {
     shaftPos: Array.from({ length: MAX_SHAFTS }, () => new THREE.Vector4(0, -100, 0, 0)),
     beacon: new THREE.Vector4(SACRE[0], standAt(SACRE[0], SACRE[1]) + 46, SACRE[1], 0.5),
+    tower: new THREE.Vector4(-1050, drop + 158, 1050, terrain.flat ? 0 : 1),     // верх Эйфелевой башни (buildFarParis)
     groundY: 0, started: false,
   };
   function update(dt, hx, hz, camera) {
