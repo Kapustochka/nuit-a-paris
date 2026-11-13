@@ -3,6 +3,7 @@ import { words } from './french-words.js';
 import { starWords, starPhrases, starStories } from './star-words.js';
 import { starSongs } from './star-songs.js';
 import { talks } from './talk-lines.js';
+import { PLACES } from './passport.js';
 
 const word = (entry, clip, badge) => {
   const [term, ipa, reading, translation, example, meaning] = entry;
@@ -25,6 +26,13 @@ export function entryFor(key) {
     return { kind: 'story', badge: kind === 'fact' ? '✦ Интересный факт' : '✦ Маленькая история',
       term: title[0], translation: title[1], lines,
       say: { term: [`star/s-${id}`, lines.map(([french]) => french).join(' '), '▶ Слушать'] } };
+  }
+  if (group === 'place') {                      // место из «Паспорта Монмартра» (passport.js)
+    const place = PLACES.find(([pid]) => pid === id);
+    if (!place) return null;
+    const [, , term, translation, example, meaning] = place;
+    return { kind: 'word', badge: '🏛 Паспорт Монмартра', term, ipa: '', reading: '', translation, example, meaning,
+      say: { term: [`place/${id}-name`, term, '▶ Название'], example: [`place/${id}`, example, '▶ Фраза'] } };
   }
   if (group === 'talk') {                       // фраза героини из разговора с прохожим (talk.js)
     const [, talkId, step] = key.split(':');

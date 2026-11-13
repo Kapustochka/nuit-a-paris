@@ -317,3 +317,29 @@
 @media (min-width: 900px) {
   #talk { left: auto; right: max(20px, env(safe-area-inset-right)); bottom: max(24px, env(safe-area-inset-bottom)); transform: rotate(.4deg); width: 420px; }
 }
+
+/* «Паспорт Монмартра» (passport.js): карточка нового места со штампом */
+#stamp-card {
+  box-sizing: border-box; position: fixed; z-index: 11; left: 50%; top: max(58px, calc(env(safe-area-inset-top) + 50px));
+  transform: translateX(-50%) rotate(-.8deg); width: min(380px, calc(100vw - 24px));
+  padding: 16px 92px 14px 20px; color: var(--ink);
+  border-radius: 3px 9px 4px 11px / 9px 3px 12px 4px; background: var(--paper); box-shadow: var(--paper-edge);
+  filter: drop-shadow(0 12px 22px #09071b80);
+}
+#stamp-card.show { animation: stamp-in .45s ease-out; }
+@keyframes stamp-in { from { opacity: 0; transform: translateX(-50%) translateY(-14px) rotate(-.8deg); } }
+#stamp-card .stamp-close { position: absolute; top: 6px; right: 6px; width: 26px; height: 26px; border: 0; border-radius: 50%;
+  background: #fff7ea80; color: inherit; font: 20px/1 var(--serif); cursor: pointer; z-index: 1; }
+#stamp-card .stamp { position: absolute; right: 16px; top: 30px; width: 68px; height: 68px; border-radius: 50%;
+  border: 2.5px double #7a3e8cd0; color: #7a3e8cd0; display: grid; place-content: center; text-align: center;
+  transform: rotate(-14deg); font: 600 9px/1.1 var(--serif); letter-spacing: .12em; text-transform: uppercase; }
+#stamp-card.show .stamp { animation: stamp-hit .5s .35s both cubic-bezier(.3,1.6,.5,1); }
+@keyframes stamp-hit { from { opacity: 0; transform: rotate(-14deg) scale(1.8); } }
+#stamp-card .stamp b { font: italic 700 18px var(--serif); letter-spacing: 0; text-transform: none; }
+#stamp-card .stamp-badge { margin: 0 0 4px; font: 600 11px system-ui, sans-serif; letter-spacing: .05em; color: var(--ink-soft); }
+#stamp-card h2 { margin: 0; font: italic 600 25px/1.1 var(--serif); }
+#stamp-card .stamp-ru { margin: 2px 0 8px; font: 13px system-ui, sans-serif; color: var(--ink-soft); }
+#stamp-card .stamp-fr { margin: 0; display: flex; gap: 8px; align-items: baseline; font: 600 17px/1.25 var(--serif); }
+#stamp-card .stamp-say { flex: none; width: 26px; height: 26px; border: 1px solid #7a526350; border-radius: 50%;
+  background: #fff7ea80; color: var(--ink-rose); cursor: pointer; font-size: 11px; }
+#stamp-card .stamp-tr { margin: 2px 0 0 34px; font: 12px/1.3 system-ui, sans-serif; color: var(--ink-soft); }
