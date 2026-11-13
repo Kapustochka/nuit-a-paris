@@ -10,6 +10,7 @@ import { createTerrain, groundGeometry, liftToGround } from './terrain.js';
 import { buildStairs } from './stairs.js';
 import { buildViewpoint, buildCityBelow } from './viewpoint.js';
 import { createLook, groundMaterial, paintMaterial, paintObject, MAX_LIGHTS } from './paint/paint.js';
+import { MAX_SHAFTS } from './paint/air.js';
 import { planFacades, buildFacades } from './paint/facades.js';
 import { Builder, K } from './paint/builder.js';
 import { foliage, leafTexture, basilicaMesh } from './paint/props.js';
@@ -200,8 +201,18 @@ export function buildParis(scene, renderer, data, city, props = {}) {
   // Тёплые блики на мокрой мостовой: в шейдер идут ближайшие к камере фонари
   let tick = 0;
   const lampOrder = lampLights.map((p) => ({ p, d: 0 }));
+  // Воздух для пост-прохода (paint/air.js): ближайшие фонари дают лучи, базилика светит сквозь дымку
+  const air = {
+    shaftPos: Array.from({ length: MAX_SHAFTS }, () => new THREE.Vector4(0, -100, 0, 0)),
+    beacon: new THREE.Vector4(SACRE[0], standAt(SACRE[0], SACRE[1]) + 46, SACRE[1], 0.5),
+    groundY: 0, started: false,
+  };
   function update(dt, hx, hz, camera) {
     sky.update(dt);
+    look.uLookTime.value += dt;
+    const gy = standAt(hx, hz);
+    air.groundY = air.started ? air.groundY + (gy - air.groundY) * (1 - Math.exp(-dt * 2)) : gy;
+    air.started = true;
     facades.update(camera.position.x, camera.position.z);
     if (hero) {
       const h = hero.position, [, moon, fill, lamp] = heroLights;
@@ -220,6 +231,14 @@ export function buildParis(scene, renderer, data, city, props = {}) {
         if (!l) { look.uLightCol.value[i].setRGB(0, 0, 0); continue; }
         look.uLightPos.value[i].set(l.p.x, l.p.y, l.p.z, 10.5);
         look.uLightCol.value[i].setRGB(1.0, 0.64, 0.3, THREE.LinearSRGBColorSpace);
+      }
+      // лучи гаснут к расстоянию первого фонаря, который в список не попал, — без скачков при ходьбе
+      const reach = Math.min(55, Math.sqrt(lampOrder[MAX_SHAFTS]?.d ?? Infinity));
+      for (let i = 0; i < MAX_SHAFTS; i++) {
+        const l = lampOrder[i];
+        if (!l) { air.shaftPos[i].w = 0; continue; }
+        const k = Math.min(1, Math.max(0, (reach - Math.sqrt(l.d)) / (reach * 0.3)));
+        air.shaftPos[i].set(l.p.x, l.p.y, l.p.z, k * k * (3 - 2 * k));
       }
     }
   }
@@ -241,7 +260,7 @@ export function buildParis(scene, renderer, data, city, props = {}) {
   }
 
   return {
-    blocked, inside, streetAt, freeSpot, update, sky, night, look, paint, facades, lightHeroine, heightAt: (x, z) => standAt(x, z),
+    blocked, inside, streetAt, freeSpot, update, sky, night, look, air, houses: plan.houses, paint, facades, lightHeroine, heightAt: (x, z) => standAt(x, z),
     soundSpots: shopFronts.filter((s) => ['cafe', 'restaurant', 'bar', 'pub'].includes(s.kind)),
     stats: { stairs: stairs.count, buildings: polys.length, lamps: lamps.length, detailedLamps, benches: benches.length, pigeons, ...streetLife },
   };
@@ -320,7 +339,30 @@ function buildLamps(scene, lamps, props, random) {
   }));
   for (const part of [pole, foot, cap, lantern]) part.userData.word = 'lamp';
   glow.renderOrder = 2;
-  for (const m of [pole, foot, cap, lantern, glow]) { m.frustumCulled = false; scene.add(m); }
+  // Боке: далёкие фонари расплываются в мягкие кружки, как огни не в фокусе; вблизи их нет
+  const bokeh = new THREE.Points(geo, new THREE.ShaderMaterial({
+    uniforms: { uScale: { value: 1 } }, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false,
+    vertexShader: /* glsl */ `
+      uniform float uScale; varying float vAmount; varying float vSeed;
+      void main() {
+        vec4 mv = modelViewMatrix * vec4(position, 1.0);
+        vSeed = fract(sin(dot(position.xz, vec2(12.9898, 78.233))) * 43758.5453);
+        vAmount = smoothstep(32.0, 95.0, -mv.z);
+        gl_PointSize = uScale * mix(6.0, 30.0, vAmount) * (0.75 + 0.5 * vSeed);
+        gl_Position = projectionMatrix * mv;
+      }`,
+    fragmentShader: /* glsl */ `
+      varying float vAmount; varying float vSeed;
+      void main() {
+        float r = length(gl_PointCoord - 0.5) * 2.0;
+        float disc = smoothstep(1.0, 0.86, r) * (0.5 + 0.5 * smoothstep(0.55, 0.95, r));   // кружок со светлым краем
+        vec3 tint = mix(vec3(1.0, 0.62, 0.3), vec3(1.0, 0.82, 0.55), vSeed);
+        gl_FragColor = vec4(tint * disc * vAmount * vAmount * 0.3, 1.0);
+      }`,
+  }));
+  bokeh.renderOrder = 3;
+  bokeh.onBeforeRender = (r) => { bokeh.material.uniforms.uScale.value = (r.getRenderTarget()?.height ?? r.domElement.height) / 720; };
+  for (const m of [pole, foot, cap, lantern, glow, bokeh]) { m.frustumCulled = false; scene.add(m); }
   return { lights, detailed: chosen.size };
 }
 
@@ -454,6 +496,7 @@ function buildShops(scene, pois, polys, inside, rnd, props = {}, propRandom = rn
   });
   const cg = new THREE.BufferGeometry(); cg.setAttribute('position', new THREE.BufferAttribute(candles, 3));
   const candleGlow = new THREE.Points(cg, new THREE.PointsMaterial({ map: glowTexture(), size: 0.48, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, color: 0xffd795, opacity: 0.75 }));
+  candleGlow.name = 'Terrace candles';                  // над этими столиками поднимается пар от кофе (ambient.js)
   tableTop.userData.word = tableLeg.userData.word = 'table';
   for (const m of [tableTop, tableLeg, candle, candleGlow]) { m.frustumCulled = false; scene.add(m); }
   addPropInstances(scene, props['bistro-table'], terrace.tables);

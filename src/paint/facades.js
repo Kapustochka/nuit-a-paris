@@ -231,6 +231,7 @@ function buildShell(h, S, deform) {
       for (const px of [-0.17, 0, 0.17]) C.lathe(px, hgt + 0.14, 0, [[0.07, 0], [0.065, 0.22], [0.05, 0.3], [0.06, 0.34]], 6, [0.78, 0.45, 0.32], K.PAINT);
       const a = Math.atan2(h.ref.tz, h.ref.tx), ca = Math.cos(a), sa = Math.sin(a), lean = (r() - 0.5) * 0.1;
       S.append(C, ([px, py, pz]) => [x + px * ca - pz * sa + py * lean, y + py, z + px * sa + pz * ca]);
+      (h.chimneys ||= []).push([x + hgt * lean, y + hgt + 0.45, z]);     // отсюда идёт дым (ambient.js)
     }
   }
   // Фронтоны видны издалека и не добавляют draw calls: это часть того же shell.
