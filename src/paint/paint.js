@@ -30,6 +30,7 @@ export function createLook(night, moonDirection) {
     uFogCol: { value: new THREE.Color().setRGB(0.21, 0.19, 0.4, THREE.LinearSRGBColorSpace) },
     uFogDensity: { value: 0.0075 },
     uWindowsOn: { value: 0.6 },
+    uWet: { value: 0 },             // дождь (rain.js): больше луж и ярче мокрые блики
     uLookTime: { value: 0 },                               // секунды: окна зажигаются и гаснут, за стёклами ходят люди
     uLightPos: { value: Array.from({ length: MAX_LIGHTS }, () => new THREE.Vector4(0, -100, 0, 0.01)) },
     uLightCol: { value: Array.from({ length: MAX_LIGHTS }, () => new THREE.Color(0, 0, 0)) },
@@ -248,6 +249,7 @@ export function paintMaterial(look, { map = null, side = THREE.DoubleSide } = {}
 // ── Мостовая: брусчатка, тротуары из карты ночного света, лужи и блики фонарей ────
 const GROUND_FRAG = /* glsl */ `
   ${LOOK_GLSL}
+  uniform float uWet;
   uniform vec4 uLightPos[${MAX_LIGHTS}]; uniform vec3 uLightCol[${MAX_LIGHTS}];
   varying vec3 vWorld; varying vec3 vNormal;
   vec3 cells(vec2 p) {
@@ -279,10 +281,10 @@ const GROUND_FRAG = /* glsl */ `
       vec2 dl = vWorld.xz - uLightPos[i].xz, vd = normalize(cameraPosition.xz - uLightPos[i].xz + 0.001);
       float along = dot(dl, vd), across = dot(dl, vec2(-vd.y, vd.x));
       float s = exp(-across * across / max(0.18 + along * 0.05, 0.12)) * smoothstep(-0.6, 1.0, along) * exp(-max(along, 0.0) / 7.0);
-      col += uLightCol[i] * s * 0.2;
+      col += uLightCol[i] * s * (0.2 + 0.22 * uWet);
     }
-    float puddle = smoothstep(0.58, 0.7, fbm(vWorld.xz * 0.18 + 2.0)) * (1.0 - walk);
-    col = mix(col, uSkyCol * 0.75 + col * 0.35, puddle * 0.2);
+    float puddle = smoothstep(0.58 - 0.14 * uWet, 0.7 - 0.1 * uWet, fbm(vWorld.xz * 0.18 + 2.0)) * (1.0 - walk * (1.0 - 0.5 * uWet));
+    col = mix(col, uSkyCol * 0.75 + col * 0.35, puddle * (0.2 + 0.22 * uWet));
     gl_FragColor = vec4(toLinear(paintFog(col, vWorld, 1.0)), 1.0);
   }
 `;

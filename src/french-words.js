@@ -59,4 +59,7 @@ export const words = {
   belleNuit: ['Belle nuit, n’est-ce pas ?', 'bɛl nɥi nɛs pa', 'бэль нюи, нэс па', 'Чудесная ночь, правда?', 'Quelle belle nuit sur Montmartre !', 'Какая чудесная ночь над Монмартром!'],
   ilFaitFrais: ['Il fait frais ce soir.', 'il fɛ fʁɛ sə swaʁ', 'иль фэ фрэ сё суар', 'Сегодня вечером прохладно.', 'Il fait frais, je mets mon écharpe.', 'Прохладно, я надеваю шарф.'],
   bonneNuit: ['Bonne nuit !', 'bɔn nɥi', 'бон нюи', 'Спокойной ночи! (на прощание поздно вечером)', 'Bonne nuit, à demain !', 'Спокойной ночи, до завтра!'],
+  umbrella: ['le parapluie', 'lə paʁaplɥi', 'лё параплюи', 'зонт', 'J’ouvre mon parapluie : il pleut.', 'Я открываю зонт: идёт дождь.'],
+  ilPleut: ['Il pleut !', 'il plø', 'иль плё', 'Идёт дождь!', 'Il pleut, prends ton parapluie !', 'Идёт дождь, возьми зонт!'],
+  quelTemps: ['Quel temps !', 'kɛl tɑ̃', 'кэль та̃', 'Ну и погода!', 'Quel temps ! On rentre vite à la maison.', 'Ну и погода! Скорее домой.'],
 };

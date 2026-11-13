@@ -3,7 +3,7 @@
     python scripts/build-people-voice.py fr_FR-siwis-medium.onnx fr_FR-upmc-medium.onnx
 
 Women use the first voice, men the second (speaker "pierre" of the two-speaker UPMC model). Clips go to assets/voice/people/<key>-f.mp3
-and <key>-m.mp3 (needs ffmpeg on PATH). Lines are the GREETINGS keys of src/people.js,
+and <key>-m.mp3 (needs ffmpeg on PATH). Lines are the GREETINGS and RAIN_GREETINGS keys of src/people.js,
 their text is the term in src/french-words.js.
 """
 import argparse
@@ -26,7 +26,7 @@ words = json.loads(subprocess.check_output([
     "const { words } = await import('./src/french-words.js'); console.log(JSON.stringify(words));",
 ], text=True, cwd=root))
 source = (root / "src/people.js").read_text(encoding="utf-8")
-keys = re.findall(r"'(\w+)'", re.search(r"const GREETINGS = \[(.*?)\];", source, re.S).group(1))
+keys = [key for block in re.findall(r"GREETINGS = \[(.*?)\];", source, re.S) for key in re.findall(r"'(\w+)'", block)]
 out = root / "assets/voice/people"
 out.mkdir(exist_ok=True)
 female = SynthesisConfig(length_scale=1.0)

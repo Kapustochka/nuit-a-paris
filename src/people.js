@@ -14,6 +14,9 @@ import { words } from './french-words.js';
 
 // Что говорят прохожие (ключи карточек из french-words.js; голос — assets/voice/people/<ключ>-f|m.mp3)
 const GREETINGS = ['bonsoirStreet', 'bonsoirMademoiselle', 'bonneSoiree', 'salut', 'belleNuit', 'ilFaitFrais', 'bonneNuit', 'pardon'];
+// …а в дождь (rain.js) ещё и это
+const RAIN_GREETINGS = ['ilPleut', 'quelTemps'];
+const UMBRELLAS = [0x1a1820, 0x1a1820, 0x1a1820, 0x8a1e2a, 0x24305a, 0x2f5a4e, 0xd8a03a, 0x6a3a6a];
 
 // По каким дорогам ходят и как далеко от оси дороги их тротуар (м)
 const WALK_OFFSET = { footway: [0.45, 0], path: [0.4, 0], steps: [0.45, 0], pedestrian: [2.4, 1.4, 0.6], living_street: [2.4, 1.4, 0.6], residential: [3.6, 2.8, 2, 1.2] };
@@ -67,69 +70,88 @@ function figureGeometry(rnd) {
     g.setAttribute('skinWeight', new THREE.BufferAttribute(sw, 4));
     parts.push(g.index ? g.toNonIndexed() : g);
   }
-  const blob = ([x, y, z], [rx, ry, rz], w = 9, h = 7) => new THREE.SphereGeometry(1, w, h).scale(rx, ry, rz).translate(x, y, z);
+  const blob = ([x, y, z], [rx, ry, rz], w = 14, h = 10) => new THREE.SphereGeometry(1, w, h).scale(rx, ry, rz).translate(x, y, z);
   // конус между двумя точками
-  const limb = (a, b, r0, r1, seg = 7) => {
+  const limb = (a, b, r0, r1, seg = 12) => {
     const A = new THREE.Vector3(...a), Bv = new THREE.Vector3(...b), d = Bv.clone().sub(A), len = d.length();
-    const g = new THREE.CylinderGeometry(r1, r0, len, seg, 1, false);
+    const g = new THREE.CylinderGeometry(r1, r0, len, seg, 3, true);
+    // чуть «мышечный» профиль: середина толще концов, а не ровный цилиндр
+    const pos = g.attributes.position;
+    for (let i = 0; i < pos.count; i++) {
+      const t = pos.getY(i) / len + 0.5, k = 1 + Math.sin(t * Math.PI) * 0.12;
+      pos.setX(i, pos.getX(i) * k); pos.setZ(i, pos.getZ(i) * k);
+    }
+    g.computeVertexNormals();
     g.translate(0, len / 2, 0);
     g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize()));
     return g.translate(...a);
   };
   // «колокол» по профилю [радиус, высота] снизу вверх, сплющенный спереди-назад
-  const bell = (profile, depth = 0.72, seg = 12) => new THREE.LatheGeometry(profile.map(([r, y]) => new THREE.Vector2(r, y)), seg).scale(1, 1, depth);
+  const bell = (profile, depth = 0.72, seg = 20) => new THREE.LatheGeometry(profile.map(([r, y]) => new THREE.Vector2(r, y)), seg).scale(1, 1, depth);
 
   const skin = pick(SKIN), hair = pick(HAIR), shoes = pick(SHOES);
   const coat = pick(COATS), legs = pick(TROUSERS), accent = pick(ACCENTS);
   const outfit = woman ? pick(['coat', 'coat', 'dress', 'jacket']) : pick(['coat', 'coat', 'jacket', 'jacket']);
 
-  // ноги и обувь
+  // ноги и обувь; шарики в коленях скругляют сгиб
   for (const [side, x] of [['L', 0.095], ['R', -0.095]]) {
     const legColor = outfit === 'dress' ? 0x241c26 : legs;
-    add(limb([x, 0.95, 0], [x, 0.47, 0.005], woman ? 0.068 : 0.078, woman ? 0.05 : 0.058), legColor, B['thigh' + side]);
-    add(limb([x, 0.53, 0.005], [x, 0.07, 0], woman ? 0.05 : 0.058, woman ? 0.036 : 0.045), legColor, B['shin' + side]);
-    add(blob([x, 0.045, 0.035], [0.048, 0.04, woman ? 0.1 : 0.115]), shoes, B['shin' + side]);
+    const knee = woman ? 0.05 : 0.058;
+    add(limb([x, 0.97, 0], [x, 0.5, 0.005], woman ? 0.072 : 0.078, knee), legColor, B['thigh' + side]);
+    add(blob([x, 0.5, 0.008], [knee, knee * 1.1, knee]), legColor, B['shin' + side]);
+    add(limb([x, 0.5, 0.005], [x, 0.08, -0.005], knee * 0.98, woman ? 0.032 : 0.042), legColor, B['shin' + side]);
+    add(blob([x, 0.05, 0.035], [0.046, 0.042, woman ? 0.1 : 0.115]), shoes, B['shin' + side]);
   }
-  // туловище: внизу на тазу, вверху на позвоночнике, между ними плавно
+  // туловище: внизу на тазу, вверху на позвоночнике, между ними плавно; покатые плечи
   const torsoWeight = (x, y) => [B.hips, B.spine, THREE.MathUtils.smoothstep(y, 0.98, 1.14)];
   const top = outfit === 'jacket' ? accent : coat;
-  const chest = woman ? 0.16 : 0.18, shoulders = woman ? 0.175 : 0.2;
-  add(bell([[0.001, 0.86], [woman ? 0.17 : 0.16, 0.87], [woman ? 0.14 : 0.155, 1.02], [chest, 1.22], [shoulders, 1.38], [0.13, 1.45], [0.05, 1.47]], 0.68), outfit === 'jacket' ? coat : top, 0, torsoWeight);
+  const hip = woman ? 0.175 : 0.16, waist = woman ? 0.13 : 0.15, chest = woman ? 0.16 : 0.18, sh = woman ? 0.17 : 0.195;
+  add(bell([[0.001, 0.84], [hip * 0.8, 0.85], [hip, 0.9], [hip * 0.97, 0.97], [waist, 1.06], [chest * 0.97, 1.18], [chest, 1.26],
+    [sh, 1.34], [sh * 0.93, 1.39], [sh * 0.72, 1.43], [0.07, 1.46], [0.045, 1.47]], woman ? 0.66 : 0.62), outfit === 'jacket' ? coat : top, 0, torsoWeight);
+  // воротник
+  add(new THREE.TorusGeometry(0.058, 0.022, 8, 18).rotateX(Math.PI / 2).translate(0, 1.445, 0.0), outfit === 'jacket' ? coat : top, B.spine);
   // полы пальто или юбка: низ качается вместе с бедром своей стороны
   const hem = outfit === 'coat' ? (woman ? 0.5 : 0.56) : outfit === 'dress' ? 0.6 : 0;
   if (hem) {
-    const flare = outfit === 'dress' ? 0.27 : 0.23;
-    add(bell([[flare, hem], [flare - 0.03, hem + 0.12], [0.18, 0.9], [0.16, 1.0]], 0.75, 14), outfit === 'dress' ? accent : coat, 0, (x, y) => {
-      const t = THREE.MathUtils.clamp((0.95 - y) / 0.45, 0, 1), s = Math.min(1, Math.abs(x) / 0.1);
-      return [B.hips, x > 0 ? B.thighL : B.thighR, t * s * 0.6];
-    });
+    const flare = outfit === 'dress' ? 0.26 : 0.22;
+    add(bell([[flare, hem], [flare - 0.005, hem + 0.04], [flare - 0.03, hem + 0.15], [hip + 0.02, 0.85], [hip + 0.01, 0.92], [waist + 0.01, 1.02]], 0.74, 22),
+      outfit === 'dress' ? accent : coat, 0, (x, y) => {
+        const t = THREE.MathUtils.clamp((0.95 - y) / 0.45, 0, 1), s = Math.min(1, Math.abs(x) / 0.1);
+        return [B.hips, x > 0 ? B.thighL : B.thighR, t * s * 0.6];
+      });
   }
-  // руки: рукав, предплечье, кисть
+  // руки: плечо-шарик, рукав, локоть, предплечье, кисть
   for (const [side, sx] of [['L', 1], ['R', -1]]) {
-    add(limb(J['arm' + side], [0.215 * sx, 1.12, -0.02], 0.058, 0.05), coat, B['arm' + side]);
-    add(limb([0.215 * sx, 1.16, -0.02], [0.22 * sx, 0.9, 0.0], 0.048, 0.042), coat, B['fore' + side]);
-    add(blob([0.222 * sx, 0.855, 0.005], [0.03, 0.05, 0.038], 7, 5), skin, B['fore' + side]);
+    const [ax, ay, az] = J['arm' + side];
+    add(blob([ax - 0.012 * sx, ay - 0.005, az], [0.062, 0.06, 0.062]), coat, B['arm' + side]);
+    add(limb([ax, ay, az], [0.212 * sx, 1.14, -0.02], 0.056, 0.046), coat, B['arm' + side]);
+    add(blob([0.213 * sx, 1.14, -0.02], [0.045, 0.047, 0.045]), coat, B['fore' + side]);
+    add(limb([0.213 * sx, 1.14, -0.02], [0.22 * sx, 0.91, 0.0], 0.045, 0.04), coat, B['fore' + side]);
+    add(blob([0.221 * sx, 0.86, 0.008], [0.028, 0.052, 0.04], 10, 8), skin, B['fore' + side]);
   }
-  // шея, голова, волосы
-  add(limb([0, 1.43, 0], [0, 1.55, 0.005], 0.045, 0.042), skin, B.head);
-  add(blob([0, 1.6, 0.01], [0.092, 0.112, 0.1], 10, 8), skin, B.head);
-  add(blob([0, 1.645, -0.03], [0.1, 0.1, 0.098], 10, 8), hair, B.head);
+  // шея, голова (с подбородком и носом), волосы
+  add(limb([0, 1.42, -0.005], [0, 1.56, 0.0], 0.043, 0.04), skin, B.head);
+  add(blob([0, 1.605, 0.008], [0.088, 0.108, 0.098], 18, 14), skin, B.head);
+  add(blob([0, 1.545, 0.04], [0.052, 0.04, 0.06], 12, 8), skin, B.head);          // подбородок и щёки
+  add(blob([0, 1.6, 0.104], [0.013, 0.024, 0.02], 8, 6), skin, B.head);           // нос
+  add(blob([0, 1.648, -0.028], [0.098, 0.098, 0.098], 18, 14), hair, B.head);
   if (woman) {
+    add(blob([0, 1.665, 0.055], [0.085, 0.035, 0.05], 12, 8), hair, B.head);      // чёлка
     const style = rnd();
-    if (style < 0.45) add(blob([0, 1.5, -0.06], [0.1, 0.17, 0.065]), hair, B.head);           // длинные
-    else if (style < 0.75) add(blob([0, 1.66, -0.1], [0.05, 0.05, 0.05], 7, 5), hair, B.head); // пучок
+    if (style < 0.45) add(blob([0, 1.5, -0.055], [0.098, 0.17, 0.062], 14, 12), hair, B.head);  // длинные
+    else if (style < 0.75) add(blob([0, 1.665, -0.105], [0.05, 0.05, 0.05], 10, 8), hair, B.head); // пучок
   }
   // шарф
   if (rnd() < 0.6) {
-    add(new THREE.TorusGeometry(0.075, 0.032, 6, 12).rotateX(Math.PI / 2).scale(1, 1, 0.9).translate(0, 1.45, 0.005), accent === top ? pick(ACCENTS) : accent, B.spine);
-    add(new THREE.BoxGeometry(0.06, 0.24, 0.025).translate(0.045, 1.33, 0.115), accent === top ? pick(ACCENTS) : accent, B.spine);
+    add(new THREE.TorusGeometry(0.07, 0.03, 8, 18).rotateX(Math.PI / 2).scale(1, 1, 0.9).translate(0, 1.45, 0.005), accent === top ? pick(ACCENTS) : accent, B.spine);
+    add(new THREE.BoxGeometry(0.06, 0.24, 0.022).translate(0.045, 1.32, 0.11), accent === top ? pick(ACCENTS) : accent, B.spine);
   }
   // головной убор
   const hat = rnd();
   if (woman && hat < 0.3) add(blob([0.02, 1.705, -0.01], [0.115, 0.035, 0.115]).rotateZ(-0.15), pick([0x7b2230, 0x1f1d24, 0x2c3a5a, accent]), B.head);
   else if (!woman && hat < 0.22) {
-    add(new THREE.CylinderGeometry(0.085, 0.095, 0.08, 10).translate(0, 1.73, -0.005), 0x23212a, B.head);
-    add(new THREE.CylinderGeometry(0.15, 0.15, 0.012, 12).translate(0, 1.69, -0.005), 0x23212a, B.head);
+    add(new THREE.CylinderGeometry(0.085, 0.095, 0.08, 16).translate(0, 1.73, -0.005), 0x23212a, B.head);
+    add(new THREE.CylinderGeometry(0.15, 0.15, 0.012, 18).translate(0, 1.69, -0.005), 0x23212a, B.head);
   } else if (!woman && hat < 0.4) add(blob([0, 1.69, 0.02], [0.105, 0.04, 0.12]), pick([0x3a3d48, 0x5a4a3a]), B.head);   // кепка
   // что несут
   const carry = rnd();
@@ -143,6 +165,22 @@ function figureGeometry(rnd) {
   const geometry = mergeGeometries(parts);
   for (const p of parts) p.dispose();      // нормали у каждой детали свои, гладкие
   return { geometry, woman, busyArm, height: woman ? 1.58 + rnd() * 0.14 : 1.7 + rnd() * 0.17 };
+}
+
+// Зонт: восемь клиньев купола, спица-ручка; держится в кисти и всегда смотрит вверх
+function umbrellaGeometry(hex) {
+  const canopy = new THREE.ConeGeometry(0.48, 0.19, 8, 1, true).translate(0, 1.0, 0);
+  const tip = new THREE.CylinderGeometry(0.008, 0.008, 0.08, 4).translate(0, 1.13, 0);
+  const stick = new THREE.CylinderGeometry(0.012, 0.012, 1.0, 5).translate(0, 0.48, 0);
+  const color = new THREE.Color(hex), dark = new THREE.Color(0x24222a);
+  const parts = [[canopy, color], [tip, dark], [stick, dark]].map(([g, c]) => {
+    g.deleteAttribute('uv');
+    const n = g.attributes.position.count, col = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) col.set([Math.min(1, c.r * 1.8), Math.min(1, c.g * 1.8), Math.min(1, c.b * 1.8)], i * 3);
+    g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    return g.index ? g.toNonIndexed() : g;
+  });
+  return mergeGeometries(parts);
 }
 
 function makeSkeleton() {
@@ -178,6 +216,9 @@ export function createPeople(scene, world, mapData, { count = 16, inspector, cam
   const net = walkNetwork(mapData.roads);
   const material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9 });
   const rnd = mulberry(4242);
+  const umbrellaMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.6, side: THREE.DoubleSide });
+  const umbrellaShapes = new Map();
+  let rain = 0;
   const people = [];
   const frustum = new THREE.Frustum(), viewProj = new THREE.Matrix4(), tmp = new THREE.Vector3();
   const bubble = createBubble(inspector);
@@ -273,10 +314,26 @@ export function createPeople(scene, world, mapData, { count = 16, inspector, cam
     };
     mesh.userData.word = () => (person.saying && performance.now() < person.sayUntil + 6000 ? person.saying : woman ? 'passerby' : 'passant');
     inspector?.addTarget(mesh);
+    // зонт есть примерно у двух третей; в руке, свободной от багета
+    if (rnd() < 0.68) {
+      const hex = UMBRELLAS[Math.floor(rnd() * UMBRELLAS.length)];
+      if (!umbrellaShapes.has(hex)) umbrellaShapes.set(hex, umbrellaGeometry(hex));
+      const side = busyArm === 'R' ? 'L' : 'R';
+      const umbrella = new THREE.Mesh(umbrellaShapes.get(hex), umbrellaMat);
+      umbrella.position.set(side === 'R' ? -0.005 : 0.005, -0.285, 0.0);
+      umbrella.rotation.x = 1.6;                      // компенсирует поднятую руку: спица вертикальна
+      umbrella.visible = false;
+      umbrella.userData.word = 'umbrella';
+      bones[B['fore' + side]].add(umbrella);
+      inspector?.addTarget(umbrella);
+      person.umbrella = umbrella; person.umbrellaSide = side; person.open = 0;
+    }
     people.push(person);
     spawn(person, 4, 70, false);
   }
   if (people[0]) world.paint(people[0].root);   // материал общий на всех
+  const anyUmbrella = people.find((p) => p.umbrella);
+  if (anyUmbrella) world.paint(anyUmbrella.umbrella);
 
   function pose(person, dt, moving) {
     const b = person.bones;
@@ -290,11 +347,28 @@ export function createPeople(scene, world, mapData, { count = 16, inspector, cam
     b[B.armR].rotation.set(person.busyArm === 'R' ? 0.05 : -0.32 * s * a, 0, person.busyArm === 'R' ? -0.16 : -0.07);
     b[B.foreL].rotation.x = -(0.18 + 0.3 * Math.max(0, -s) * a);
     b[B.foreR].rotation.x = person.busyArm === 'R' ? -1.0 : -(0.18 + 0.3 * Math.max(0, s) * a);
+    // зонт: рука поднята и согнута, спица смотрит вверх, купол раскрывается
+    if (person.umbrella) {
+      const want = rain > 0.25 ? 1 : rain < 0.1 ? 0 : person.open > 0.5 ? 1 : 0;
+      person.open += (want - person.open) * (1 - Math.exp(-dt * 4));
+      const o = person.open, side = person.umbrellaSide, sx = side === 'L' ? 1 : -1;
+      if (o > 0.02) {
+        const arm = b[B['arm' + side]], fore = b[B['fore' + side]];
+        arm.rotation.set(THREE.MathUtils.lerp(arm.rotation.x, -0.2, o), 0, THREE.MathUtils.lerp(arm.rotation.z, 0.12 * sx, o));
+        fore.rotation.x = THREE.MathUtils.lerp(fore.rotation.x, -1.15, o);
+        const k = 0.15 + 0.85 * THREE.MathUtils.smoothstep(o, 0.3, 1);
+        person.umbrella.rotation.x = -(arm.rotation.x + fore.rotation.x);
+        person.umbrella.scale.set(k, 1, k);
+      }
+      person.umbrella.visible = o > 0.02;
+    }
+    // без зонта под дождём — плечи вперёд, шаг быстрее (см. update)
+    const hunch = person.umbrella ? 0 : Math.min(1, rain * 1.5) * 0.12;
     b[B.hips].position.y = person.rest + (Math.abs(c) - 0.6) * 0.035 * a;
     b[B.hips].rotation.y = 0.09 * s * a;
     const idle = Math.sin(performance.now() / 900 + person.speed * 10) * (1 - a);
     b[B.hips].rotation.z = 0.02 * idle;
-    b[B.spine].rotation.set(0.05 * a, -0.16 * s * a, -0.02 * idle);
+    b[B.spine].rotation.set(0.05 * a + hunch, -0.16 * s * a, -0.02 * idle);
     b[B.head].rotation.y += (person.look - b[B.head].rotation.y) * (1 - Math.exp(-dt * 5));
     b[B.head].rotation.x = 0.04 * a - 0.03 * (1 - a);
   }
@@ -311,7 +385,8 @@ export function createPeople(scene, world, mapData, { count = 16, inspector, cam
   }
 
   let viewTick = 0;
-  function update(dt) {
+  function update(dt, rainLevel = 0) {
+    rain = rainLevel;
     viewTick -= dt;
     if (viewTick <= 0) { viewTick = 0.25; frustum.setFromProjectionMatrix(viewProj.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse)); }
     greetCooldown -= dt;
@@ -335,7 +410,8 @@ export function createPeople(scene, world, mapData, { count = 16, inspector, cam
       // здоровается
       if (dist < 3.4 && facingHero > 0.35 && greetCooldown <= 0 && now - person.greeted > 90000 && dist > 0.9) {
         person.greeted = now;
-        let key = GREETINGS[Math.floor(rnd() * (GREETINGS.length - 1))];
+        let key = rain > 0.25 && rnd() < 0.5 ? RAIN_GREETINGS[Math.floor(rnd() * RAIN_GREETINGS.length)]
+          : GREETINGS[Math.floor(rnd() * (GREETINGS.length - 1))];
         if (key === lastGreeting) key = 'bonsoirStreet';
         say(person, dist < 1.4 ? 'pardon' : key);
       }
@@ -353,7 +429,8 @@ export function createPeople(scene, world, mapData, { count = 16, inspector, cam
           person.wait = blockedByHero ? person.wait + dt : 0;
           if (person.wait > 2.5) { person.wait = 0; person.dir = -person.dir; nextTarget(person, true); }
           else if (!blockedByHero) {
-            const step = person.speed * dt * Math.max(0, Math.cos(delta));
+            const hurry = person.umbrella ? 1 : 1 + Math.min(1, rain * 1.5) * 0.3;
+            const step = person.speed * hurry * dt * Math.max(0, Math.cos(delta));
             const nx = pos.x + Math.sin(person.root.rotation.y) * step, nz = pos.z + Math.cos(person.root.rotation.y) * step;
             if (free(nx, nz)) {
               pos.x = nx; pos.z = nz; pos.y = world.heightAt(nx, nz);
