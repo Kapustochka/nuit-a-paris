@@ -15,6 +15,7 @@ import { createCityAudio } from './city-audio.js';
 import { loadPasserby, placePasserby, placeCircularPasserby, passerbyBlocksStep } from './passerby.js';
 import { createPainter } from './paint/post.js';
 import { createPeople } from './people.js';
+import { createAmbient } from './ambient.js';
 
 const loading = document.getElementById('loading');
 const streetEl = document.getElementById('street');
@@ -30,10 +31,11 @@ const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(58, innerWidth / innerHeight, 0.1, 4000);
 
 // Кадр как нарисованный: мазки (фильтр Кувахары), контуры тушью, зерно бумаги (paint/post.js).
+// В том же проходе — воздух (paint/air.js): дымка, лучи фонарей, сияние Сакре-Кёр.
 // С ?plain — обычный кадр без живописи, для сравнения и для очень слабых устройств.
 const plainView = new URLSearchParams(location.search).has('plain');
 const originalHero = new URLSearchParams(location.search).has('original-hero');
-let painter = plainView ? null : createPainter(renderer, { radius: phone ? 2 : 3, heroStyle: originalHero ? 0 : 1 });
+let painter = plainView ? null : createPainter(renderer, { radius: phone ? 2 : 3, heroStyle: originalHero ? 0 : 1, shafts: phone ? 4 : 8, shaftSteps: phone ? 5 : 8, bloom: phone ? 1 : 2 });
 painter?.setSize();
 let slowFrames = 0, frames = 0;
 
@@ -50,6 +52,7 @@ const heroineLoad = loadHeroine(scene).then((heroine) => ({ heroine }), (error) 
 const terrainLoad = loadTerrain();
 const mapData = await loadMapData((t) => { loading.textContent = t; }).catch(fail);
 const world = buildParis(scene, renderer, mapData, { terrain: await terrainLoad }, await streetProps);
+painter?.setAir(world.air);
 const controls = createControls(renderer.domElement);
 controls.state.camDist = 3.6;
 const minimap = createMinimap(document.getElementById('minimap'), mapData);
@@ -81,12 +84,14 @@ const stars = createFallingStars(scene, camera, world, inspector, lesson.review)
 installStarToggle(stars);
 // Живые улицы: нарисованные прохожие из кода (people.js). ?no-people — без них, для сравнения.
 if (!new URLSearchParams(location.search).has('no-people')) people = createPeople(scene, world, mapData, { count: phone ? 10 : 18, inspector, camera, player });
+// Мелкая жизнь в воздухе: листья, лепестки, светлячки, пар над кофе, дым из труб. ?no-ambient — без неё.
+const ambient = new URLSearchParams(location.search).has('no-ambient') ? null : createAmbient(scene, world, { phone });
 loading.remove();
 performance.mark('paris-ready');
 
 const debug = new URLSearchParams(location.search).has('debug');
 if (debug) addDebugPanel();
-window.__game = { heroine, passersby, get people() { return people; }, world, stars, inspector, mapData, camera, controls, renderer, cityAudio, get painted() { return painter !== null; }, get painter() { return painter; } };
+window.__game = { ambient, heroine, passersby, get people() { return people; }, world, stars, inspector, mapData, camera, controls, renderer, cityAudio, get painted() { return painter !== null; }, get painter() { return painter; } };
 
 // ── Движение ─────────────────────────────────────────────────
 const MAX_WALK = 1.45, MAX_RUN = 3.8, MAX_BACK = 0.95; // м/с
@@ -157,6 +162,7 @@ renderer.setAnimationLoop(() => {
   }
   for (const actor of passersby) actor.update(dt);
   people?.update(dt);
+  ambient?.update(dt, camera, world.air.groundY);
   stars.update(dt, p.x, p.z, facing);
   cityAudio.update(dt, p.x, p.z, yaw, heroine.busy !== 'jump');
 
@@ -177,6 +183,8 @@ renderer.setAnimationLoop(() => {
     if (frames > 240) {
       if (slowFrames > 110) {
         if (painter.radius > 1) painter.setRadius(painter.radius - 1);
+        else if (painter.shafts > 2) painter.setShafts(2, 4);      // лучи только у двух ближайших фонарей
+        else if (painter.bloom > 1) painter.setBloom(1);           // свечение только узкое
         else if (renderer.getPixelRatio() > 1) { renderer.setPixelRatio(1); painter.setSize(); }
         else painter.setScale(0.75);
       }
@@ -238,6 +246,11 @@ async function addDebugPanel() {
     art.add(painter.uniforms.uEdges, 'value', 0, 1, 0.05).name('контуры');
     art.add(painter.uniforms.uLine, 'value', 0.5, 3, 0.05).name('толщина линии');
     art.add(painter.uniforms.uHeroLine, 'value', 0.3, 1.2, 0.05).name('контур героини');
+    art.add(painter.uniforms.uBloom, 'value', 0, 2, 0.05).name('свечение');
+    art.add(painter.uniforms.uPaper, 'value', 0, 3, 0.05).name('бумага');
+    art.add(painter.uniforms.uVignette, 'value', 0, 2, 0.05).name('виньетка');
+    art.add(painter.uniforms.uMist, 'value', 0, 2, 0.05).name('дымка');
+    art.add(painter.uniforms.uShaft, 'value', 0, 3, 0.05).name('лучи фонарей');
   }
   const arms = gui.addFolder('Руки к телу (°)');
   for (const k of ['idle', 'walk', 'run']) arms.add(TUNING.armIn, k, -20, 30, 0.5);

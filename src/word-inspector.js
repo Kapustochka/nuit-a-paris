@@ -40,7 +40,7 @@ export function installWordInspector(canvas, scene, camera, moonDirection, audio
     const hit = ray.intersectObjects(targets, false).find(visibleAt);
     if (!hit) {
       if (ray.ray.direction.y < 0) return;
-      show(ray.ray.direction.dot(moonDirection) >= Math.sqrt(1 - 0.021 ** 2) ? 'moon' : 'sky', x, y);
+      show(ray.ray.direction.dot(moonDirection) >= Math.sqrt(1 - 0.027 ** 2) ? 'moon' : 'sky', x, y);
       return;
     }
     const tag = hit.object.userData.word;
