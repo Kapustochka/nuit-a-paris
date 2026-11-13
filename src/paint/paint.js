@@ -294,6 +294,7 @@ const GROUND_FRAG = /* glsl */ `
     base = mix(base, vec3(0.84, 0.8, 0.76), curb * 0.85);
     base *= 1.0 - cell.b * 0.6;
     float strokes = fbm(vWorld.xz * vec2(1.3, 4.2));
+    base *= 1.0 - 0.2 * uWet;                               // мокрый камень темнее — отражения читаются
     vec3 col = paintShade(base, n, vWorld, strokes, 0.0);
     for (int i = 0; i < ${MAX_LIGHTS}; i++) {                    // мокрые блики фонарей
       vec2 dl = vWorld.xz - uLightPos[i].xz, vd = normalize(cameraPosition.xz - uLightPos[i].xz + 0.001);
