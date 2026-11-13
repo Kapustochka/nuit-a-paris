@@ -21,6 +21,7 @@ const UMBRELLAS = [0x1a1820, 0x1a1820, 0x1a1820, 0x8a1e2a, 0x24305a, 0x2f5a4e, 0
 // По каким дорогам ходят и как далеко от оси дороги их тротуар (м)
 const WALK_OFFSET = { footway: [0.45, 0], path: [0.4, 0], steps: [0.45, 0], pedestrian: [2.4, 1.4, 0.6], living_street: [2.4, 1.4, 0.6], residential: [3.6, 2.8, 2, 1.2] };
 const RADIUS = 0.3;
+export const TRAY_TILT = 1.5;          // наклон подноса в позе покоя: в согнутой руке он ляжет ровно
 
 // ── Палитра парижской ночи (sRGB) ────────────────────────────
 const COATS = [0x3b4a7a, 0x7a2f3a, 0x9a6a3a, 0x2f5a4e, 0x5a3a6a, 0x2a2a34, 0xb08850, 0x8a3a2a, 0x4a5a78, 0x6a4a3a, 0x9a4a5a];
@@ -37,17 +38,18 @@ const J = {
   armL: [0.195, 1.42, -0.01], foreL: [0.215, 1.14, -0.02], armR: [-0.195, 1.42, -0.01], foreR: [-0.215, 1.14, -0.02],
 };
 const BONES = Object.keys(J);
-const B = Object.fromEntries(BONES.map((name, i) => [name, i]));
+export const B = Object.fromEntries(BONES.map((name, i) => [name, i]));
 const PARENT = { spine: 'hips', head: 'spine', thighL: 'hips', shinL: 'thighL', thighR: 'hips', shinR: 'thighR', armL: 'spine', foreL: 'armL', armR: 'spine', foreR: 'armR' };
 
-function mulberry(a) {
+export function mulberry(a) {
   return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
 }
 
 // ── Сборка фигуры ────────────────────────────────────────────
-function figureGeometry(rnd) {
+// waiter: официант(ка) у кафе (cafe.js) — белая рубашка, чёрный жилет, длинный фартук, поднос в левой руке
+export function figureGeometry(rnd, { waiter = false, woman: forceWoman = null } = {}) {
   const pick = (list) => list[Math.floor(rnd() * list.length)];
-  const woman = rnd() < 0.55;
+  const woman = forceWoman ?? rnd() < 0.55;
   const parts = [];
   const color = new THREE.Color();
   // weight(x, y, z) → [кость A, кость B, вес B] — по умолчанию вся деталь на одной кости
@@ -90,8 +92,10 @@ function figureGeometry(rnd) {
   const bell = (profile, depth = 0.72, seg = 20) => new THREE.LatheGeometry(profile.map(([r, y]) => new THREE.Vector2(r, y)), seg).scale(1, 1, depth);
 
   const skin = pick(SKIN), hair = pick(HAIR), shoes = pick(SHOES);
-  const coat = pick(COATS), legs = pick(TROUSERS), accent = pick(ACCENTS);
-  const outfit = woman ? pick(['coat', 'coat', 'dress', 'jacket']) : pick(['coat', 'coat', 'jacket', 'jacket']);
+  let coat = pick(COATS), legs = pick(TROUSERS), accent = pick(ACCENTS);
+  let outfit = woman ? pick(['coat', 'coat', 'dress', 'jacket']) : pick(['coat', 'coat', 'jacket', 'jacket']);
+  let top = outfit === 'jacket' ? accent : coat;
+  if (waiter) { outfit = 'waiter'; coat = 0xeeeae2; top = 0x1d1b24; legs = 0x1d1b24; }
 
   // ноги и обувь; шарики в коленях скругляют сгиб
   for (const [side, x] of [['L', 0.095], ['R', -0.095]]) {
@@ -104,18 +108,17 @@ function figureGeometry(rnd) {
   }
   // туловище: внизу на тазу, вверху на позвоночнике, между ними плавно; покатые плечи
   const torsoWeight = (x, y) => [B.hips, B.spine, THREE.MathUtils.smoothstep(y, 0.98, 1.14)];
-  const top = outfit === 'jacket' ? accent : coat;
   const hip = woman ? 0.175 : 0.16, waist = woman ? 0.13 : 0.15, chest = woman ? 0.16 : 0.18, sh = woman ? 0.17 : 0.195;
   add(bell([[0.001, 0.84], [hip * 0.8, 0.85], [hip, 0.9], [hip * 0.97, 0.97], [waist, 1.06], [chest * 0.97, 1.18], [chest, 1.26],
     [sh, 1.34], [sh * 0.93, 1.39], [sh * 0.72, 1.43], [0.07, 1.46], [0.045, 1.47]], woman ? 0.66 : 0.62), outfit === 'jacket' ? coat : top, 0, torsoWeight);
   // воротник
   add(new THREE.TorusGeometry(0.058, 0.022, 8, 18).rotateX(Math.PI / 2).translate(0, 1.445, 0.0), outfit === 'jacket' ? coat : top, B.spine);
-  // полы пальто или юбка: низ качается вместе с бедром своей стороны
-  const hem = outfit === 'coat' ? (woman ? 0.5 : 0.56) : outfit === 'dress' ? 0.6 : 0;
+  // полы пальто, юбка или длинный фартук официанта: низ качается вместе с бедром своей стороны
+  const hem = outfit === 'coat' ? (woman ? 0.5 : 0.56) : outfit === 'dress' ? 0.6 : outfit === 'waiter' ? 0.4 : 0;
   if (hem) {
-    const flare = outfit === 'dress' ? 0.26 : 0.22;
+    const flare = outfit === 'dress' ? 0.26 : outfit === 'waiter' ? 0.2 : 0.22;
     add(bell([[flare, hem], [flare - 0.005, hem + 0.04], [flare - 0.03, hem + 0.15], [hip + 0.02, 0.85], [hip + 0.01, 0.92], [waist + 0.01, 1.02]], 0.74, 22),
-      outfit === 'dress' ? accent : coat, 0, (x, y) => {
+      outfit === 'dress' ? accent : outfit === 'waiter' ? 0xf2eee6 : coat, 0, (x, y) => {
         const t = THREE.MathUtils.clamp((0.95 - y) / 0.45, 0, 1), s = Math.min(1, Math.abs(x) / 0.1);
         return [B.hips, x > 0 ? B.thighL : B.thighR, t * s * 0.6];
       });
@@ -140,6 +143,18 @@ function figureGeometry(rnd) {
     const style = rnd();
     if (style < 0.45) add(blob([0, 1.5, -0.055], [0.098, 0.17, 0.062], 14, 12), hair, B.head);  // длинные
     else if (style < 0.75) add(blob([0, 1.665, -0.105], [0.05, 0.05, 0.05], 10, 8), hair, B.head); // пучок
+  }
+  if (waiter) {
+    // бабочка и поднос с бокалом: поднос в кисти левой руки, согнутой вперёд (pose в cafe.js)
+    add(blob([0, 1.36, 0.1], [0.045, 0.085, 0.03], 10, 8), 0xf4f0ea, B.spine);      // белая рубашка в вырезе жилета
+    add(blob([0.026, 1.43, 0.098], [0.028, 0.018, 0.012], 8, 6), 0x15131a, B.spine);
+    add(blob([-0.026, 1.43, 0.098], [0.028, 0.018, 0.012], 8, 6), 0x15131a, B.spine);
+    const onHand = (g) => g.rotateX(TRAY_TILT).translate(0.221, 0.86, 0.008);
+    add(onHand(new THREE.CylinderGeometry(0.17, 0.165, 0.014, 20).translate(0, 0.03, 0.03)), 0xb8b4ae, B.foreL);
+    add(onHand(new THREE.CylinderGeometry(0.03, 0.022, 0.11, 10).translate(0.05, 0.095, 0.05)), 0xe8eef4, B.foreL);
+    const geometry = mergeGeometries(parts);
+    for (const p of parts) p.dispose();
+    return { geometry, woman, busyArm: 'L', height: woman ? 1.62 + rnd() * 0.1 : 1.72 + rnd() * 0.12 };
   }
   // шарф
   if (rnd() < 0.6) {
@@ -183,7 +198,7 @@ function umbrellaGeometry(hex) {
   return mergeGeometries(parts);
 }
 
-function makeSkeleton() {
+export function makeSkeleton() {
   const bones = BONES.map((name) => { const b = new THREE.Bone(); b.name = name; return b; });
   BONES.forEach((name, i) => {
     const parent = PARENT[name], p = J[name];

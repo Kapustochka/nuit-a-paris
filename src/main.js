@@ -17,6 +17,7 @@ import { createPainter } from './paint/post.js';
 import { createPeople } from './people.js';
 import { createTalk } from './talk.js';
 import { createPassport } from './passport.js';
+import { createCafes } from './cafe.js';
 import { createRain } from './rain.js';
 import { createAmbient } from './ambient.js';
 
@@ -77,8 +78,8 @@ const passersby = [];
 heroine.root.traverse((o) => { o.userData.noPaint = true; o.userData.realistic = true; });
 world.lightHeroine(heroine.root, { clarity: !originalHero });
 world.paint(scene);                 // прохожие и всё остальное — в живописный свет
-let people = null;
-const blocked = (x, z) => world.blocked(x, z) || passersby.some((actor) => passerbyBlocksStep(actor, player, x, z)) || !!people?.blocksStep(x, z);
+let people = null, cafes = null;
+const blocked = (x, z) => world.blocked(x, z) || passersby.some((actor) => passerbyBlocksStep(actor, player, x, z)) || !!people?.blocksStep(x, z) || !!cafes?.blocksStep(x, z);
 const cityAudio = createCityAudio(world.soundSpots);
 const rain = createRain(renderer, world, { phone, cityAudio });
 const audio = createFrenchAudio({ onActivity: (active) => cityAudio.setDucked(active) });
@@ -90,6 +91,8 @@ const stars = createFallingStars(scene, camera, world, inspector, lesson.review)
 installStarToggle(stars);
 // Живые улицы: нарисованные прохожие из кода (people.js). ?no-people — без них, для сравнения.
 if (!new URLSearchParams(location.search).has('no-people')) people = createPeople(scene, world, mapData, { count: phone ? 10 : 18, inspector, camera, player, onTalk: (p, raining) => talk.start(p, raining) });
+// Официанты у ближайших кафе и продавец у булочной: двойной клик — заказ (cafe.js)
+cafes = createCafes(scene, world, { inspector, player, camera, talk, isRaining: () => rain.level > 0.25, count: phone ? 2 : 4 });
 // Мелкая жизнь в воздухе: листья, лепестки, светлячки, пар над кофе, дым из труб. ?no-ambient — без неё.
 const ambient = new URLSearchParams(location.search).has('no-ambient') ? null : createAmbient(scene, world, { phone });
 loading.remove();
@@ -97,7 +100,7 @@ performance.mark('paris-ready');
 
 const debug = new URLSearchParams(location.search).has('debug');
 if (debug) addDebugPanel();
-window.__game = { ambient, rain, talk, passport, heroine, passersby, get people() { return people; }, world, stars, inspector, mapData, camera, controls, renderer, cityAudio, get painted() { return painter !== null; }, get painter() { return painter; } };
+window.__game = { ambient, rain, talk, passport, cafes, heroine, passersby, get people() { return people; }, world, stars, inspector, mapData, camera, controls, renderer, cityAudio, get painted() { return painter !== null; }, get painter() { return painter; } };
 
 // ── Движение ─────────────────────────────────────────────────
 const MAX_WALK = 1.45, MAX_RUN = 3.8, MAX_BACK = 0.95; // м/с
@@ -171,6 +174,7 @@ renderer.setAnimationLoop(() => {
   people?.update(dt, rain.level);
   talk.update();
   passport.update(dt);
+  cafes.update(dt);
   ambient?.update(dt, camera, world.air.groundY);
   shadowCasters.length = 0; shadowCasters.push(p);
   for (const actor of passersby) shadowCasters.push(actor.position);

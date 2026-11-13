@@ -4,7 +4,9 @@
 
 Passer-by lines get a female (siwis) and a male (upmc, speaker "pierre") version:
 assets/voice/talk/<id>-n<step>-f|m.mp3, <id>-end-f|m.mp3 and huh-<n>-f|m.mp3.
-The heroine's answers use siwis: <id>-p<step>-<choice>.mp3. Needs ffmpeg on PATH.
+The heroine's answers use siwis: <id>-p<step>-<choice>.mp3. Lines that depend on the heroine's
+earlier choice (café orders) become <id>-n<step>-<choice key>-f|m.mp3. Needs ffmpeg on PATH.
+--only commande boulangerie rebuilds just those conversations (and skips the "Pardon ?" lines).
 """
 import argparse
 import json
@@ -18,6 +20,7 @@ from piper import PiperVoice, SynthesisConfig
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("female", type=Path)
 parser.add_argument("male", type=Path)
+parser.add_argument("--only", nargs="+", help="conversation ids to build")
 args = parser.parse_args()
 root = Path(__file__).resolve().parents[1]
 data = json.loads(subprocess.check_output([
@@ -26,14 +29,20 @@ data = json.loads(subprocess.check_output([
 ], text=True, cwd=root))
 npc, hero = {}, {}
 for tid, talk in data["talks"].items():
+    if args.only and tid not in args.only:
+        continue
     for i, step in enumerate(talk["steps"]):
-        if step["npc"]:
+        if isinstance(step["npc"], list):
             npc[f"{tid}-n{i}"] = step["npc"][0]
-        for c, (fr, _ru) in enumerate(step["choices"]):
-            hero[f"{tid}-p{i}-{c}"] = fr
+        elif step["npc"]:
+            for key, (fr, _ru) in step["npc"]["lines"].items():
+                npc[f"{tid}-n{i}-{key}"] = fr
+        for c, choice in enumerate(step["choices"]):
+            hero[f"{tid}-p{i}-{c}"] = choice[0]
     npc[f"{tid}-end"] = talk["end"][0]
-for n, (fr, _ru) in enumerate(data["puzzled"]):
-    npc[f"huh-{n}"] = fr
+if not args.only:
+    for n, (fr, _ru) in enumerate(data["puzzled"]):
+        npc[f"huh-{n}"] = fr
 out = root / "assets/voice/talk"
 out.mkdir(exist_ok=True)
 female = PiperVoice.load(args.female)
