@@ -212,7 +212,7 @@ function walkNetwork(roads) {
   return { ways, lengths, total, branches: (w, i) => nodes.get(key(ways[w].p[i * 2], ways[w].p[i * 2 + 1])) || [] };
 }
 
-export function createPeople(scene, world, mapData, { count = 16, inspector, camera, player } = {}) {
+export function createPeople(scene, world, mapData, { count = 16, inspector, camera, player, onTalk = null } = {}) {
   const net = walkNetwork(mapData.roads);
   const material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9 });
   const rnd = mulberry(4242);
@@ -313,6 +313,8 @@ export function createPeople(scene, world, mapData, { count = 16, inspector, cam
       pause: 0, wait: 0, stuck: 0, active: false, greeted: -1e9, saying: null, sayUntil: 0, look: 0,
     };
     mesh.userData.word = () => (person.saying && performance.now() < person.sayUntil + 6000 ? person.saying : woman ? 'passerby' : 'passant');
+    // двойной клик по прохожему рядом — разговор (talk.js); издалека — карточка слова
+    if (onTalk) mesh.userData.onInspect = (x, y) => { if (!onTalk(person, rain > 0.25)) inspector?.show(mesh.userData.word(), x, y, mesh); };
     inspector?.addTarget(mesh);
     // зонт есть примерно у двух третей; в руке, свободной от багета
     if (rnd() < 0.68) {
@@ -406,6 +408,15 @@ export function createPeople(scene, world, mapData, { count = 16, inspector, cam
         look = THREE.MathUtils.clamp(Math.atan2(Math.sin(rel), Math.cos(rel)), -1.0, 1.0);
       }
       person.look = look;
+
+      // во время разговора стоит лицом к героине
+      if (person.talking) {
+        const want = Math.atan2(toX, toZ), delta = Math.atan2(Math.sin(want - yaw), Math.cos(want - yaw));
+        person.root.rotation.y += delta * (1 - Math.exp(-dt * 4));
+        person.look = THREE.MathUtils.clamp(delta, -1, 1);
+        if (dist < 70) pose(person, dt, false);
+        continue;
+      }
 
       // здоровается
       if (dist < 3.4 && facingHero > 0.35 && greetCooldown <= 0 && now - person.greeted > 90000 && dist > 0.9) {
