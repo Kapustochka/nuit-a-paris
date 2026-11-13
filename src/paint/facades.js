@@ -23,7 +23,8 @@ const BUILD_SLICE_MS = 3;   // CPU-бюджет подгрузки за кадр
 const WALLS = [[0.96, 0.79, 0.67], [0.95, 0.88, 0.74], [0.93, 0.74, 0.71], [0.97, 0.86, 0.62], [0.82, 0.83, 0.88],
   [0.8, 0.85, 0.76], [0.97, 0.76, 0.58], [0.86, 0.8, 0.9], [0.95, 0.88, 0.74], [0.96, 0.79, 0.67]];
 const SHUTTERS = [[0.36, 0.46, 0.64], [0.4, 0.56, 0.5], [0.6, 0.24, 0.28], [0.88, 0.84, 0.74], [0.3, 0.52, 0.56]];
-const ROOFS = [[0.4, 0.43, 0.6], [0.4, 0.43, 0.6], [0.46, 0.47, 0.6], [0.36, 0.38, 0.55], [0.74, 0.43, 0.34]];
+const ROOFS = [[0.4, 0.43, 0.6], [0.4, 0.43, 0.6], [0.46, 0.47, 0.6], [0.36, 0.38, 0.55], [0.52, 0.53, 0.62], [0.4, 0.54, 0.54], [0.3, 0.31, 0.47],
+  [0.74, 0.43, 0.34]];   // цинк и сланец, светлый цинк, патина, тёмный сланец; последняя — черепица вальмовых крыш
 const SHOPS = [['#4a3a26', [0.36, 0.28, 0.18], [0.85, 0.66, 0.32]], ['#2d4a52', [0.22, 0.36, 0.4], [0.3, 0.52, 0.44]],
   ['#3b2f5c', [0.28, 0.23, 0.45], [0.55, 0.22, 0.3]], ['#5b2230', [0.42, 0.16, 0.22], [0.62, 0.2, 0.28]],
   ['#6a3a52', [0.5, 0.28, 0.4], [0.86, 0.6, 0.66]], ['#22303f', [0.18, 0.24, 0.32], [0.3, 0.36, 0.5]]];
@@ -79,7 +80,7 @@ export function planFacades(pending, heightAt, inside, flat) {
     const ref = edges.reduce((a, e) => (e.L > a.L ? e : a), edges[0]);
     const roofType = H < 9 && r() < 0.5 ? 'flat' : r() < 0.12 ? 'hip' : 'mansard';
     houses.push({
-      p, n, cx, cz, base, E, H, edges, width, roofType, roof: roofType === 'hip' ? ROOFS[4] : pick(r, ROOFS.slice(0, 4)),
+      p, n, cx, cz, base, E, H, edges, width, roofType, roof: roofType === 'hip' ? ROOFS[ROOFS.length - 1] : pick(r, ROOFS.slice(0, -1)),
       rise: Math.min(4.2, Math.max(2.2, H * 0.24)), low: 0.9 + r() * 0.3, pitch: 0.5 + r() * 0.35,
       wall: edges.find((e) => e.segs.length)?.segs[0].wall || WALLS[0],
       lean: [(r() - 0.5) * 0.012, (r() - 0.5) * 0.012], sag: 0.08 + r() * 0.12, ph: r() * 10, ref,
@@ -101,6 +102,16 @@ function layout(seg, E, shop) {
   const shutter = pick(r, SHUTTERS), shutters = r() < 0.78, balconyFloor = nUp >= 3 && r() < 0.4 ? 2 : nUp >= 2 && r() < 0.2 ? 1 : -1;
   const door = cols >= 2 && r() < 0.75 ? Math.floor(r() * cols) : -1;
   const style = pick(r, SHOPS);
+  // разнообразие «домика» — свой генератор, чтобы раскладка окон осталась прежней
+  const v = mulberry(seg.seed * 17 + 911);
+  const look = {
+    lintel: Math.floor(v() * 4),                       // 0 — замковый камень, 1 — фронтончик, 2 — карниз-козырёк, 3 — гладкая перемычка
+    rustic: v() < 0.35, quoins: v() < 0.3,             // руст первого этажа, лопатки по краям
+    winAwning: v() < 0.13 ? pick(v, SHOPS)[2] : null,  // полосатые маркизы над окнами
+    topBalcony: nUp >= 4 && v() < 0.4 ? nUp : -1,      // длинный балкон под крышей, как у османовских домов
+    awning: Math.floor(v() * 4),                       // лавка: 0 — круглая маркиза, 1 — прямая, 2 — лампы над вывеской, 3 — козырёк с лампочками
+    blade: v() < 0.45,                                 // вывеска-флажок на кронштейне
+  };
   // ячейки по этажам: [xa, xb, тип], строки — [y...]
   const floors = [];
   for (let f = 0; f <= nUp; f++) {
@@ -124,7 +135,7 @@ function layout(seg, E, shop) {
     }
     floors.push({ f, y0, y1, rows, cells, top: f === nUp });
   }
-  return { ys, nUp, centers, shutter, shutters, balconyFloor, style, floors, lit: (f, i) => mulberry(seg.seed * 31 + f * 7 + i)() };
+  return { ys, nUp, centers, shutter, shutters, balconyFloor, style, floors, look, lit: (f, i) => mulberry(seg.seed * 31 + f * 7 + i)() };
 }
 
 // ── Строители ─────────────────────────────────────────────────────────────
@@ -226,9 +237,16 @@ function buildShell(h, S, deform) {
     for (let c = 0; c < count; c++) {
       const i = Math.floor(r() * n), [x, , z] = ring(R.capD + 0.4, 0)[i], y = R.capY, hgt = 1.0 + r() * 0.8;
       const C = new Builder();
-      C.box(-0.32, -1.2, -0.24, 0.32, hgt, 0.24, CHIMNEY, K.WALL);
-      C.box(-0.38, hgt, -0.3, 0.38, hgt + 0.14, 0.3, shadeOf(CHIMNEY, 1.1), K.TRIM);
-      for (const px of [-0.17, 0, 0.17]) C.lathe(px, hgt + 0.14, 0, [[0.07, 0], [0.065, 0.22], [0.05, 0.3], [0.06, 0.34]], 6, [0.78, 0.45, 0.32], K.PAINT);
+      const v = mulberry(h.seed * 29 + c * 7 + 5), wide = STREET_DETAILS && v() < 0.45, hw = wide ? 0.85 + v() * 0.4 : 0.32;   // парижская «стенка» с рядом горшков
+      const np = Math.round(hw * 2 / 0.3), pots = wide ? Array.from({ length: np }, (_, k) => -hw + 0.2 + (hw * 2 - 0.4) * k / Math.max(np - 1, 1)) : [-0.17, 0, 0.17];
+      C.box(-hw, -1.2, -0.24, hw, hgt, 0.24, wide ? shadeOf(h.wall, 0.9) : CHIMNEY, K.WALL);
+      C.box(-hw - 0.06, hgt, -0.3, hw + 0.06, hgt + 0.14, 0.3, shadeOf(CHIMNEY, 1.1), K.TRIM);
+      if (STREET_DETAILS && v() < 0.3) {                         // телеантенна
+        const ax = hw - 0.1, top = hgt + 1.7 + v() * 0.5, dark = [0.2, 0.2, 0.32];
+        C.box(ax - 0.02, hgt, -0.02, ax + 0.02, top, 0.02, dark, K.PAINT);
+        for (let k = 0; k < 4; k++) C.box(ax - 0.42 + k * 0.05, top - 0.12 - k * 0.2, -0.015, ax + 0.42 - k * 0.05, top - 0.09 - k * 0.2, 0.015, dark, K.PAINT);
+      }
+      for (const px of pots) C.lathe(px, hgt + 0.14, 0, [[0.07, 0], [0.065, 0.22], [0.05, 0.3], [0.06, 0.34]], 6, [0.78, 0.45, 0.32], K.PAINT);
       const a = Math.atan2(h.ref.tz, h.ref.tx), ca = Math.cos(a), sa = Math.sin(a), lean = (r() - 0.5) * 0.1;
       S.append(C, ([px, py, pz]) => [x + px * ca - pz * sa + py * lean, y + py, z + px * sa + pz * ca]);
       (h.chimneys ||= []).push([x + hgt * lean, y + hgt + 0.45, z]);     // отсюда идёт дым (ambient.js)
@@ -266,6 +284,7 @@ function buildFar(h, F, deform, shops) {
             B.quad([xb + 0.02, ya, 0.02], [xb + sw, ya, 0.02], [xb + sw, yb, 0.02], [xb + 0.02, yb, 0.02], Lo.shutter, K.SHUTTER, [0, 0, 1, yb - ya]);
           }
           B.quad([xa - 0.09, ya - 0.1, 0.035], [xb + 0.09, ya - 0.1, 0.035], [xb + 0.09, ya, 0.035], [xa - 0.09, ya, 0.035], TRIM, K.TRIM);
+          if (Lo.look.winAwning && fl.f > 0 && !fl.top) B.quad([xa - 0.1, yb - 0.5, 0.6], [xb + 0.1, yb - 0.5, 0.6], [xb + 0.1, yb + 0.04, 0.05], [xa - 0.1, yb + 0.04, 0.05], Lo.look.winAwning, K.AWNING, [xa, 0.85, xb, 0]);
         } else if (type === 'door') {
           const yb = fl.rows[2];
           B.quad([xa, fl.y0, 0.03], [xb, fl.y0, 0.03], [xb, yb, 0.03], [xa, yb, 0.03], Lo.shutter.map((v) => v * 0.75), K.DOOR, [0, 0, 1, 1], 0.5);
@@ -274,7 +293,7 @@ function buildFar(h, F, deform, shops) {
           B.quad([xa, fl.y0, 0.02], [xb, fl.y0, 0.02], [xb, ya, 0.02], [xa, ya, 0.02], Lo.style[1], K.PAINT);
           B.quad([xa, ya, 0.03], [xb, ya, 0.03], [xb, yb, 0.03], [xa, yb, 0.03], [0.35, 0.22, 0.18], K.SHOP, [0, 0, 1, 1], 0.9);
           B.quad([xa, yb, 0.02], [xb, yb, 0.02], [xb, yc, 0.02], [xa, yc, 0.02], Lo.style[1], K.PAINT);
-          B.quad([xa, yb + 0.02, 0.05], [xb, yb + 0.02, 0.05], [xb, yb - 0.5, 1.3], [xa, yb - 0.5, 1.3], Lo.style[2], K.AWNING, [xa, 0, xb, 0.85]);
+          if (Lo.look.awning < 2) B.quad([xa, yb + 0.02, 0.05], [xb, yb + 0.02, 0.05], [xb, yb - 0.5, 1.3], [xa, yb - 0.5, 1.3], Lo.style[2], K.AWNING, [xa, 0, xb, 0.85]);
         }
       }
     }
@@ -301,6 +320,17 @@ function* buildNear(h, N, Rl, planters, deform, shops) {
         if (type === 'shop') { col = q === 3 ? wall : Lo.style[1]; kind = q === 3 ? K.WALL : K.PAINT; }
         if (xb - xa > 0.01) B.panel([xa, ya, 0], X, Y, xb - xa, yb - ya, col, kind, 1.6);
       }
+      if (STREET_DETAILS && f === 0 && !shop && Lo.look.rustic) {                                           // руст: рельефные полосы между проёмами
+        for (const [xa, xb, type] of cells) if (type === 'wall' && xb - xa > 0.12)
+          for (let y = y0 + 0.55; y < y1 - 0.45; y += 0.52) B.box(xa, y, -0.02, xb, y + 0.4, 0.045, shadeOf(wall, 0.96), K.WALL);
+      }
+      if (STREET_DETAILS && f > 0 && Lo.look.quoins) {                                                      // лопатки из «камней» по краям домика
+        for (let y = y0 + 0.04, k = f; y < y1 - 0.5; y += 0.5, k++) {
+          const w = k % 2 ? 0.36 : 0.24;
+          B.box(seg.x0, y, -0.02, seg.x0 + w, y + 0.42, 0.05, shadeOf(trim, 0.97), K.TRIM);
+          B.box(seg.x1 - w, y, -0.02, seg.x1, y + 0.42, 0.05, shadeOf(trim, 0.97), K.TRIM);
+        }
+      }
       let wi = 0;
       for (const [xa, xb, type] of cells) {
         if (type !== 'win' && type !== 'shop' && type !== 'door') continue;
@@ -317,22 +347,65 @@ function* buildNear(h, N, Rl, planters, deform, shops) {
         }
         if (type === 'shop') {
           B.quad([xa, ya, zb], [xb, ya, zb], [xb, yb, zb], [xa, yb, zb], [0.35, 0.22, 0.18], K.SHOP, [0, 0, 1, 1], 0.9);
-          // маркиза: изогнутое полотно в полоску с фестоном
-          const x0 = xa + 0.05, x1 = xb - 0.05, yA = rows[2] + 0.02, out = 1.35, drop = 0.6;
-          const at = (s) => [out * Math.sin(s * Math.PI / 2), yA - drop * (1 - Math.cos(s * Math.PI / 2))];
-          for (let k = 0; k < 5; k++) {
-            const [za, y0a] = at(k / 5), [zb2, y0b] = at((k + 1) / 5);
-            B.quad([x0, y0a, za + 0.02], [x1, y0a, za + 0.02], [x1, y0b, zb2 + 0.02], [x0, y0b, zb2 + 0.02], Lo.style[2], K.AWNING, [x0, k / 5 * 0.85, x1, (k + 1) / 5 * 0.85]);
+          const x0 = xa + 0.05, x1 = xb - 0.05, yA = rows[2] + 0.02, kindA = STREET_DETAILS ? Lo.look.awning : 0;
+          if (kindA === 0) {                                     // маркиза: изогнутое полотно в полоску с фестоном
+            const out = 1.35, drop = 0.6;
+            const at = (s) => [out * Math.sin(s * Math.PI / 2), yA - drop * (1 - Math.cos(s * Math.PI / 2))];
+            for (let k = 0; k < 5; k++) {
+              const [za, y0a] = at(k / 5), [zb2, y0b] = at((k + 1) / 5);
+              B.quad([x0, y0a, za + 0.02], [x1, y0a, za + 0.02], [x1, y0b, zb2 + 0.02], [x0, y0b, zb2 + 0.02], Lo.style[2], K.AWNING, [x0, k / 5 * 0.85, x1, (k + 1) / 5 * 0.85]);
+            }
+            const [ze, ye] = at(1);
+            B.quad([x0, ye - 0.24, ze + 0.02], [x1, ye - 0.24, ze + 0.02], [x1, ye, ze + 0.02], [x0, ye, ze + 0.02], Lo.style[2], K.AWNING, [x0, 0.86, x1, 1.0]);
+          } else if (kindA === 1) {                              // прямая маркиза на спицах, с ровной оборкой и боковинами
+            const out = 1.5, ye = yA - 0.7;
+            B.quad([x0, yA, 0.04], [x1, yA, 0.04], [x1, ye, out], [x0, ye, out], Lo.style[2], K.AWNING, [x0, 0, x1, 0.85]);
+            B.quad([x0, ye - 0.22, out], [x1, ye - 0.22, out], [x1, ye, out], [x0, ye, out], Lo.style[2], K.AWNING, [x0, 0.86, x1, 1.0]);
+            for (const x of [x0, x1]) B.tri([x, yA, 0.04], [x, ye, out], [x, ye, 0.04], shadeOf(Lo.style[2], 0.85), K.PAINT);
+          } else if (kindA === 2) {                              // без маркизы: лампы на «гусиных шеях» светят на вывеску
+            const n = Math.max(2, Math.round((x1 - x0) / 1.3));
+            for (let k = 0; k < n; k++) {
+              const x = x0 + (x1 - x0) * (k + 0.5) / n, y = rows[3] + 0.16;
+              B.box(x - 0.02, y, 0, x + 0.02, y + 0.03, 0.42, IRON_COL, K.PAINT);
+              B.box(x - 0.02, y - 0.12, 0.39, x + 0.02, y + 0.03, 0.43, IRON_COL, K.PAINT);
+              B.box(x - 0.1, y - 0.2, 0.33, x + 0.1, y - 0.12, 0.5, Lo.style[1], K.PAINT);
+              B.box(x - 0.05, y - 0.25, 0.37, x + 0.05, y - 0.2, 0.46, [1, 0.86, 0.55], K.LAMP);
+            }
+          } else {                                               // козырёк-«маркиз» с гирляндой лампочек по краю
+            const out = 1.05;
+            B.box(x0, yA - 0.16, 0, x1, yA, out, Lo.style[2], K.PAINT);
+            B.box(x0 - 0.03, yA, 0, x1 + 0.03, yA + 0.05, out + 0.03, shadeOf(Lo.style[1], 0.9), K.PAINT);
+            for (let x = x0 + 0.2; x < x1 - 0.1; x += 0.42) B.box(x - 0.035, yA - 0.22, out - 0.1, x + 0.035, yA - 0.16, out - 0.03, [1, 0.86, 0.55], K.LAMP);
           }
-          const [ze, ye] = at(1);
-          B.quad([x0, ye - 0.24, ze + 0.02], [x1, ye - 0.24, ze + 0.02], [x1, ye, ze + 0.02], [x0, ye, ze + 0.02], Lo.style[2], K.AWNING, [x0, 0.86, x1, 1.0]);
+          if (STREET_DETAILS && Lo.look.blade && seg.x1 - xb > 0.3) {     // вывеска-флажок на кованом кронштейне
+            const x = xb + 0.22, y = rows[3] + 0.25;
+            B.box(x - 0.02, y + 0.62, 0, x + 0.02, y + 0.66, 0.82, IRON_COL, K.PAINT);
+            B.tri([x, y + 0.24, 0.02], [x, y + 0.62, 0.02], [x, y + 0.62, 0.4], IRON_COL, K.PAINT);
+            B.box(x - 0.035, y, 0.24, x + 0.035, y + 0.56, 0.8, Lo.style[2], K.PAINT);
+            B.box(x - 0.04, y + 0.2, 0.36, x + 0.04, y + 0.36, 0.68, [0.95, 0.86, 0.6], K.PAINT);
+          }
           continue;
         }
         B.quad([xa, ya, zb], [xb, ya, zb], [xb, yb, zb], [xa, yb, zb], [0.93, 0.9, 0.84], K.GLASS, [0, 0, 1, 1], Lo.lit(f, wi++));
         const c = (xa + xb) / 2;
         B.box(xa - 0.09, ya - 0.11, -0.02, xb + 0.09, ya + 0.01, 0.14, trim, K.TRIM);                     // подоконник
         B.box(xa - 0.13, yb, -0.02, xb + 0.13, yb + 0.2, 0.06, trim, K.TRIM);                             // перемычка
-        if (!fl.top) B.box(c - 0.11, yb - 0.04, -0.02, c + 0.11, yb + 0.3, 0.1, trim, K.TRIM);              // замковый камень
+        const lintel = STREET_DETAILS ? Lo.look.lintel : 0;
+        if (!fl.top && lintel === 0) B.box(c - 0.11, yb - 0.04, -0.02, c + 0.11, yb + 0.3, 0.1, trim, K.TRIM);   // замковый камень
+        else if (!fl.top && lintel === 1) {                                                              // низкий фронтончик
+          B.tri([xa - 0.2, yb + 0.14, 0.07], [xb + 0.2, yb + 0.14, 0.07], [c, yb + 0.36, 0.07], trim, K.TRIM);
+          B.box(xa - 0.22, yb + 0.1, -0.02, xb + 0.22, yb + 0.17, 0.13, shadeOf(trim, 1.03), K.TRIM);
+        } else if (!fl.top && lintel === 2) {                                                            // карниз-козырёк на двух консолях
+          B.box(xa - 0.24, yb + 0.2, -0.02, xb + 0.24, yb + 0.29, 0.22, trim, K.TRIM);
+          for (const bx of [xa - 0.12, xb + 0.12]) B.box(bx - 0.05, yb - 0.02, -0.02, bx + 0.05, yb + 0.2, 0.15, shadeOf(trim, 0.92), K.TRIM);
+        }
+        const full = f === Lo.balconyFloor || f === Lo.look.topBalcony;
+        if (STREET_DETAILS && Lo.look.winAwning && f > 0 && !fl.top && !full) {                              // маркиза над окном
+          const yA = yb + 0.04, ye = yb - 0.5, out = 0.62, wa = xa - 0.1, wb = xb + 0.1;
+          B.quad([wa, ye, out], [wb, ye, out], [wb, yA, 0.05], [wa, yA, 0.05], Lo.look.winAwning, K.AWNING, [wa, 0.85, wb, 0]);
+          B.quad([wa, ye - 0.14, out], [wb, ye - 0.14, out], [wb, ye, out], [wa, ye, out], Lo.look.winAwning, K.AWNING, [wa, 1.0, wb, 0.86]);
+          for (const x of [wa, wb]) B.tri([x, yA, 0.05], [x, ye, out], [x, ye, 0.05], shadeOf(Lo.look.winAwning, 0.85), K.PAINT);
+        }
         if (Lo.shutters && f > 0 && !fl.top) {
           const sw = (xb - xa) / 2 + 0.04, open = 0.12 + r() * 0.1;
           B.quad([xa - sw, ya, open], [xa - 0.02, ya, 0.04], [xa - 0.02, yb, 0.04], [xa - sw, yb, open], shutter, K.SHUTTER, [0, 0, 1, yb - ya]);
@@ -340,20 +413,20 @@ function* buildNear(h, N, Rl, planters, deform, shops) {
         }
         if (f === 0) continue;
         const roll = r();
-        if (f !== Lo.balconyFloor && roll < 0.16) {                                                          // балкончик на консолях
+        if (!full && roll < 0.16) {                                                          // балкончик на консолях
           B.box(xa - 0.25, ya - 0.08, -0.02, xb + 0.25, ya + 0.06, 0.55, trim, K.TRIM);
           for (const bx of [xa - 0.1, xb + 0.1]) B.box(bx - 0.06, ya - 0.34, -0.02, bx + 0.06, ya - 0.08, 0.4, shadeOf(trim, 0.9), K.TRIM);
           rails.quad([xa - 0.25, ya + 0.06, 0.53], [xb + 0.25, ya + 0.06, 0.53], [xb + 0.25, ya + 0.95, 0.53], [xa - 0.25, ya + 0.95, 0.53], IRON_COL, K.IRON, [0, 0, (xb - xa + 0.5) / 0.9, 0.95]);
           for (const bx of [xa - 0.24, xb + 0.24]) rails.quad([bx, ya + 0.06, 0], [bx, ya + 0.06, 0.53], [bx, ya + 0.95, 0.53], [bx, ya + 0.95, 0], IRON_COL, K.IRON, [0, 0, 0.55, 0.95]);
           if (r() < 0.7) pl.push([xb + 0.05, ya + 0.35, 0.35, 0.8, 'pot']);
-        } else if (f !== Lo.balconyFloor && roll < 0.62) {                                                   // французский балкончик
+        } else if (!full && roll < 0.62) {                                                   // французский балкончик
           rails.quad([xa - 0.05, ya, 0.16], [xb + 0.05, ya, 0.16], [xb + 0.05, ya + 0.85, 0.16], [xa - 0.05, ya + 0.85, 0.16], IRON_COL, K.IRON, [0, 0, (xb - xa + 0.1) / 0.9, 0.95]);
-        } else if (f !== Lo.balconyFloor && roll < 0.8) {                                                    // ящик с цветами
+        } else if (!full && roll < 0.8) {                                                    // ящик с цветами
           B.box(xa - 0.02, ya + 0.01, 0.02, xb + 0.02, ya + 0.22, 0.3, [0.62, 0.36, 0.3], K.PAINT);
           pl.push([c, ya + 0.3, 0.18, xb - xa]);
         }
       }
-      if (f === Lo.balconyFloor) {                                                                            // сплошной балкон бельэтажа
+      if (f === Lo.balconyFloor || f === Lo.look.topBalcony) {                                                                            // сплошной балкон бельэтажа
         const xa = seg.x0 + 0.1, xb = seg.x1 - 0.1;
         B.box(xa, y0 - 0.06, -0.02, xb, y0 + 0.1, 0.72, trim, K.TRIM);
         for (let x = xa + 0.3; x < xb; x += 1.1) B.box(x - 0.08, y0 - 0.38, -0.02, x + 0.08, y0 - 0.06, 0.5, shadeOf(trim, 0.9), K.TRIM);

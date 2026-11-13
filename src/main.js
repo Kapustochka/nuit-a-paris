@@ -37,7 +37,7 @@ const camera = new THREE.PerspectiveCamera(58, innerWidth / innerHeight, 0.1, 40
 // С ?plain — обычный кадр без живописи, для сравнения и для очень слабых устройств.
 const plainView = new URLSearchParams(location.search).has('plain');
 const originalHero = new URLSearchParams(location.search).has('original-hero');
-let painter = plainView ? null : createPainter(renderer, { radius: phone ? 2 : 3, heroStyle: originalHero ? 0 : 1, shafts: phone ? 4 : 8, shaftSteps: phone ? 5 : 8, bloom: phone ? 1 : 2 });
+let painter = plainView ? null : createPainter(renderer, { radius: phone ? 2 : 3, heroStyle: originalHero ? 0 : 1, shafts: phone ? 4 : 8, shaftSteps: phone ? 5 : 8, bloom: phone ? 1 : 2, reflect: phone ? 6 : 10 });
 painter?.setSize();
 let slowFrames = 0, frames = 0;
 
@@ -195,6 +195,7 @@ renderer.setAnimationLoop(() => {
         if (painter.radius > 1) painter.setRadius(painter.radius - 1);
         else if (painter.shafts > 2) painter.setShafts(2, 4);      // лучи только у двух ближайших фонарей
         else if (painter.bloom > 1) painter.setBloom(1);           // свечение только узкое
+        else if (painter.reflect > 0) painter.setReflect(0);       // без отражений в мокрой мостовой
         else if (renderer.getPixelRatio() > 1) { renderer.setPixelRatio(1); painter.setSize(); }
         else painter.setScale(0.75);
       }
@@ -202,7 +203,7 @@ renderer.setAnimationLoop(() => {
       slowFrames = 0;
     }
   }
-  if (painter) painter.render(scene, camera); else renderer.render(scene, camera);
+  if (painter) { painter.uniforms.uWet.value = world.look.uWet.value; painter.render(scene, camera); } else renderer.render(scene, camera);
   rain.render(camera);                // штрихи дождя поверх картины
 });
 
@@ -261,6 +262,7 @@ async function addDebugPanel() {
     art.add(painter.uniforms.uPaper, 'value', 0, 3, 0.05).name('бумага');
     art.add(painter.uniforms.uVignette, 'value', 0, 2, 0.05).name('виньетка');
     art.add(painter.uniforms.uMist, 'value', 0, 2, 0.05).name('дымка');
+    art.add(painter.uniforms.uReflect, 'value', 0, 2, 0.05).name('отражения');
     art.add(painter.uniforms.uShaft, 'value', 0, 3, 0.05).name('лучи фонарей');
   }
   const arms = gui.addFolder('Руки к телу (°)');

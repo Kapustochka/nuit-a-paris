@@ -4,13 +4,14 @@
 //   3) контуры по скачкам нормалей и глубины: толщина плавает, линия дрожит и местами рвётся;
 //   4) воздух (paint/air.js): дымка по высоте, конусы света под фонарями, сияние Сакре-Кёр;
 //   5) свечение (bloom): яркое — фонари, окна, луна — размывается в маленьких текстурах и ложится поверх;
+//      до воздуха — отражения в мокрой мостовой: луч от камня идёт по уже нарисованному кадру (окна, фонари, витрины);
 //   6) бумага: едва заметные волокна и зерно листа, мягкая виньетка.
 // Листва и всё с alphaTest-картой пишут в нормали чёрный «маркер» — обводится только силуэт кроны, а не каждый лист.
 import * as THREE from 'three';
 import { NOISE } from './paint.js';
 import { AIR_GLSL, airUniforms, MAX_SHAFTS } from './air.js';
 
-export function createPainter(renderer, { radius = 3, scale = 1, heroStyle = 1, shafts = 8, shaftSteps = 8, bloom = 2 } = {}) {
+export function createPainter(renderer, { radius = 3, scale = 1, heroStyle = 1, shafts = 8, shaftSteps = 8, bloom = 2, reflect = 10, reflectDry = 0 } = {}) {
   const size = new THREE.Vector2(), cssSize = new THREE.Vector2();
   const colorRT = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: Math.min(4, renderer.capabilities.maxSamples) });
   const normalRT = new THREE.WebGLRenderTarget(1, 1, { depthTexture: new THREE.DepthTexture(1, 1) });
@@ -81,7 +82,7 @@ export function createPainter(renderer, { radius = 3, scale = 1, heroStyle = 1, 
   }
 
   const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({
-    defines: { RADIUS: radius, BLOOM: bloom, SHAFTS: Math.min(shafts, MAX_SHAFTS), SHAFT_STEPS: shaftSteps },
+    defines: { RADIUS: radius, BLOOM: bloom, SHAFTS: Math.min(shafts, MAX_SHAFTS), SHAFT_STEPS: shaftSteps, REFLECT: reflect, REFLECT_DRY: reflectDry.toFixed(2) },
     uniforms: {
       tColor: { value: colorRT.texture }, tNormal: { value: normalRT.texture }, tDepth: { value: normalRT.depthTexture },
       uRes: { value: new THREE.Vector2() }, uNear: { value: 0.1 }, uFar: { value: 600 },
@@ -89,6 +90,7 @@ export function createPainter(renderer, { radius = 3, scale = 1, heroStyle = 1, 
       ...airUniforms(),
       tBloom: { value: bloomRT[0].texture }, tBloomWide: { value: bloomRT[2].texture }, uBloom: { value: 1 },
       uPaper: { value: 1 }, uVignette: { value: 1 },
+      uViewProj: { value: new THREE.Matrix4() }, uWet: { value: 0 }, uReflect: { value: 1 },
       uPaint: { value: 1 }, uEdges: { value: 1 }, uLine: { value: 1.4 }, uInk: { value: new THREE.Color(0.08, 0.06, 0.2) },
     },
     vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
@@ -100,6 +102,52 @@ export function createPainter(renderer, { radius = 3, scale = 1, heroStyle = 1, 
       ${AIR_GLSL}
       vec3 srgb(vec3 c) { return pow(clamp(c, 0.0, 1.0), vec3(1.0 / 2.2)); }
       vec3 tap(vec2 uv) { return srgb(texture2D(tColor, uv).rgb); }
+      #if REFLECT > 0
+      // Мокрая мостовая: от камня пускаем отражённый луч и ищем, во что он упрётся на экране.
+      // Только в дождь (reflectDry > 0 оставит отражения в лужах и в сухую погоду); рябь ломает отражение на мазки.
+      uniform mat4 uViewProj; uniform float uWet, uReflect;
+      vec3 wetReflect(vec3 col, vec2 uv, float dRaw, vec3 nView, vec2 sp) {
+        vec4 v = uProjInv * vec4(uv * 2.0 - 1.0, dRaw * 2.0 - 1.0, 1.0); vec3 pv = v.xyz / v.w;
+        float dist = length(pv);
+        if (dist > 70.0 || (mat3(uCamWorld) * (nView * 2.0 - 1.0)).y < 0.9) return col;
+        vec3 P = (uCamWorld * vec4(pv, 1.0)).xyz;
+        float puddle = smoothstep(0.62 - 0.07 * uWet, 0.72 - 0.07 * uWet, fbm(P.xz * 0.18 + 2.0));   // сердцевина лужи из paint.js
+        float pud = puddle * mix(REFLECT_DRY, 1.0, uWet), amt = (pud + uWet * 0.3) * uReflect * (1.0 - smoothstep(45.0, 70.0, dist));
+        if (amt < 0.01) return col;
+        vec3 V = normalize(P - uCamWorld[3].xyz);
+        vec2 rip = vec2(vnoise(P.xz * 2.6 + uTime * 0.5), vnoise(P.xz * 2.6 + 17.0 - uTime * 0.4)) - 0.5;
+        rip += (vec2(vnoise(P.xz * 9.0), vnoise(P.xz * 9.0 + 5.0)) - 0.5) * 0.6;       // стыки камней
+        vec3 R = reflect(V, normalize(vec3(rip.x, 0.0, rip.y) * mix(0.07, 0.2, uWet) * (1.0 - 0.6 * puddle) + vec3(0.0, 1.0, 0.0)));
+        R.y = max(R.y, 0.02); R = normalize(R);
+        float t = 0.0, stepLen = 0.35 * (0.75 + 0.5 * hash(floor(sp))), prev = 0.0; vec2 hit = vec2(-1.0);
+        for (int i = 0; i < REFLECT; i++) {
+          prev = t; t += stepLen; stepLen *= 1.55;
+          vec4 c = uViewProj * vec4(P + R * t, 1.0);
+          if (c.w <= 0.0) break;
+          vec2 q = c.xy / c.w * 0.5 + 0.5;
+          if (q.x < 0.0 || q.x > 1.0 || q.y < 0.0 || q.y > 1.0) break;
+          float gap = c.w - lin(texture2D(tDepth, q).r);
+          if (gap > 0.05) {
+            if (gap < stepLen + 1.5) {                           // уточняем место попадания между двумя шагами
+              float a = prev, b = t;
+              for (int k = 0; k < 3; k++) {
+                float m = (a + b) * 0.5; vec4 cm = uViewProj * vec4(P + R * m, 1.0); vec2 qm = cm.xy / cm.w * 0.5 + 0.5;
+                if (cm.w - lin(texture2D(tDepth, qm).r) > 0.05) { b = m; hit = qm; } else a = m;
+              }
+              if (hit.x < 0.0) hit = q;
+            }
+            break;
+          }
+        }
+        if (hit.x < 0.0) return col;
+        vec3 rc = tap(hit);
+        vec2 e = min(hit, 1.0 - hit); amt *= smoothstep(0.0, 0.06, min(e.x, e.y));
+        float fres = mix(0.35, 1.0, pow(1.0 - max(-V.y, 0.0), 3.0));
+        float lit = smoothstep(0.7, 1.0, max(rc.r, max(rc.g, rc.b)));
+        col = mix(col, rc * 0.85, amt * fres * (pud * 0.5 + 0.05) / (pud + 0.3));   // зеркало — только в лужах, на камне — намёк
+        return col + rc * lit * amt * fres * 0.42;                // светящееся — окна и фонари — горит в воде ярче
+      }
+      #endif
       vec3 kuwahara(vec2 uv, vec2 px) {
         vec3 m[4]; vec3 s[4];
         for (int k = 0; k < 4; k++) { m[k] = vec3(0); s[k] = vec3(0); }
@@ -157,6 +205,9 @@ export function createPainter(renderer, { radius = 3, scale = 1, heroStyle = 1, 
         float dRaw = texture2D(tDepth, vUv).r;
         vec3 raw = tap(vUv);
         vec3 farLights = raw * smoothstep(0.42, 0.7, max(raw.r, max(raw.g, raw.b))) * step(260.0, lin(dRaw)) * (1.0 - real);
+        #if REFLECT > 0
+          if (real < 0.5 && dRaw < 1.0) col = wetReflect(col, vUv, dRaw, center.rgb, sp);
+        #endif
         col = air(col, vUv, dRaw, sp);
         col = max(col, farLights * 0.85);
 
@@ -204,6 +255,7 @@ export function createPainter(renderer, { radius = 3, scale = 1, heroStyle = 1, 
     U.uNear.value = camera.near; U.uFar.value = camera.far;
     U.uProjInv.value.copy(camera.projectionMatrixInverse); U.uCamWorld.value.copy(camera.matrixWorld);
     U.uTime.value = performance.now() / 1000 % 3600;
+    U.uViewProj.value.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
     if (airSrc) U.uGroundY.value = airSrc.groundY;
     // нормали и глубина: без неба, спрайтов, огоньков и прозрачного; листва — «маркером»
     const mask = camera.layers.mask;
@@ -238,5 +290,6 @@ export function createPainter(renderer, { radius = 3, scale = 1, heroStyle = 1, 
   let airSrc = null;
   function setAir(air) { airSrc = air; U.uShaftPos.value = air.shaftPos; U.uBeacon.value = air.beacon; if (air.tower) U.uTower.value = air.tower; }
   function setShafts(n, steps = n) { quad.material.defines.SHAFTS = Math.min(n, MAX_SHAFTS); quad.material.defines.SHAFT_STEPS = steps; quad.material.needsUpdate = true; }
-  return { render, setSize, uniforms: U, setRadius, setScale, setAir, setShafts, setBloom, get bloom() { return bloomLevels; }, get shafts() { return quad.material.defines.SHAFTS; }, get radius() { return quad.material.defines.RADIUS; } };
+  function setReflect(n) { quad.material.defines.REFLECT = n; quad.material.needsUpdate = true; }
+  return { render, setSize, uniforms: U, setRadius, setScale, setAir, setShafts, setBloom, setReflect, get reflect() { return quad.material.defines.REFLECT; }, get bloom() { return bloomLevels; }, get shafts() { return quad.material.defines.SHAFTS; }, get radius() { return quad.material.defines.RADIUS; } };
 }
