@@ -11,7 +11,7 @@ import * as THREE from 'three';
 import { NOISE } from './paint.js';
 import { AIR_GLSL, airUniforms, MAX_SHAFTS } from './air.js';
 
-export function createPainter(renderer, { radius = 3, scale = 1, heroStyle = 1, shafts = 8, shaftSteps = 8, bloom = 2, reflect = 10, reflectDry = 0.55 } = {}) {
+export function createPainter(renderer, { radius = 3, scale = 1, heroStyle = 1, shafts = 8, shaftSteps = 8, bloom = 2, reflect = 10, reflectDry = 0 } = {}) {
   const size = new THREE.Vector2(), cssSize = new THREE.Vector2();
   const colorRT = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: Math.min(4, renderer.capabilities.maxSamples) });
   const normalRT = new THREE.WebGLRenderTarget(1, 1, { depthTexture: new THREE.DepthTexture(1, 1) });
@@ -104,7 +104,7 @@ export function createPainter(renderer, { radius = 3, scale = 1, heroStyle = 1, 
       vec3 tap(vec2 uv) { return srgb(texture2D(tColor, uv).rgb); }
       #if REFLECT > 0
       // Мокрая мостовая: от камня пускаем отражённый луч и ищем, во что он упрётся на экране.
-      // В сухую погоду отражают только лужи, в дождь — вся брусчатка; рябь ломает отражение на мазки.
+      // Только в дождь (reflectDry > 0 оставит отражения в лужах и в сухую погоду); рябь ломает отражение на мазки.
       uniform mat4 uViewProj; uniform float uWet, uReflect;
       vec3 wetReflect(vec3 col, vec2 uv, float dRaw, vec3 nView, vec2 sp) {
         vec4 v = uProjInv * vec4(uv * 2.0 - 1.0, dRaw * 2.0 - 1.0, 1.0); vec3 pv = v.xyz / v.w;

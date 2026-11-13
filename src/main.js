@@ -37,7 +37,7 @@ const camera = new THREE.PerspectiveCamera(58, innerWidth / innerHeight, 0.1, 40
 // С ?plain — обычный кадр без живописи, для сравнения и для очень слабых устройств.
 const plainView = new URLSearchParams(location.search).has('plain');
 const originalHero = new URLSearchParams(location.search).has('original-hero');
-let painter = plainView ? null : createPainter(renderer, { radius: phone ? 2 : 3, heroStyle: originalHero ? 0 : 1, shafts: phone ? 4 : 8, shaftSteps: phone ? 5 : 8, bloom: phone ? 1 : 2, reflect: phone ? 6 : 10, reflectDry: phone ? 0 : 0.55 });
+let painter = plainView ? null : createPainter(renderer, { radius: phone ? 2 : 3, heroStyle: originalHero ? 0 : 1, shafts: phone ? 4 : 8, shaftSteps: phone ? 5 : 8, bloom: phone ? 1 : 2, reflect: phone ? 6 : 10 });
 painter?.setSize();
 let slowFrames = 0, frames = 0;
 
