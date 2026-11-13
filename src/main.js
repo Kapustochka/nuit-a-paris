@@ -97,7 +97,7 @@ window.__game = { ambient, heroine, passersby, get people() { return people; }, 
 const MAX_WALK = 1.45, MAX_RUN = 3.8, MAX_BACK = 0.95; // м/с
 let speed = 0, facing = Math.PI, streetTick = 0, lastStreet = '';
 const moveDir = new THREE.Vector3(), camTarget = new THREE.Vector3(), want = new THREE.Vector3();
-const clock = new THREE.Clock();
+const clock = new THREE.Clock(), shadowCasters = [];
 camera.position.set(sx, world.heightAt(sx, sz) + 3, sz + 5);
 
 renderer.setAnimationLoop(() => {
@@ -163,6 +163,10 @@ renderer.setAnimationLoop(() => {
   for (const actor of passersby) actor.update(dt);
   people?.update(dt);
   ambient?.update(dt, camera, world.air.groundY);
+  shadowCasters.length = 0; shadowCasters.push(p);
+  for (const actor of passersby) shadowCasters.push(actor.position);
+  if (people) for (const one of people.people) if (one.active) shadowCasters.push(one.root.position);
+  world.castShadows(shadowCasters, camera);
   stars.update(dt, p.x, p.z, facing);
   cityAudio.update(dt, p.x, p.z, yaw, heroine.busy !== 'jump');
 

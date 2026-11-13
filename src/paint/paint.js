@@ -8,6 +8,7 @@
 import * as THREE from 'three';
 
 export const MAX_LIGHTS = 6;
+export const MAX_CASTERS = 6;      // героиня и ближайшие прохожие отбрасывают тени на мостовую
 
 export const NOISE = /* glsl */ `
   float hash(vec2 p) { vec3 q = fract(vec3(p.xyx) * 0.1031); q += dot(q, q.yzx + 33.33); return fract((q.x + q.y) * q.z); }
@@ -30,6 +31,8 @@ export function createLook(night, moonDirection) {
     uFogCol: { value: new THREE.Color().setRGB(0.21, 0.19, 0.4, THREE.LinearSRGBColorSpace) },
     uFogDensity: { value: 0.0075 },
     uWindowsOn: { value: 0.6 },
+    uCaster: { value: Array.from({ length: MAX_CASTERS }, () => new THREE.Vector4(0, -100, 0, 0)) },      // ступни: xyz, w — сила тени
+    uCasterDir: { value: Array.from({ length: MAX_CASTERS }, () => new THREE.Vector4(1, 0, 1, 0)) },      // от фонаря: xz, длина, сила
     uLookTime: { value: 0 },                               // секунды: окна зажигаются и гаснут, за стёклами ходят люди
     uLightPos: { value: Array.from({ length: MAX_LIGHTS }, () => new THREE.Vector4(0, -100, 0, 0.01)) },
     uLightCol: { value: Array.from({ length: MAX_LIGHTS }, () => new THREE.Color(0, 0, 0)) },
@@ -40,6 +43,7 @@ const LOOK_GLSL = /* glsl */ `
   uniform vec3 uKeyDir, uKeyCol, uShadeCol, uSkyCol, uFogCol, uLampColor;
   uniform float uFogDensity, uWindowsOn, uLookTime;
   uniform sampler2D uNightMap; uniform vec4 uNightBounds;
+  uniform vec4 uCaster[${MAX_CASTERS}], uCasterDir[${MAX_CASTERS}];
   #ifdef NIGHT_TERRAIN
     uniform sampler2D uHeightMap; uniform vec4 uHeightBounds; uniform vec2 uHeightTexel;
     float groundAt(vec2 xz) {
@@ -65,6 +69,20 @@ const LOOK_GLSL = /* glsl */ `
     float gb = g * 4.0 + 0.3 + (strokes - 0.5) * 0.18;          // ступени света, но с мягким краем
     g = (floor(gb) + smoothstep(0.3, 0.7, fract(gb))) / 4.0;
     col += base * uLampColor * g * 1.15 + uLampColor * g * 0.03;
+    // тени людей: пятно под ногами и длинная тень прочь от ближайшего фонаря
+    if (n.y > 0.5) {
+      float sh = 0.0;
+      for (int i = 0; i < ${MAX_CASTERS}; i++) {
+        vec4 c = uCaster[i];
+        if (c.w < 0.01 || abs(wp.y - c.y) > 0.7) continue;
+        vec2 d = wp.xz - c.xz; vec4 L = uCasterDir[i];
+        float along = dot(d, L.xy), across = dot(d, vec2(-L.y, L.x)), t = along / L.z;
+        float wide = 0.2 + 0.3 * clamp(t, 0.0, 1.0);
+        float lean = smoothstep(wide, wide * 0.35, abs(across) + (strokes - 0.5) * 0.08) * smoothstep(-0.12, 0.1, along) * smoothstep(1.0, 0.65, t);
+        sh = max(sh, max(exp(-dot(d, d) / 0.11) * 0.75, lean * min(L.w * 1.5, 1.0) * 0.85) * c.w);
+      }
+      col = mix(col, col * vec3(0.26, 0.24, 0.5), sh);
+    }
     return col;
   }
   vec3 paintFog(vec3 col, vec3 wp, float k) {

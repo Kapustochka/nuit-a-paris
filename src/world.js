@@ -9,7 +9,7 @@ import { createNightLight } from './night-light.js';
 import { createTerrain, groundGeometry, liftToGround } from './terrain.js';
 import { buildStairs } from './stairs.js';
 import { buildViewpoint, buildCityBelow } from './viewpoint.js';
-import { createLook, groundMaterial, paintMaterial, paintObject, MAX_LIGHTS } from './paint/paint.js';
+import { createLook, groundMaterial, paintMaterial, paintObject, MAX_LIGHTS, MAX_CASTERS } from './paint/paint.js';
 import { MAX_SHAFTS } from './paint/air.js';
 import { planFacades, buildFacades } from './paint/facades.js';
 import { Builder, K } from './paint/builder.js';
@@ -242,6 +242,26 @@ export function buildParis(scene, renderer, data, city, props = {}) {
       }
     }
   }
+  // Тени людей на мостовой: ближайшие к камере фигуры, каждая — прочь от своего ближайшего фонаря
+  const casterOrder = [];
+  function castShadows(positions, camera) {
+    casterOrder.length = 0;
+    for (const p of positions) casterOrder.push({ p, d: p.distanceToSquared(camera.position) });
+    casterOrder.sort((a, c) => a.d - c.d);
+    for (let i = 0; i < MAX_CASTERS; i++) {
+      const c = casterOrder[i], out = look.uCaster.value[i], dir = look.uCasterDir.value[i];
+      if (!c || c.d > 45 * 45) { out.w = 0; continue; }
+      out.set(c.p.x, c.p.y, c.p.z, 1 - Math.min(1, Math.max(0, (Math.sqrt(c.d) - 32) / 13)));
+      let lamp = null, best = 14 * 14;
+      for (let k = 0; k < Math.min(lampOrder.length, 10); k++) {
+        const l = lampOrder[k].p, d = (l.x - c.p.x) ** 2 + (l.z - c.p.z) ** 2;
+        if (d < best) { best = d; lamp = l; }
+      }
+      if (!lamp) { dir.set(sky.moonDirection.x, sky.moonDirection.z, 1, 0).multiplyScalar(1); dir.w = 0; continue; }
+      const far = Math.sqrt(best) || 0.01, up = Math.max(lamp.y - c.p.y - 1.0, 0.8);
+      dir.set((c.p.x - lamp.x) / far, (c.p.z - lamp.z) / far, Math.min(6, Math.max(0.5, 1.7 * far / up)), Math.min(1, far / 1.2) * (1 - far / 14));
+    }
+  }
   const paint = (object) => paintObject(object, look);
 
   // Свет только для героини (живописные материалы его не замечают): небо, луна, мягкая подсветка и ближайший фонарь
@@ -260,7 +280,7 @@ export function buildParis(scene, renderer, data, city, props = {}) {
   }
 
   return {
-    blocked, inside, streetAt, freeSpot, update, sky, night, look, air, houses: plan.houses, paint, facades, lightHeroine, heightAt: (x, z) => standAt(x, z),
+    blocked, inside, streetAt, freeSpot, update, castShadows, sky, night, look, air, houses: plan.houses, paint, facades, lightHeroine, heightAt: (x, z) => standAt(x, z),
     soundSpots: shopFronts.filter((s) => ['cafe', 'restaurant', 'bar', 'pub'].includes(s.kind)),
     stats: { stairs: stairs.count, buildings: polys.length, lamps: lamps.length, detailedLamps, benches: benches.length, pigeons, ...streetLife },
   };
@@ -324,9 +344,11 @@ function buildLamps(scene, lamps, props, random) {
       cap.setMatrixAt(standardIndex, M.makeTranslation(x, 3.78, z));
       standardIndex++;
     } else {
-      const [bottom, top] = variants[variant].glassHeight;
-      height = (bottom + top) / 2;
-      placements[variant].push({ x, z, yaw: Math.atan2(tx, tz) });
+      // фонарь на кронштейне висит сбоку от столба: свет ставим в середину стекла, а не на ось модели
+      const [cx, cy, cz] = variants[variant].glassCenter, yaw = Math.atan2(tx, tz);
+      height = cy;
+      placements[variant].push({ x, z, yaw });
+      x += cx * Math.cos(yaw) + cz * Math.sin(yaw); z += -cx * Math.sin(yaw) + cz * Math.cos(yaw);
     }
     pts.set([x, height, z], i * 3);
     return new THREE.Vector3(x, height, z);
@@ -361,6 +383,7 @@ function buildLamps(scene, lamps, props, random) {
       }`,
   }));
   bokeh.renderOrder = 3;
+  bokeh.userData.noLift = true;                         // точки общие с glow: на склон их поднимают один раз, а не дважды
   bokeh.onBeforeRender = (r) => { bokeh.material.uniforms.uScale.value = (r.getRenderTarget()?.height ?? r.domElement.height) / 720; };
   for (const m of [pole, foot, cap, lantern, glow, bokeh]) { m.frustumCulled = false; scene.add(m); }
   return { lights, detailed: chosen.size };
