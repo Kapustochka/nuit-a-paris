@@ -15,6 +15,7 @@ import { createCityAudio } from './city-audio.js';
 import { loadPasserby, placePasserby, placeCircularPasserby, passerbyBlocksStep } from './passerby.js';
 import { createPainter } from './paint/post.js';
 import { createPeople } from './people.js';
+import { createTalk } from './talk.js';
 import { createRain } from './rain.js';
 import { createAmbient } from './ambient.js';
 
@@ -81,11 +82,12 @@ const cityAudio = createCityAudio(world.soundSpots);
 const rain = createRain(renderer, world, { phone, cityAudio });
 const audio = createFrenchAudio({ onActivity: (active) => cityAudio.setDucked(active) });
 const lesson = createLesson((key) => inspector.show(key));
+const talk = createTalk({ audio, lesson, player });   // разговоры с прохожими (talk.js)
 const inspector = installWordInspector(renderer.domElement, scene, camera, world.sky.moonDirection, audio, lesson.inspect, lesson.review);
 const stars = createFallingStars(scene, camera, world, inspector, lesson.review);
 installStarToggle(stars);
 // Живые улицы: нарисованные прохожие из кода (people.js). ?no-people — без них, для сравнения.
-if (!new URLSearchParams(location.search).has('no-people')) people = createPeople(scene, world, mapData, { count: phone ? 10 : 18, inspector, camera, player });
+if (!new URLSearchParams(location.search).has('no-people')) people = createPeople(scene, world, mapData, { count: phone ? 10 : 18, inspector, camera, player, onTalk: (p, raining) => talk.start(p, raining) });
 // Мелкая жизнь в воздухе: листья, лепестки, светлячки, пар над кофе, дым из труб. ?no-ambient — без неё.
 const ambient = new URLSearchParams(location.search).has('no-ambient') ? null : createAmbient(scene, world, { phone });
 loading.remove();
@@ -93,7 +95,7 @@ performance.mark('paris-ready');
 
 const debug = new URLSearchParams(location.search).has('debug');
 if (debug) addDebugPanel();
-window.__game = { ambient, rain, heroine, passersby, get people() { return people; }, world, stars, inspector, mapData, camera, controls, renderer, cityAudio, get painted() { return painter !== null; }, get painter() { return painter; } };
+window.__game = { ambient, rain, talk, heroine, passersby, get people() { return people; }, world, stars, inspector, mapData, camera, controls, renderer, cityAudio, get painted() { return painter !== null; }, get painter() { return painter; } };
 
 // ── Движение ─────────────────────────────────────────────────
 const MAX_WALK = 1.45, MAX_RUN = 3.8, MAX_BACK = 0.95; // м/с
@@ -165,6 +167,7 @@ renderer.setAnimationLoop(() => {
   for (const actor of passersby) actor.update(dt);
   rain.update(dt);
   people?.update(dt, rain.level);
+  talk.update();
   ambient?.update(dt, camera, world.air.groundY);
   shadowCasters.length = 0; shadowCasters.push(p);
   for (const actor of passersby) shadowCasters.push(actor.position);

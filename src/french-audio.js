@@ -73,8 +73,8 @@ export function createFrenchAudio({ onActivity = () => {} } = {}) {
       return;
     }
     player.onended = done;
-    // Слова с улицы лежат в WAV, находки из звёзд — в сжатом MP3.
-    player.src = `assets/voice/${clip}.${clip.startsWith('star/') ? 'mp3' : 'wav'}`;
+    // Слова с улицы лежат в WAV, находки из звёзд и разговоры — в сжатом MP3.
+    player.src = `assets/voice/${clip}.${/^(star|talk|people)\//.test(clip) ? 'mp3' : 'wav'}`;
     let fallingBack = false;
     const fallback = () => {
       if (attempt !== revision) return;

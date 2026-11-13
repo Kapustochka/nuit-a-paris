@@ -2,6 +2,7 @@
 import { words } from './french-words.js';
 import { starWords, starPhrases, starStories } from './star-words.js';
 import { starSongs } from './star-songs.js';
+import { talks } from './talk-lines.js';
 
 const word = (entry, clip, badge) => {
   const [term, ipa, reading, translation, example, meaning] = entry;
@@ -24,6 +25,13 @@ export function entryFor(key) {
     return { kind: 'story', badge: kind === 'fact' ? '✦ Интересный факт' : '✦ Маленькая история',
       term: title[0], translation: title[1], lines,
       say: { term: [`star/s-${id}`, lines.map(([french]) => french).join(' '), '▶ Слушать'] } };
+  }
+  if (group === 'talk') {                       // фраза героини из разговора с прохожим (talk.js)
+    const [, talkId, step] = key.split(':');
+    const line = talks[talkId]?.steps[Number(step)]?.choices[0];
+    if (!line) return null;
+    return { kind: 'phrase', badge: '💬 Из разговора', term: line[0], translation: line[1],
+      say: { term: [`talk/${talkId}-p${step}-0`, line[0], '▶ Слушать'] } };
   }
   if (group === 'song' && starSongs[id]) {
     const { title, lines } = starSongs[id];

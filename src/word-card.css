@@ -283,3 +283,37 @@
 }
 #speech.show { animation: speech-pop .35s ease-out; }
 @keyframes speech-pop { from { opacity: 0; transform: translate(-50%, calc(-100% + 2px)) rotate(-1deg) scale(.85); } }
+
+/* Разговор с прохожим (talk.js) */
+#talk {
+  box-sizing: border-box; position: fixed; z-index: 9;
+  left: 50%; bottom: max(64px, calc(env(safe-area-inset-bottom) + 56px)); transform: translateX(-50%) rotate(.4deg);
+  width: min(460px, calc(100vw - 24px)); max-height: 62dvh; overflow-y: auto;
+  padding: 16px 20px 12px; color: var(--ink);
+  border-radius: 4px 10px 5px 12px / 10px 4px 12px 5px;
+  background: var(--paper); box-shadow: var(--paper-edge);
+  filter: drop-shadow(0 12px 22px #09071b80);
+}
+#talk .talk-close { position: absolute; top: 8px; right: 8px; width: 30px; height: 30px; border: 1px solid #7a526350;
+  border-radius: 50%; background: #fff7ea80; color: inherit; font: 22px/1 var(--serif); cursor: pointer; }
+#talk .talk-badge { margin: 0 30px 8px 0; font: 600 12px/1.2 system-ui, sans-serif; letter-spacing: .04em; color: var(--ink-soft); }
+#talk .talk-npc { display: grid; grid-template-columns: auto 1fr; gap: 0 10px; align-items: start; margin-bottom: 10px; }
+#talk .talk-npc p { margin: 0; font: italic 600 22px/1.2 var(--serif); }
+#talk .talk-npc small { grid-column: 2; font: 13px/1.3 system-ui, sans-serif; color: var(--ink-soft); }
+#talk .talk-say { grid-row: span 2; width: 30px; height: 30px; border: 1px solid #7a526350; border-radius: 50%;
+  background: #fff7ea80; color: var(--ink-rose); cursor: pointer; font-size: 12px; }
+#talk ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+#talk ol button { display: grid; width: 100%; gap: 1px; text-align: left; padding: 8px 12px; cursor: pointer;
+  border: 1px dashed #8a5f6a66; border-radius: 6px 10px 7px 9px; background: #fff8ec8c; color: inherit; }
+#talk ol button:hover:not(:disabled) { background: #f6dfe2b0; }
+#talk ol button span { font: 600 18px/1.2 var(--serif); }
+#talk ol button small { font: 12px/1.3 system-ui, sans-serif; color: var(--ink-soft); }
+#talk ol button.right { border: 1.5px solid #5f8a5a; background: #dcebd2c0; }
+#talk ol button.wrong { border: 1.5px solid #a7646a; background: #f3d6d2a0; opacity: .7; text-decoration: line-through #a7646a88; }
+#talk ol button:disabled { cursor: default; }
+#talk .talk-done { font: italic 600 17px var(--serif); text-align: center; }
+#talk.no-ru small { display: none; }
+#talk .talk-ru { display: inline-flex; gap: 5px; align-items: center; margin-top: 8px; font: 12px system-ui, sans-serif; color: var(--ink-soft); cursor: pointer; }
+@media (min-width: 900px) {
+  #talk { left: auto; right: max(20px, env(safe-area-inset-right)); bottom: max(24px, env(safe-area-inset-bottom)); transform: rotate(.4deg); width: 420px; }
+}
