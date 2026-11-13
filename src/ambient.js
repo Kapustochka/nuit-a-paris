@@ -137,7 +137,7 @@ function createPuffs(count) {
         float soft = smoothstep(1.0, 0.0, d);
         float a = soft * soft * smoothstep(0.0, 0.12, t) * (1.0 - t) * (1.0 - t) * vData.z;
         if (a < 0.004) discard;
-        gl_FragColor = vec4(mix(vec3(0.7, 0.66, 0.84), vec3(0.42, 0.38, 0.6), t), a);     // сиреневый дым в ночном воздухе
+        gl_FragColor = vec4(mix(vec3(0.86, 0.82, 0.96), vec3(0.5, 0.46, 0.7), t), a);     // сиреневый дым в ночном воздухе
       }`,
   }));
   points.frustumCulled = false; points.renderOrder = 4; points.userData.noPaint = true;
@@ -162,7 +162,7 @@ function createPuffs(count) {
       pos[i * 3] += (vel[i * 3] + WIND.x * lean) * dt;
       pos[i * 3 + 1] += vel[i * 3 + 1] * (1 - 0.5 * t) * dt;
       pos[i * 3 + 2] += (vel[i * 3 + 2] + WIND.z * lean) * dt;
-      data[i * 3] = t; data[i * 3 + 1] = smoke ? 0.5 + 2.4 * t : 0.07 + 0.3 * t; data[i * 3 + 2] = smoke ? 0.55 : 0.45;
+      data[i * 3] = t; data[i * 3 + 1] = smoke ? 0.5 + 2.4 * t : 0.07 + 0.3 * t; data[i * 3 + 2] = smoke ? 0.85 : 0.5;
     }
     geo.attributes.position.needsUpdate = true; geo.attributes.aData.needsUpdate = true;
   }

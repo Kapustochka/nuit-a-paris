@@ -12,6 +12,7 @@ export function airUniforms() {
     uProjInv: { value: new THREE.Matrix4() }, uCamWorld: { value: new THREE.Matrix4() }, uTime: { value: 0 },
     uShaftPos: { value: Array.from({ length: MAX_SHAFTS }, () => new THREE.Vector4(0, -100, 0, 0)) },   // xyz фонаря, w — сила
     uBeacon: { value: new THREE.Vector4(0, -1000, 0, 0) },                                              // Сакре-Кёр
+    uTower: { value: new THREE.Vector4(0, -1000, 0, 0) },                                               // верх Эйфелевой башни, w — сила луча
     uGroundY: { value: 0 },
     uMist: { value: 1 }, uShaft: { value: 1 },
     uMistCol: { value: new THREE.Color(0.3, 0.27, 0.52) }, uMistWarm: { value: new THREE.Color(0.56, 0.38, 0.5) },
@@ -22,7 +23,7 @@ export function airUniforms() {
 // Требует lin(), vnoise(), fbm(), hash() из post.js
 export const AIR_GLSL = /* glsl */ `
   uniform mat4 uProjInv, uCamWorld; uniform float uTime, uGroundY, uMist, uShaft;
-  uniform vec4 uShaftPos[${MAX_SHAFTS}]; uniform vec4 uBeacon; uniform vec3 uMistCol, uMistWarm, uShaftCol;
+  uniform vec4 uShaftPos[${MAX_SHAFTS}]; uniform vec4 uBeacon, uTower; uniform vec3 uMistCol, uMistWarm, uShaftCol;
   // свет точки, собранный вдоль луча в однородном тумане (точная формула, без шагов)
   float airlight(vec3 ro, vec3 rd, float dist, vec3 p, float soft) {
     vec3 oc = p - ro; float tc = dot(oc, rd), h = sqrt(max(dot(oc, oc) - tc * tc, 0.0) + soft * soft);
@@ -68,6 +69,21 @@ export const AIR_GLSL = /* glsl */ `
       }
     }
     #endif
+
+    // ── прожектор Эйфелевой башни: два луча медленно обходят город ──
+    if (uTower.w > 0.0) {
+      float ang = uTime * 0.12; vec3 w0 = ro - uTower.xyz; const float LEN = 1500.0;
+      for (int k = 0; k < 2; k++) {
+        vec3 bd = normalize(vec3(cos(ang), 0.035, sin(ang))) * (k == 0 ? 1.0 : -1.0);
+        // ближайшие точки двух прямых: луча взгляда и луча прожектора
+        float b = dot(rd, bd), d = dot(rd, w0), e = dot(bd, w0), den = max(1.0 - b * b, 1e-4);
+        float s = clamp((e - b * d) / den, 0.0, LEN);          // вдоль прожектора
+        float t = clamp(b * s - d, 0.0, dist);                 // вдоль взгляда
+        float gap = length(w0 + rd * t - bd * s), wide = 5.0 + s * 0.03;
+        float beam = exp(-gap * gap / (wide * wide)) * (1.0 - s / LEN) * smoothstep(0.0, 40.0, s);
+        col += vec3(1.0, 0.93, 0.78) * beam * 0.3 * uTower.w * (1.0 - 0.6 * col);
+      }
+    }
 
     // ── фонари: ореол и конус света с лучами ──
     #if SHAFTS > 0

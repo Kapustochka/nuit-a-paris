@@ -55,7 +55,7 @@ export async function loadStreetProps() {
         material.roughness = 0.84;
         material.roughnessMap = null;
       }
-      return [name, { name, geometry, material, glassHeight, word: spec.word, bounds: geometry.boundingBox }];
+      return [name, { name, geometry, material, glassHeight, glassCenter: glassHeight && glassCentre(geometry, glassHeight), word: spec.word, bounds: geometry.boundingBox }];
     } catch (error) {
       console.warn(`Реквизит ${name}: ${error.message}`);
       return [name, null];
@@ -74,6 +74,17 @@ function toFloat(geometry) {
     geometry.setAttribute(name, new THREE.BufferAttribute(array, itemSize));
   }
   return geometry;
+}
+
+// Середина фонаря: среднее по вершинам в полосе стекла (у столба их мало, фонарь перевешивает)
+function glassCentre(geometry, [bottom, top]) {
+  const p = geometry.attributes.position; let sx = 0, sz = 0, n = 0;
+  for (let i = 0; i < p.count; i++) {
+    const y = p.getY(i);
+    if (y < bottom || y > top) continue;
+    sx += p.getX(i); sz += p.getZ(i); n++;
+  }
+  return [n ? sx / n : 0, (bottom + top) / 2, n ? sz / n : 0];
 }
 
 function lightGlass(material, [bottom, top]) {

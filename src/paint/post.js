@@ -152,7 +152,13 @@ export function createPainter(renderer, { radius = 3, scale = 1, heroStyle = 1, 
         vec3 ink = mix(col * vec3(0.35, 0.3, 0.55), uInk, 0.5);
         ink = mix(ink, col * vec3(0.45, 0.43, 0.55), hero);
         col = mix(col, ink, e);
-        col = air(col, vUv, texture2D(tDepth, vUv).r, sp);
+        // далёкие огни — окна Парижа под холмом, Эйфелева башня, звёзды — мельче мазка: фильтр их стирает,
+        // а дымка гасит. Берём их из исходного кадра и возвращаем поверх дымки.
+        float dRaw = texture2D(tDepth, vUv).r;
+        vec3 raw = tap(vUv);
+        vec3 farLights = raw * smoothstep(0.42, 0.7, max(raw.r, max(raw.g, raw.b))) * step(260.0, lin(dRaw)) * (1.0 - real);
+        col = air(col, vUv, dRaw, sp);
+        col = max(col, farLights * 0.85);
 
         #if BLOOM > 0
           vec3 glowB = texture2D(tBloom, vUv).rgb * 0.5;
@@ -230,7 +236,7 @@ export function createPainter(renderer, { radius = 3, scale = 1, heroStyle = 1, 
   function setBloom(levels) { bloomLevels = levels; quad.material.defines.BLOOM = levels; quad.material.needsUpdate = true; }
   // воздух: world.air даёт фонари для лучей, маяк-базилику и высоту земли под героиней
   let airSrc = null;
-  function setAir(air) { airSrc = air; U.uShaftPos.value = air.shaftPos; U.uBeacon.value = air.beacon; }
+  function setAir(air) { airSrc = air; U.uShaftPos.value = air.shaftPos; U.uBeacon.value = air.beacon; if (air.tower) U.uTower.value = air.tower; }
   function setShafts(n, steps = n) { quad.material.defines.SHAFTS = Math.min(n, MAX_SHAFTS); quad.material.defines.SHAFT_STEPS = steps; quad.material.needsUpdate = true; }
   return { render, setSize, uniforms: U, setRadius, setScale, setAir, setShafts, setBloom, get bloom() { return bloomLevels; }, get shafts() { return quad.material.defines.SHAFTS; }, get radius() { return quad.material.defines.RADIUS; } };
 }
