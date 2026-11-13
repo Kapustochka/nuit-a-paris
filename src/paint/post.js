@@ -1,5 +1,6 @@
 // post.js — «кисть и тушь» поверх кадра игры (из прототипа experiments/painted/post.js):
-//   1) кадр рисуется в текстуру (в линейных цветах), отдельно — нормали и глубина без неба, спрайтов и прозрачного;
+//   1) кадр рисуется в текстуру (в линейных цветах) вместе с глубиной; отдельно — нормали без неба, спрайтов и
+//      прозрачного, но только до INK_FAR метров: дальше контуров по нормалям нет, и вторая отрисовка города не нужна;
 //   2) фильтр Кувахары превращает пиксели в плоские мазки, сохраняя края;
 //   3) контуры по скачкам нормалей и глубины: толщина плавает, линия дрожит и местами рвётся;
 //   4) воздух (paint/air.js): дымка по высоте, конусы света под фонарями, сияние Сакре-Кёр;
@@ -11,9 +12,11 @@ import * as THREE from 'three';
 import { NOISE } from './paint.js';
 import { AIR_GLSL, airUniforms, MAX_SHAFTS } from './air.js';
 
+const INK_FAR = 90;        // дальше этого расстояния сцена не рисуется во второй раз (нормали для туши)
+
 export function createPainter(renderer, { radius = 3, scale = 1, heroStyle = 1, shafts = 8, shaftSteps = 8, bloom = 2, reflect = 10, reflectDry = 0 } = {}) {
   const size = new THREE.Vector2(), cssSize = new THREE.Vector2();
-  const colorRT = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: Math.min(4, renderer.capabilities.maxSamples) });
+  const colorRT = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: Math.min(4, renderer.capabilities.maxSamples), depthTexture: new THREE.DepthTexture(1, 1) });
   const normalRT = new THREE.WebGLRenderTarget(1, 1, { depthTexture: new THREE.DepthTexture(1, 1) });
   const normalMat = new THREE.MeshNormalMaterial({ side: THREE.DoubleSide });
   const normalInst = new THREE.MeshNormalMaterial({ side: THREE.DoubleSide });
@@ -84,7 +87,7 @@ export function createPainter(renderer, { radius = 3, scale = 1, heroStyle = 1, 
   const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({
     defines: { RADIUS: radius, BLOOM: bloom, SHAFTS: Math.min(shafts, MAX_SHAFTS), SHAFT_STEPS: shaftSteps, REFLECT: reflect, REFLECT_DRY: reflectDry.toFixed(2) },
     uniforms: {
-      tColor: { value: colorRT.texture }, tNormal: { value: normalRT.texture }, tDepth: { value: normalRT.depthTexture },
+      tColor: { value: colorRT.texture }, tNormal: { value: normalRT.texture }, tDepth: { value: colorRT.depthTexture }, tInkDepth: { value: normalRT.depthTexture }, uInkFar: { value: INK_FAR },
       uRes: { value: new THREE.Vector2() }, uNear: { value: 0.1 }, uFar: { value: 600 },
       uCssRes: { value: new THREE.Vector2(1, 1) }, uHeroLine: { value: 0.65 }, uHeroStyle: { value: heroStyle },
       ...airUniforms(),
@@ -95,10 +98,16 @@ export function createPainter(renderer, { radius = 3, scale = 1, heroStyle = 1, 
     },
     vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
     fragmentShader: /* glsl */ `
-      uniform sampler2D tColor, tNormal, tDepth, tBloom, tBloomWide; uniform float uBloom, uPaper, uVignette; uniform vec2 uRes, uCssRes; uniform float uNear, uFar, uPaint, uEdges, uLine, uHeroLine, uHeroStyle; uniform vec3 uInk;
+      uniform sampler2D tColor, tNormal, tDepth, tInkDepth, tBloom, tBloomWide; uniform float uInkFar; uniform float uBloom, uPaper, uVignette; uniform vec2 uRes, uCssRes; uniform float uNear, uFar, uPaint, uEdges, uLine, uHeroLine, uHeroStyle; uniform vec3 uInk;
       varying vec2 vUv;
       ${NOISE}
       float lin(float d) { float z = d * 2.0 - 1.0; return 2.0 * uNear * uFar / (uFar + uNear - z * (uFar - uNear)); }
+      // глубина для туши: вблизи — из прохода нормалей (в нём нет перил и прозрачного), дальше INK_FAR — из самого кадра
+      float inkZ(vec2 uv) {
+        float d = texture2D(tInkDepth, uv).r;
+        if (d > 0.99999) return lin(texture2D(tDepth, uv).r);
+        float z = d * 2.0 - 1.0; return 2.0 * uNear * uInkFar / (uInkFar + uNear - z * (uInkFar - uNear));
+      }
       ${AIR_GLSL}
       vec3 srgb(vec3 c) { return pow(clamp(c, 0.0, 1.0), vec3(1.0 / 2.2)); }
       vec3 tap(vec2 uv) { return srgb(texture2D(tColor, uv).rgb); }
@@ -151,14 +160,17 @@ export function createPainter(renderer, { radius = 3, scale = 1, heroStyle = 1, 
       vec3 kuwahara(vec2 uv, vec2 px) {
         vec3 m[4]; vec3 s[4];
         for (int k = 0; k < 4; k++) { m[k] = vec3(0); s[k] = vec3(0); }
-        for (int j = -RADIUS; j <= RADIUS; j++) for (int i = -RADIUS; i <= RADIUS; i++) {
-          vec3 c = tap(uv + vec2(i, j) * px), c2 = c * c;
-          if (i <= 0 && j <= 0) { m[0] += c; s[0] += c2; }
-          if (i >= 0 && j <= 0) { m[1] += c; s[1] += c2; }
-          if (i <= 0 && j >= 0) { m[2] += c; s[2] += c2; }
-          if (i >= 0 && j >= 0) { m[3] += c; s[3] += c2; }
+        // Каждая выборка стоит между пикселями и усредняет сразу четыре (линейный фильтр текстуры):
+        // на четверть 4×4 пикселя уходит 4 выборки вместо 16, на весь фильтр — 16 вместо 49.
+        const int T = (RADIUS + 2) / 2; const float STEP = float(RADIUS + 1) / float(T);
+        for (int k = 0; k < 4; k++) {
+          vec2 dir = vec2(k == 1 || k == 3 ? 1.0 : -1.0, k >= 2 ? 1.0 : -1.0);
+          for (int j = 0; j < T; j++) for (int i = 0; i < T; i++) {
+            vec3 c = tap(uv + dir * ((vec2(i, j) + 0.5) * STEP - 0.5) * px);
+            m[k] += c; s[k] += c * c;
+          }
         }
-        float n = float((RADIUS + 1) * (RADIUS + 1)), best = 1e9; vec3 res = vec3(0);
+        float n = float(T * T), best = 1e9; vec3 res = vec3(0);
         for (int k = 0; k < 4; k++) {
           vec3 mean = m[k] / n, v = abs(s[k] / n - mean * mean);
           float sig = v.r + v.g + v.b;
@@ -186,15 +198,15 @@ export function createPainter(renderer, { radius = 3, scale = 1, heroStyle = 1, 
         nC = mix(nC, center.rgb, hero);
         float leaf = step(length(nC), 0.05);
         dx = vec2(w * px.x, 0.0); dy = vec2(0.0, w * px.y);
-        float zC = lin(texture2D(tDepth, c).r);
-        float zL = lin(texture2D(tDepth, c - dx).r), zR = lin(texture2D(tDepth, c + dx).r);
-        float zD = lin(texture2D(tDepth, c - dy).r), zU = lin(texture2D(tDepth, c + dy).r);
+        float zC = inkZ(c);
+        float zL = inkZ(c - dx), zR = inkZ(c + dx);
+        float zD = inkZ(c - dy), zU = inkZ(c + dy);
         float dn = length(left.rgb - right.rgb) + length(up.rgb - down.rgb);
         // скачок глубины: вторая производная 1/z — у ровной плоскости под любым углом она ноль, поэтому
         // мостовая и стены вдали не покрываются ложными линиями-рябью
         float iC = 1.0 / zC;
         float dz = (abs(1.0 / zL + 1.0 / zR - 2.0 * iC) + abs(1.0 / zU + 1.0 / zD - 2.0 * iC)) / iC;
-        float e = max(smoothstep(0.45, 0.95, dn) * (1.0 - max(real, hero)), smoothstep(0.04, 0.12, dz) * mix(mix(1.0, 0.6, real), 0.42, hero));
+        float e = max(smoothstep(0.45, 0.95, dn) * (1.0 - max(real, hero)) * (1.0 - smoothstep(uInkFar * 0.75, uInkFar * 0.95, zC)), smoothstep(0.04, 0.12, dz) * mix(mix(1.0, 0.6, real), 0.42, hero));
         e *= (1.0 - leaf) * (1.0 - 0.85 * smoothstep(14.0, 70.0, zC)) * uEdges;
         e *= mix(mix(0.55, 1.0, smoothstep(0.25, 0.5, vnoise(sp / 7.0 + 5.0))), 1.0, hero);
         vec3 ink = mix(col * vec3(0.35, 0.3, 0.55), uInk, 0.5);
@@ -257,13 +269,16 @@ export function createPainter(renderer, { radius = 3, scale = 1, heroStyle = 1, 
     U.uTime.value = performance.now() / 1000 % 3600;
     U.uViewProj.value.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
     if (airSrc) U.uGroundY.value = airSrc.groundY;
-    // нормали и глубина: без неба, спрайтов, огоньков и прозрачного; листва — «маркером»
-    const mask = camera.layers.mask;
+    // нормали: без неба, спрайтов, огоньков и прозрачного; листва — «маркером». Только ближние INK_FAR метров:
+    // всё, что дальше, отсекается целыми объектами и второй раз не рисуется.
+    const mask = camera.layers.mask, far = camera.far;
+    camera.far = Math.min(far, INK_FAR); camera.updateProjectionMatrix();
     camera.layers.set(0);
     scene.traverseVisible((o) => {
       if (o.isMesh) {
         const m = Array.isArray(o.material) ? o.material[0] : o.material;
-        if (skip(m)) { hidden.push(o); return; }
+        // мелкий реквизит дальше своего inkRange остаётся без контура — и не рисуется второй раз
+        if (skip(m) || (o.userData.inkRange && o.boundingSphere && o.boundingSphere.center.distanceTo(camera.position) - o.boundingSphere.radius > o.userData.inkRange)) { hidden.push(o); return; }
         swap.push([o, o.material]);
         o.material = o.userData.realistic ? (U.uHeroStyle.value > 0.5 ? normalReal : normalLegacy) : o.userData.leafMap ? leafNormal(o.userData.leafMap)
           : m.alphaTest > 0 && m.map ? leafNormal(m.map)
@@ -277,6 +292,7 @@ export function createPainter(renderer, { radius = 3, scale = 1, heroStyle = 1, 
     for (const o of hidden) o.visible = true;
     swap.length = 0; hidden.length = 0;
     scene.background = bg;
+    camera.far = far; camera.updateProjectionMatrix();
     camera.layers.mask = mask;
     camera.layers.enableAll();
     renderer.setRenderTarget(colorRT); renderer.setClearColor(0x000000, 1); renderer.clear(); renderer.render(scene, camera);

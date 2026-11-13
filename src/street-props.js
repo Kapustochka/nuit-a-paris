@@ -105,6 +105,11 @@ function lightGlass(material, [bottom, top]) {
   };
 }
 
+// С какого расстояния реквизит перестаёт рисоваться (world.js прячет дальние группы целиком).
+// Модели Meshy тяжёлые — голубь 4 тыс. треугольников, скамейка 19 тыс., — а вдали они меньше мазка кисти.
+const SMALL = new Set(['pigeon', 'pigeon-small', 'rat', 'cat', 'croissant', 'newspaper', 'fruit-crate', 'flower-pot']);
+export const propRange = (name) => (name.startsWith('lamp') ? 240 : SMALL.has(name) ? 60 : 120);
+
 export function addPropInstances(scene, asset, placements) {
   if (!asset || placements.length === 0) return;
   const cells = new Map();
@@ -119,6 +124,8 @@ export function addPropInstances(scene, asset, placements) {
     const mesh = new THREE.InstancedMesh(asset.geometry, asset.material, cell.length);
     mesh.name = asset.name;
     mesh.userData.word = asset.word;
+    mesh.userData.range = propRange(asset.name);
+    if (!asset.name.startsWith('lamp')) mesh.userData.inkRange = 40;
     cell.forEach(({ x, z, yaw, y = 0, scale = 1 }, i) => {
       pose.position.set(x, y, z);
       pose.rotation.y = yaw;
