@@ -282,6 +282,7 @@ export function buildParis(scene, renderer, data, city, props = {}) {
 
   return {
     blocked, inside, streetAt, freeSpot, update, castShadows, sky, night, look, air, houses: plan.houses, paint, facades, lightHeroine, heightAt: (x, z) => standAt(x, z),
+    shopFronts,                                   // кафе и булочные: официанты и заказ (cafe.js)
     soundSpots: shopFronts.filter((s) => ['cafe', 'restaurant', 'bar', 'pub'].includes(s.kind)),
     stats: { stairs: stairs.count, buildings: polys.length, lamps: lamps.length, detailedLamps, benches: benches.length, pigeons, ...streetLife },
   };
@@ -488,6 +489,7 @@ function buildShops(scene, pois, polys, inside, rnd, props = {}, propRandom = rn
     const yaw = Math.atan2(s.nx, s.nz);                // фасад смотрит вдоль нормали
     const tx = s.nz, tz = -s.nx;                       // направление вдоль стены
     Q.setFromAxisAngle(Yax, yaw);
+    const tables = [];
     // витрина, маркиза и вывеска рисуются вместе с домом (paint/facades.js)
     for (let k = 0; k < 2; k++) {
       const off = (k ? 1 : -1) * (s === bakery ? w * 0.47 : w * 0.28), x = s.x + s.nx * 1.9 + tx * off, z = s.z + s.nz * 1.9 + tz * off;
@@ -498,13 +500,14 @@ function buildShops(scene, pois, polys, inside, rnd, props = {}, propRandom = rn
       tableLeg.setMatrixAt(i * 2 + k, model ? ZERO : M.makeTranslation(x, 0.36, z));
       candle.setMatrixAt(i * 2 + k, M.makeTranslation(x, tableHeight + 0.055, z));
       candles.set([x, tableHeight + 0.13, z], (i * 2 + k) * 3);
+      tables.push({ x, z, y: tableHeight });
       if (model) {
         terraceSet(props, x, z, tx, tz, propRandom, terrace);
         const turn = Math.atan2(-tz, tx);
         terraces.push({ x, z, cos: Math.cos(turn), sin: Math.sin(turn), halfWidth: 0.85, halfDepth: 0.35 });
       }
     }
-    shopFronts.push({ x: s.x, z: s.z, w, nx: s.nx, nz: s.nz, name: s.name, kind: s.kind });
+    shopFronts.push({ x: s.x, z: s.z, w, nx: s.nx, nz: s.nz, name: s.name, kind: s.kind, tables });
     // ящик с яблоками у булочной и у каждой третьей лавки
     if (s === bakery || i % 3 === 1) {
       const off = w / 2 + 0.95;

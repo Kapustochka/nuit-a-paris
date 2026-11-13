@@ -35,11 +35,12 @@ export function entryFor(key) {
       say: { term: [`place/${id}-name`, term, '▶ Название'], example: [`place/${id}`, example, '▶ Фраза'] } };
   }
   if (group === 'talk') {                       // фраза героини из разговора с прохожим (talk.js)
-    const [, talkId, step] = key.split(':');
-    const line = talks[talkId]?.steps[Number(step)]?.choices[0];
+    const [, talkId, step, choice = '0'] = key.split(':');     // talk:<id>:<шаг>[:<вариант>] — вариант у заказов
+    const line = talks[talkId]?.steps[Number(step)]?.choices[Number(choice)];
     if (!line) return null;
-    return { kind: 'phrase', badge: '💬 Из разговора', term: line[0], translation: line[1],
-      say: { term: [`talk/${talkId}-p${step}-0`, line[0], '▶ Слушать'] } };
+    const badge = { cafe: '☕ Из заказа в кафе', bakery: '🥖 Из булочной' }[talks[talkId].place] || '💬 Из разговора';
+    return { kind: 'phrase', badge, term: line[0], translation: line[1],
+      say: { term: [`talk/${talkId}-p${step}-${choice}`, line[0], '▶ Слушать'] } };
   }
   if (group === 'song' && starSongs[id]) {
     const { title, lines } = starSongs[id];

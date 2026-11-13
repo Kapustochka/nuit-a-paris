@@ -3,6 +3,8 @@
 // трёх вариантов. Подходящий ответ ведёт разговор дальше, неподходящий — прохожий переспрашивает.
 // В конце удачные ответы попадают в блокнот (lesson.inspect), а пройденные разговоры запоминаются,
 // чтобы в следующий раз прохожие начинали другие. Отойдёшь дальше 7 м — разговор закончится.
+// Те же карточки ведут заказ у официанта кафе и у продавца булочной (cafe.js): там можно выбрать,
+// что заказать, и следующие реплики (что принесли, сколько стоит) зависят от выбора.
 import { talks, puzzled } from './talk-lines.js';
 
 const DONE_KEY = 'nuit-a-paris:talks-done:v1';
@@ -22,7 +24,7 @@ export function createTalk({ audio, lesson, player }) {
   document.body.append(box);
   const badge = box.querySelector('.talk-badge'), npcFr = box.querySelector('.talk-npc p'), npcRu = box.querySelector('.talk-npc small');
   const list = box.querySelector('.talk-choices'), ruBox = box.querySelector('.talk-ru input');
-  let done = new Set(), person = null, talk = null, talkId = '', step = 0, said = null;
+  let done = new Set(), person = null, talk = null, talkId = '', step = 0, said = null, picks = [], hooks = {};
   try { done = new Set(JSON.parse(localStorage.getItem(DONE_KEY) || '[]')); } catch { /* в памяти */ }
   try { ruBox.checked = localStorage.getItem(RU_KEY) !== '0'; } catch { ruBox.checked = true; }
   const showRu = () => box.classList.toggle('no-ru', !ruBox.checked);
@@ -37,8 +39,8 @@ export function createTalk({ audio, lesson, player }) {
   }
   box.querySelector('.talk-say').addEventListener('click', () => said && audio.play(...said));
 
-  function choose(raining) {
-    const pool = Object.keys(talks).filter((id) => !talks[id].rain || raining);
+  function choose(raining, place) {
+    const pool = Object.keys(talks).filter((id) => (talks[id].place || 'street') === place && (!talks[id].rain || raining));
     const fresh = pool.filter((id) => !done.has(id));
     const from = fresh.length ? fresh : pool;
     if (raining && from.includes('pluie') && Math.random() < 0.6) return 'pluie';
@@ -47,10 +49,14 @@ export function createTalk({ audio, lesson, player }) {
 
   function showStep() {
     const s = talk.steps[step];
-    if (s.npc) npcSays(s.npc, voice(`${talkId}-n${step}`));
-    else { npcFr.textContent = 'Начни разговор сама…'; npcRu.textContent = ''; said = null; }
+    if (Array.isArray(s.npc)) npcSays(s.npc, voice(`${talkId}-n${step}`));
+    else if (s.npc) {                                    // реплика зависит от того, что героиня выбрала раньше
+      const key = s.npc.by.map((i) => picks[i]).join('-');
+      npcSays(s.npc.lines[key], voice(`${talkId}-n${step}-${key}`));
+    } else { npcFr.textContent = 'Начни разговор сама…'; npcRu.textContent = ''; said = null; }
+    if (s.serve) hooks.serve?.(picks);
     list.replaceChildren();
-    const order = [0, 1, 2].sort(() => Math.random() - 0.5);
+    const order = s.choices.map((_, i) => i).sort(() => Math.random() - 0.5);
     for (const c of order) {
       const [fr, ru] = s.choices[c];
       const li = document.createElement('li'), b = document.createElement('button');
@@ -65,7 +71,8 @@ export function createTalk({ audio, lesson, player }) {
   function answer(c, button) {
     const [fr] = talk.steps[step].choices[c];
     audio.play(`talk/${talkId}-p${step}-${c}`, fr);
-    if (c !== 0) {
+    const s = talk.steps[step];
+    if (c >= (s.ok || 1)) {
       button.classList.add('wrong'); button.disabled = true;
       const i = Math.floor(Math.random() * puzzled.length);
       const who = person;
@@ -74,7 +81,8 @@ export function createTalk({ audio, lesson, player }) {
     }
     button.classList.add('right');
     list.querySelectorAll('button').forEach((b) => { b.disabled = true; });
-    lesson.inspect(`talk:${talkId}:${step}`);
+    picks[step] = s.choices[c][2];
+    lesson.inspect(s.ok > 1 ? `talk:${talkId}:${step}:${c}` : `talk:${talkId}:${step}`);
     const who = person;
     setTimeout(() => {
       if (person !== who) return;
@@ -89,7 +97,7 @@ export function createTalk({ audio, lesson, player }) {
     list.replaceChildren();
     const li = document.createElement('li'), b = document.createElement('button');
     b.type = 'button'; b.className = 'talk-done';
-    b.textContent = 'Фразы из разговора — в блокноте ✓';
+    b.textContent = talk.place ? 'Фразы из заказа — в блокноте ✓' : 'Фразы из разговора — в блокноте ✓';
     b.addEventListener('click', () => close(false));
     li.append(b); list.append(li);
     done.add(talkId);
@@ -111,13 +119,18 @@ export function createTalk({ audio, lesson, player }) {
 
   return {
     get active() { return person !== null; },
-    start(p, raining = false) {
-      if (person === p) return;
+    // place: 'street' (прохожий), 'cafe' (официант), 'bakery' (продавец); events.serve(picks) — принести заказ
+    start(p, raining = false, { place = 'street', events = {} } = {}) {
+      if (person === p) return true;
       if (person) close();
       if (Math.hypot(p.root.position.x - player.x, p.root.position.z - player.z) > 7) return false;
+      talkId = choose(raining, place);
+      if (!talkId) return false;
       person = p; p.talking = true;
-      talkId = choose(raining); talk = talks[talkId]; step = 0;
-      badge.textContent = `💬 ${talk.title} · ${p.woman ? 'прохожая' : 'прохожий'}`;
+      talk = talks[talkId]; step = 0; picks = []; hooks = events;
+      const who = place === 'cafe' ? (p.woman ? 'официантка' : 'официант') : place === 'bakery' ? (p.woman ? 'продавщица' : 'продавец')
+        : p.woman ? 'прохожая' : 'прохожий';
+      badge.textContent = `${place === 'street' ? '💬' : place === 'cafe' ? '☕' : '🥖'} ${talk.title} · ${who}`;
       box.hidden = false;
       showStep();
       return true;

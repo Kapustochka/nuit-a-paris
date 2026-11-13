@@ -62,4 +62,9 @@ export const words = {
   umbrella: ['le parapluie', 'lə paʁaplɥi', 'лё параплюи', 'зонт', 'J’ouvre mon parapluie : il pleut.', 'Я открываю зонт: идёт дождь.'],
   ilPleut: ['Il pleut !', 'il plø', 'иль плё', 'Идёт дождь!', 'Il pleut, prends ton parapluie !', 'Идёт дождь, возьми зонт!'],
   quelTemps: ['Quel temps !', 'kɛl tɑ̃', 'кэль та̃', 'Ну и погода!', 'Quel temps ! On rentre vite à la maison.', 'Ну и погода! Скорее домой.'],
+  waiter: ['le serveur', 'lə sɛʁvœʁ', 'лё сэрвёр', 'официант', 'Le serveur apporte un café.', 'Официант приносит кофе.'],
+  waitress: ['la serveuse', 'la sɛʁvøz', 'ла сэрвёз', 'официантка', 'La serveuse sourit aux clients.', 'Официантка улыбается посетителям.'],
+  baker: ['le boulanger', 'lə bulɑ̃ʒe', 'лё була̃жэ', 'булочник', 'Le boulanger vend du pain frais.', 'Булочник продаёт свежий хлеб.'],
+  bakerWoman: ['la boulangère', 'la bulɑ̃ʒɛʁ', 'ла була̃жэр', 'булочница', 'La boulangère me rend la monnaie.', 'Булочница даёт мне сдачу.'],
+  cup: ['la tasse', 'la tas', 'ла тас', 'чашка', 'La tasse de café est chaude.', 'Чашка кофе горячая.'],
 };
