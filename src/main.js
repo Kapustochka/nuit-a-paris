@@ -16,6 +16,7 @@ import { loadPasserby, placePasserby, placeCircularPasserby, passerbyBlocksStep 
 import { createPainter } from './paint/post.js';
 import { createPeople } from './people.js';
 import { createTalk } from './talk.js';
+import { createPassport } from './passport.js';
 import { createRain } from './rain.js';
 import { createAmbient } from './ambient.js';
 
@@ -83,6 +84,7 @@ const rain = createRain(renderer, world, { phone, cityAudio });
 const audio = createFrenchAudio({ onActivity: (active) => cityAudio.setDucked(active) });
 const lesson = createLesson((key) => inspector.show(key));
 const talk = createTalk({ audio, lesson, player });   // разговоры с прохожими (talk.js)
+const passport = createPassport(mapData, { audio, lesson, minimap, player });   // «Паспорт Монмартра»
 const inspector = installWordInspector(renderer.domElement, scene, camera, world.sky.moonDirection, audio, lesson.inspect, lesson.review);
 const stars = createFallingStars(scene, camera, world, inspector, lesson.review);
 installStarToggle(stars);
@@ -95,7 +97,7 @@ performance.mark('paris-ready');
 
 const debug = new URLSearchParams(location.search).has('debug');
 if (debug) addDebugPanel();
-window.__game = { ambient, rain, talk, heroine, passersby, get people() { return people; }, world, stars, inspector, mapData, camera, controls, renderer, cityAudio, get painted() { return painter !== null; }, get painter() { return painter; } };
+window.__game = { ambient, rain, talk, passport, heroine, passersby, get people() { return people; }, world, stars, inspector, mapData, camera, controls, renderer, cityAudio, get painted() { return painter !== null; }, get painter() { return painter; } };
 
 // ── Движение ─────────────────────────────────────────────────
 const MAX_WALK = 1.45, MAX_RUN = 3.8, MAX_BACK = 0.95; // м/с
@@ -168,6 +170,7 @@ renderer.setAnimationLoop(() => {
   rain.update(dt);
   people?.update(dt, rain.level);
   talk.update();
+  passport.update(dt);
   ambient?.update(dt, camera, world.air.groundY);
   shadowCasters.length = 0; shadowCasters.push(p);
   for (const actor of passersby) shadowCasters.push(actor.position);

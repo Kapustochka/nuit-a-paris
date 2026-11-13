@@ -35,7 +35,8 @@ export function createMinimap(el, data) {
   }
 
   const ctx = el.getContext('2d');
-  let goal = null;
+  let goal = null, places = [];
+  const bigLabel = document.querySelector('#bigmap span'), labelText = bigLabel?.textContent || '';
   function drawGoal(context, x, y, size) {
     context.save();
     context.translate(x, y);
@@ -127,6 +128,21 @@ export function createMinimap(el, data) {
     bctx.imageSmoothingQuality = 'high';
     bctx.drawImage(c, ox, oy, c.width * sc, c.height * sc);
     if (goal) drawGoal(bctx, ox + X(goal.x) * K * sc, oy + Z(goal.z) * K * sc, 7 * dpr);
+    // места «Паспорта Монмартра»: найденные — фиолетовый штамп с названием, ненайденные — «?»
+    for (const p of places) {
+      const px = ox + X(p.x) * K * sc, py = oy + Z(p.z) * K * sc, r = 13 * dpr;
+      bctx.save();
+      bctx.beginPath(); bctx.arc(px, py, r, 0, 6.3);
+      bctx.fillStyle = p.found ? 'rgba(122,62,140,0.9)' : 'rgba(246,223,180,0.92)'; bctx.fill();
+      bctx.lineWidth = 2 * dpr; bctx.strokeStyle = p.found ? '#f6dfb4' : '#7a3e8c'; bctx.setLineDash(p.found ? [] : [3 * dpr, 2 * dpr]); bctx.stroke();
+      bctx.fillStyle = p.found ? '#f6dfb4' : '#7a3e8c'; bctx.textAlign = 'center'; bctx.textBaseline = 'middle';
+      bctx.font = `700 ${13 * dpr}px Georgia, serif`; bctx.fillText(p.found ? '✓' : '?', px, py + dpr);
+      if (p.found) {
+        bctx.font = `italic 600 ${12 * dpr}px Georgia, serif`; bctx.lineWidth = 3 * dpr; bctx.strokeStyle = '#14103a'; bctx.setLineDash([]);
+        bctx.strokeText(p.name, px, py + r + 9 * dpr); bctx.fillStyle = '#f6dfb4'; bctx.fillText(p.name, px, py + r + 9 * dpr);
+      }
+      bctx.restore();
+    }
     const hx = ox + X(x) * K * sc, hy = oy + Z(z) * K * sc, a = Math.max(11, cw * 0.012) * dpr / dpr;
     const pulse = 1 + 0.25 * Math.sin(performance.now() / 250);
     bctx.strokeStyle = 'rgba(255,90,138,0.55)'; bctx.lineWidth = 3; bctx.beginPath(); bctx.arc(hx, hy, a * 2.1 * pulse, 0, 6.3); bctx.stroke();
@@ -139,5 +155,6 @@ export function createMinimap(el, data) {
   el.addEventListener('pointerdown', (e) => { e.stopPropagation(); toggleBig(); });
   overlay.addEventListener('pointerdown', () => toggleBig(false));
 
-  return { update, drawBig, toggleBig, setGoal(point) { goal = point; }, get bigOpen() { return open; } };
+  return { update, drawBig, toggleBig, setGoal(point) { goal = point; },
+    setPlaces(list, count) { places = list; if (bigLabel) bigLabel.textContent = `${labelText} · Паспорт: ${count}`; }, get bigOpen() { return open; } };
 }
