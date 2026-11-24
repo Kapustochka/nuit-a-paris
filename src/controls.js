@@ -35,7 +35,8 @@ export function createControls(dom) {
 
   // ── Камера ────────────────────────────────────────────────
   let camId = null, lastX = 0, lastY = 0;
-  const pinch = new Map(); let pinchDist = 0;
+  const cameraTouches = new Map();
+  let pinchDist = 0;
 
   dom.addEventListener('pointerdown', (e) => {
     dom.setPointerCapture(e.pointerId);
@@ -48,10 +49,13 @@ export function createControls(dom) {
       return;
     }
     if (e.pointerType === 'touch') {
-      pinch.set(e.pointerId, { x: e.clientX, y: e.clientY });
-      if (pinch.size === 2) { pinchDist = spread(); camId = null; return; }
+      cameraTouches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      syncTouchCamera();
+      return;
     }
-    if (camId === null) { camId = e.pointerId; lastX = e.clientX; lastY = e.clientY; }
+    if (camId === null && cameraTouches.size === 0) {
+      camId = e.pointerId; lastX = e.clientX; lastY = e.clientY;
+    }
   });
 
   dom.addEventListener('pointermove', (e) => {
@@ -63,9 +67,11 @@ export function createControls(dom) {
       knob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
       return;
     }
-    if (pinch.has(e.pointerId)) {
-      pinch.set(e.pointerId, { x: e.clientX, y: e.clientY });
-      if (pinch.size === 2) {
+    const touch = cameraTouches.get(e.pointerId);
+    if (touch) {
+      touch.x = e.clientX;
+      touch.y = e.clientY;
+      if (cameraTouches.size >= 2) {
         const d = spread();
         state.camDist = clamp(state.camDist * (pinchDist / d), 2.2, 9);
         pinchDist = d; return;
@@ -80,17 +86,31 @@ export function createControls(dom) {
 
   const up = (e) => {
     if (e.pointerId === joyId) { joyId = null; jx = jy = 0; base.style.display = 'none'; }
-    if (e.pointerId === camId) camId = null;
-    pinch.delete(e.pointerId);
+    if (cameraTouches.delete(e.pointerId)) syncTouchCamera();
+    else if (e.pointerId === camId) camId = null;
   };
   dom.addEventListener('pointerup', up);
   dom.addEventListener('pointercancel', up);
+  dom.addEventListener('lostpointercapture', up);
   dom.addEventListener('wheel', (e) => {
     state.camDist = clamp(state.camDist * (1 + Math.sign(e.deltaY) * 0.1), 2.2, 9);
   }, { passive: true });
 
+  function syncTouchCamera() {
+    camId = null;
+    if (cameraTouches.size >= 2) {
+      pinchDist = spread();
+    } else if (cameraTouches.size === 1) {
+      // Продолжаем вращать камеру оставшимся пальцем с его последней позиции.
+      const [id, point] = cameraTouches.entries().next().value;
+      camId = id;
+      lastX = point.x;
+      lastY = point.y;
+    }
+  }
+
   function spread() {
-    const [a, b] = [...pinch.values()];
+    const [a, b] = cameraTouches.values();
     return Math.max(1, Math.hypot(a.x - b.x, a.y - b.y));
   }
 

@@ -21,7 +21,7 @@ Windows may ask about the firewall — allow access on private networks.
 
 ## Controls
 - Computer: WASD / arrow keys — walk, Shift — run, Space — jump, F — punch, M — big map, mouse — camera, wheel — zoom.
-- Phone: left half of the screen — joystick (push to the edge to run), right half — camera, two fingers — zoom.
+- Phone: left half of the screen — joystick (push to the edge to run), right half — camera. Pinch with two fingers on the camera side to zoom, then lift one finger to keep rotating.
 - Double-click (or double-tap) an object to open a word card with pronunciation, translation and an example. The word is saved to the notebook in this browser. Close the card with × or Escape.
 - About every ten steps a glowing star falls in front of the heroine. Double-click it to get a random French word, phrase, short story or fun fact with a Russian translation and voice-over. The next star falls only after the current one is opened, or once it has dropped out of view.
 - Occasionally (at most every fourth star), a star asks you to recall a word from your notebook. Think of its translation, choose **Показать ответ**, then **Вспомнил** or **Пока забыл**. The answer plays aloud. New words wait two minutes before becoming eligible; forgotten words can return after one minute, while successful reviews spread from ten minutes to several days. The notebook and review progress stay in this browser. Closing a card does not count as a successful review. Songs, stories and phrases keep their normal stars.

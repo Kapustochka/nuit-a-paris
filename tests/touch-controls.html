@@ -1,0 +1,76 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Touch camera controls</title>
+<div id="joy-base" style="display: none"><div id="joy-knob"></div></div>
+<canvas></canvas>
+<pre></pre>
+<script type="module">
+import { createControls } from '../src/controls.js';
+
+const canvas = document.querySelector('canvas');
+const joystick = document.querySelector('#joy-base');
+// Synthetic pointer events do not register active pointers with the browser.
+canvas.setPointerCapture = () => {};
+const controls = createControls(canvas);
+const { state } = controls;
+const right = Math.round(innerWidth * 0.6);
+const assert = (condition, message) => { if (!condition) throw Error(message); };
+
+function touch(type, pointerId, clientX, clientY = 100) {
+  canvas.dispatchEvent(new PointerEvent(type, { pointerId, pointerType: 'touch', clientX, clientY }));
+}
+
+const results = [];
+try {
+  touch('pointerdown', 1, right);
+  touch('pointerdown', 2, right + 60);
+  touch('pointermove', 2, right + 90);
+  assert(state.camDist < 4.2 && state.camYaw === 0, 'Pinching should zoom without rotating');
+  touch('pointerup', 1, right);
+  touch('lostpointercapture', 1, right);
+  touch('pointermove', 2, right + 90);
+  assert(state.camYaw === 0, 'The remaining finger should keep its last position');
+  touch('pointermove', 2, right + 100);
+  assert(Math.abs(state.camYaw + 0.06) < 1e-9, 'The remaining finger should rotate immediately');
+  touch('pointerup', 2, right + 100);
+  results.push('Pinch returns to one-finger rotation without a jump');
+
+  touch('pointerdown', 1, right);
+  touch('pointerdown', 2, right + 60);
+  touch('pointerdown', 3, right + 120);
+  const before = state.camDist;
+  touch('pointermove', 2, right + 70);
+  assert(state.camDist < before, 'An extra finger should leave the first pair zooming');
+  const after = state.camDist;
+  touch('pointercancel', 1, right);
+  touch('pointermove', 2, right + 70);
+  assert(state.camDist === after, 'Changing the pinch pair should preserve zoom');
+  touch('pointermove', 3, right + 110);
+  assert(state.camDist > after, 'The new pair should be able to zoom');
+  touch('pointerup', 2, right + 70);
+  touch('pointerup', 3, right + 110);
+  results.push('Pinch tolerates extra fingers and cancellation');
+
+  touch('pointerdown', 1, 40);
+  touch('pointermove', 1, 40, 45);
+  assert(controls.update().move.y > 0 && state.run && joystick.style.display === 'block', 'The joystick should still control movement');
+  const distance = state.camDist;
+  const yaw = state.camYaw;
+  touch('pointerdown', 2, right);
+  touch('pointermove', 2, right + 15);
+  assert(state.camYaw !== yaw && state.camDist === distance, 'The camera should rotate while the joystick is held');
+  assert(controls.update().move.y > 0, 'Camera input should leave joystick movement active');
+  touch('lostpointercapture', 1, 40, 45);
+  assert(controls.update().move.y === 0 && !state.run && joystick.style.display === 'none', 'Lost joystick capture should clear movement');
+  touch('lostpointercapture', 2, right + 15);
+  const finalYaw = state.camYaw;
+  touch('pointermove', 2, right + 30);
+  assert(state.camYaw === finalYaw, 'Lost camera capture should end rotation');
+  results.push('The joystick and camera remain independent and release cleanly');
+
+  window.__testResults = { passed: results.length, results };
+} catch (error) {
+  window.__testResults = { error: error.message, results };
+}
+document.querySelector('pre').textContent = JSON.stringify(window.__testResults, null, 2);
+</script>
