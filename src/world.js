@@ -208,6 +208,19 @@ export function buildParis(scene, renderer, data, city, props = {}) {
     tower: new THREE.Vector4(-1050, drop + 158, 1050, terrain.flat ? 0 : 1),     // верх Эйфелевой башни (buildFarParis)
     groundY: 0, started: false,
   };
+  // Дальний реквизит: группы с userData.range прячутся целиком, когда вся группа дальше своего расстояния
+  let ranged = null;
+  function cullFar(camera) {
+    if (!ranged) {
+      ranged = [];
+      scene.traverse((o) => { if (o.isInstancedMesh && o.userData.range) { o.computeBoundingSphere(); ranged.push(o); } });
+    }
+    const c = camera.position;
+    for (const o of ranged) {
+      const s = o.boundingSphere, r = o.userData.range + s.radius;
+      o.visible = s.center.distanceToSquared(c) < r * r;
+    }
+  }
   function update(dt, hx, hz, camera) {
     sky.update(dt);
     look.uLookTime.value += dt;
@@ -215,6 +228,7 @@ export function buildParis(scene, renderer, data, city, props = {}) {
     air.groundY = air.started ? air.groundY + (gy - air.groundY) * (1 - Math.exp(-dt * 2)) : gy;
     air.started = true;
     facades.update(camera.position.x, camera.position.z);
+    cullFar(camera);
     if (hero) {
       const h = hero.position, [, moon, fill, lamp] = heroLights;
       moon.target.position.copy(h); moon.position.copy(h).addScaledVector(sky.moonDirection, 30); moon.target.updateMatrixWorld();
@@ -605,13 +619,18 @@ function buildBollards(scene, lamps, inside) {
   }
   if (!list.length) return;
   const mat = new THREE.MeshStandardMaterial({ color: 0x0e0e14, roughness: 0.3, metalness: 0.85 });
-  const post = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.06, 0.08, 0.85, 8), mat, list.length);
-  const ball = new THREE.InstancedMesh(new THREE.SphereGeometry(0.09, 8, 6), mat, list.length);
-  const M = new THREE.Matrix4();
-  list.forEach(([x, z], i) => { post.setMatrixAt(i, M.makeTranslation(x, 0.42, z)); ball.setMatrixAt(i, M.makeTranslation(x, 0.9, z)); });
-  post.frustumCulled = ball.frustumCulled = false;
-  post.userData.word = ball.userData.word = 'bollard';
-  scene.add(post, ball);
+  // по клеткам 48 м: столбики за спиной и вдали не рисуются (раньше все 1400 шли в каждый кадр)
+  const cells = new Map();
+  for (const b of list) { const key = Math.floor(b[0] / 48) + ':' + Math.floor(b[1] / 48); if (!cells.has(key)) cells.set(key, []); cells.get(key).push(b); }
+  const postGeo = new THREE.CylinderGeometry(0.06, 0.08, 0.85, 8), ballGeo = new THREE.SphereGeometry(0.09, 8, 6), M = new THREE.Matrix4();
+  for (const cell of cells.values()) {
+    const post = new THREE.InstancedMesh(postGeo, mat, cell.length), ball = new THREE.InstancedMesh(ballGeo, mat, cell.length);
+    cell.forEach(([x, z], i) => { post.setMatrixAt(i, M.makeTranslation(x, 0.42, z)); ball.setMatrixAt(i, M.makeTranslation(x, 0.9, z)); });
+    post.userData.word = ball.userData.word = 'bollard';
+    post.userData.range = ball.userData.range = 110;
+    post.userData.inkRange = ball.userData.inkRange = 40;
+    scene.add(post, ball);
+  }
 }
 
 // ═══ Плющ и глициния на стенах ═══════════════════════════════

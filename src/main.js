@@ -41,6 +41,22 @@ const originalHero = new URLSearchParams(location.search).has('original-hero');
 let painter = plainView ? null : createPainter(renderer, { radius: phone ? 2 : 3, heroStyle: originalHero ? 0 : 1, shafts: phone ? 4 : 8, shaftSteps: phone ? 5 : 8, bloom: phone ? 1 : 2, reflect: phone ? 6 : 10 });
 painter?.setSize();
 let slowFrames = 0, frames = 0;
+// ?fps — счётчик в углу: кадры в секунду, время кадра, треугольники и текущее качество (для замеров на телефоне)
+let fpsMeter = null;
+if (new URLSearchParams(location.search).has('fps')) {
+  const box = document.createElement('div');
+  box.style.cssText = 'position:fixed;left:8px;bottom:8px;z-index:50;padding:4px 8px;font:12px/1.35 monospace;color:#fff;background:rgba(20,16,40,.72);border-radius:6px;pointer-events:none;white-space:pre';
+  document.body.appendChild(box);
+  let acc = 0, n = 0, worst = 0;
+  fpsMeter = (dt) => {
+    acc += dt; n++; worst = Math.max(worst, dt);
+    if (acc < 1) return;
+    const size = renderer.getDrawingBufferSize(new THREE.Vector2());
+    box.textContent = `${(n / acc).toFixed(0)} fps  ${(acc / n * 1000).toFixed(1)} ms  max ${(worst * 1000).toFixed(0)} ms\n`
+      + `${size.x}×${size.y}` + (painter ? `  brush ${painter.radius}  rays ${painter.shafts}  bloom ${painter.bloom}  refl ${painter.reflect}` : '  plain');
+    acc = 0; n = 0; worst = 0;
+  };
+}
 
 addEventListener('resize', () => {
   camera.aspect = innerWidth / innerHeight;
@@ -207,6 +223,7 @@ renderer.setAnimationLoop(() => {
     }
   }
   if (painter) { painter.uniforms.uWet.value = world.look.uWet.value; painter.render(scene, camera); } else renderer.render(scene, camera);
+  fpsMeter?.(dt);
   rain.render(camera);                // штрихи дождя поверх картины
 });
 
