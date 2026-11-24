@@ -23,6 +23,8 @@ const UMBRELLAS = [0x1a1820, 0x1a1820, 0x1a1820, 0x8a1e2a, 0x24305a, 0x2f5a4e, 0
 // По каким дорогам ходят и как далеко от оси дороги их тротуар (м)
 const WALK_OFFSET = { footway: [0.45, 0], path: [0.4, 0], steps: [0.45, 0], pedestrian: [2.4, 1.4, 0.6], living_street: [2.4, 1.4, 0.6], residential: [3.6, 2.8, 2, 1.2] };
 const RADIUS = 0.3;
+// в какие стороны пробовать обойти препятствие (радианы от прямого пути; + вправо)
+const DETOURS = [0, 0.4, -0.4, 0.8, -0.8, 1.25, -1.25, 1.7];
 
 function mulberry(a) {
   return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
@@ -111,6 +113,18 @@ export function createPeople(scene, world, mapData, { count = 16, inspector, cam
   if (!net.ways.length) return { people, update() {}, count: 0 };
 
   const free = (x, z) => !world.blocked(x, z);
+  // свободно ли место для прохожего: дома, скамейки, столики, фонари, деревья, столбики, героиня и другие люди
+  function clear(person, x, z) {
+    if (world.blocked(x, z) || world.post?.(x, z, RADIUS)) return false;
+    if ((x - player.x) ** 2 + (z - player.z) ** 2 < 0.62 ** 2) return false;
+    for (const o of people) {
+      if (o === person || !o.active) continue;
+      const q = o.root.position, ox = x - q.x, oz = z - q.z;
+      // ближе 0,55 м к другому — нельзя, но если уже стоим вплотную, разрешаем расходиться
+      if (ox * ox + oz * oz < 0.55 ** 2 && ox * ox + oz * oz < (person.root.position.x - q.x) ** 2 + (person.root.position.z - q.z) ** 2) return false;
+    }
+    return true;
+  }
   // точка пути: вершина дороги, сдвинутая на тротуар своей стороны
   function waypoint(person, w, i) {
     const p = net.ways[w].p, n = p.length / 2;
@@ -149,7 +163,7 @@ export function createPeople(scene, world, mapData, { count = 16, inspector, cam
       nextTarget(person, true);
       person.root.rotation.y = Math.atan2(person.target[0] - x, person.target[1] - z);
       person.active = true; person.root.visible = true;
-      person.pause = 0; person.wait = 0; person.stuck = 0; person.greeted = -1e9;
+      person.pause = 0; person.wait = 0; person.stuck = 0; person.detour = 0; person.check = 4; person.lastD = 1e9; person.greeted = -1e9;
       return true;
     }
     person.active = false; person.root.visible = false;
@@ -157,6 +171,7 @@ export function createPeople(scene, world, mapData, { count = 16, inspector, cam
   }
   // следующая вершина; на перекрёстке иногда сворачиваем
   function nextTarget(person, first = false) {
+    person.lastD = 1e9; person.check = 4;
     if (!first) {
       const options = net.branches(person.way, person.index).filter(([w]) => w !== person.way);
       if (options.length && rnd() < 0.45) {
@@ -179,10 +194,12 @@ export function createPeople(scene, world, mapData, { count = 16, inspector, cam
   for (let k = 0; k < count; k++) {
     const who = cast[k % cast.length], woman = who.sheet.woman;
     // тот же лист, но чуть другой оттенок и рост — двойники не так бросаются в глаза
-    const material = new THREE.MeshLambertMaterial({ map: who.map, alphaTest: 0.5 });
-    const tone = 1.35 + rnd() * 0.15;                 // ночью живописный свет сильно темнит — картинка светлее
+    // часть собственного цвета картинки не зависит от ночного света — прохожие не тонут в фиолетовой мгле
+    const material = new THREE.MeshLambertMaterial({ map: who.map, alphaTest: 0.5, emissiveMap: who.map, emissive: new THREE.Color(0.42, 0.4, 0.38) });
+    const tone = 1.25 + rnd() * 0.12;                 // ночью живописный свет сильно темнит — картинка светлее
     material.color.setRGB(tone * (0.97 + rnd() * 0.06), tone * (0.97 + rnd() * 0.06), tone * (0.97 + rnd() * 0.06));
     const mesh = new THREE.Mesh(who.geometries[0], material);
+    mesh.userData.figure = true;                    // post.js: меньше мазков кисти, чтобы прохожие читались
     const root = new THREE.Group();
     root.name = woman ? 'Passante' : 'Passant';
     root.add(mesh);
@@ -194,7 +211,7 @@ export function createPeople(scene, world, mapData, { count = 16, inspector, cam
       root, mesh, who, woman, view: 0,
       speed: (woman ? 1.15 : 1.25) + rnd() * 0.3, stride: 1.32 * who.sheet.height * scale / 1.7,
       phase: rnd() * 6.28, amp: 0, side: 1, way: 0, index: 0, dir: 1, target: [0, 0],
-      pause: 0, wait: 0, stuck: 0, active: false, greeted: -1e9, saying: null, sayUntil: 0, look: 0,
+      pause: 0, wait: 0, stuck: 0, detour: 0, check: 4, lastD: 1e9, active: false, greeted: -1e9, saying: null, sayUntil: 0, look: 0,
     };
     mesh.userData.word = () => (person.saying && performance.now() < person.sayUntil + 6000 ? person.saying : woman ? 'passerby' : 'passant');
     // двойной клик по прохожему рядом — разговор (talk.js); издалека — карточка слова
@@ -303,29 +320,44 @@ export function createPeople(scene, world, mapData, { count = 16, inspector, cam
       if (person.pause > 0) person.pause -= dt;
       else {
         const dx = person.target[0] - pos.x, dz = person.target[1] - pos.z, d = Math.hypot(dx, dz);
-        if (d < 0.35) nextTarget(person);
+        // точку внутри препятствия (столик, фонарь) засчитываем издалека — обходить её незачем
+        if (d < 0.35 || (d < 1 && person.detour > 0.3)) nextTarget(person);
         else {
-          const want = Math.atan2(dx, dz), delta = Math.atan2(Math.sin(want - yaw), Math.cos(want - yaw));
-          person.root.rotation.y += delta * (1 - Math.exp(-dt * 5));
-          // героиня прямо на пути — ждём, пока пройдёт
-          const blockedByHero = dist < 1.15 && facingHero > 0.5;
-          person.wait = blockedByHero ? person.wait + dt : 0;
-          if (person.wait > 2.5) { person.wait = 0; person.dir = -person.dir; nextTarget(person, true); }
-          else if (!blockedByHero) {
-            const hurry = person.umbrella ? 1 : 1 + Math.min(1, rain * 1.5) * 0.3;
-            const step = person.speed * hurry * dt * Math.max(0, Math.cos(delta));
-            const nx = pos.x + Math.sin(person.root.rotation.y) * step, nz = pos.z + Math.cos(person.root.rotation.y) * step;
-            if (free(nx, nz)) {
+          // идти прямо к цели, а если там фонарь, столбик, дерево, столик или другой человек —
+          // взять в сторону (сначала вправо: правостороннее движение), в крайнем случае ждать
+          const want = Math.atan2(dx, dz);
+          const hurry = person.umbrella ? 1 : 1 + Math.min(1, rain * 1.5) * 0.3;
+          let go = null;
+          for (const off of DETOURS) {
+            const h = want - off * person.side;
+            const sx = Math.sin(h), sz = Math.cos(h);
+            if (clear(person, pos.x + sx * 0.32, pos.z + sz * 0.32) && clear(person, pos.x + sx * 0.75, pos.z + sz * 0.75)) { go = h; break; }
+          }
+          if (go === null) {
+            person.wait += dt;
+            if (person.wait > 1.6) { person.wait = 0; person.dir = -person.dir; nextTarget(person, true); }
+            if (++person.stuck > 400) spawn(person, 35, 75, true);
+          } else {
+            person.wait = 0;
+            person.detour = go === want ? Math.max(0, person.detour - dt) : person.detour + dt;
+            const delta = Math.atan2(Math.sin(go - yaw), Math.cos(go - yaw));
+            person.root.rotation.y += delta * (1 - Math.exp(-dt * 6));
+            const turn = Math.atan2(Math.sin(go - person.root.rotation.y), Math.cos(go - person.root.rotation.y));
+            const step = person.speed * hurry * dt * Math.max(0.15, Math.cos(turn));
+            const nx = pos.x + Math.sin(go) * step, nz = pos.z + Math.cos(go) * step;
+            if (clear(person, nx, nz)) {
               pos.x = nx; pos.z = nz; pos.y = world.heightAt(nx, nz);
               person.phase += step / person.stride * Math.PI * 2;
               moving = step > 0.0001;
-              person.stuck = 0;
-            } else if (++person.stuck > 30) spawn(person, 35, 75, true);
-            else {
-              // скамейка, столик, урна: разворачиваемся
-              person.dir = -person.dir;
-              nextTarget(person, true);
             }
+          }
+          // не продвигается к цели несколько секунд — следующая точка, а если и так никак — появиться заново
+          person.check -= dt;
+          if (person.check <= 0) {
+            if (d > person.lastD - 0.6) { person.stuck += 100; nextTarget(person, true); }
+            else person.stuck = 0;
+            person.check = 4; person.lastD = d;
+            if (person.stuck >= 300) spawn(person, 35, 75, !inView(pos.x, pos.y, pos.z));
           }
         }
       }
