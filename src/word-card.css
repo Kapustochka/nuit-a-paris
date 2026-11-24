@@ -368,6 +368,7 @@
 #evening .evening-text { display: grid; gap: 1px; }
 #evening .evening-fr { font: italic 600 19px/1.15 var(--serif); }
 #evening .evening-ru { font: 12px/1.25 system-ui, sans-serif; color: var(--ink-soft); }
+#evening .evening-how { font: italic 11px/1.25 system-ui, sans-serif; color: #8d6f7f; }
 #evening li.done .evening-fr { text-decoration: line-through 1.5px #a7646aa0; }
 #evening .evening-count { font: 600 13px var(--serif); color: var(--ink-soft); }
 #evening .evening-say { width: 26px; height: 26px; border: 1px solid #7a526350; border-radius: 50%; background: #fff7ea80; color: inherit; font-size: 11px; cursor: pointer; }

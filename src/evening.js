@@ -17,6 +17,16 @@ export const TASKS = [
   ['cafe', 'Commander quelque chose au café.', 'Заказать что-нибудь в кафе.', 1, 'cafe'],
 ];
 export const BRAVO = ['Belle soirée ! Tout est fait.', 'Прекрасный вечер! Всё сделано.'];
+// Подсказка «как это сделать» — мелко под переводом
+export const HOW = {
+  talk: 'Двойной клик (на телефоне — касание) по прохожему рядом.',
+  place: 'Знаки «?» на большой карте (M или по нажатию на мини-карту).',
+  star: 'Иди вперёд — звезда упадёт рядом. Двойной клик (касание) по ней.',
+  word: 'Двойной клик (касание) по фонарям, дверям, скамейкам, деревьям…',
+  review: 'Каждая четвёртая звезда спрашивает слово из блокнота.',
+  sacre: 'Белый купол над крышами. Вверх по лестницам.',
+  cafe: 'Подойди к столику кафе.',
+};
 const KEY = 'nuit-a-paris:evening:v1';
 const PER_EVENING = 4;
 
@@ -75,10 +85,11 @@ export function createEvening({ audio, player, available, sacre, storage = () =>
       const li = document.createElement('li');
       li.className = done ? 'done' : '';
       li.innerHTML = `<span class="evening-tick" aria-hidden="true"></span>
-        <span class="evening-text"><span class="evening-fr" lang="fr"></span><span class="evening-ru"></span></span>
+        <span class="evening-text"><span class="evening-fr" lang="fr"></span><span class="evening-ru"></span><span class="evening-how"></span></span>
         <span class="evening-count"></span><button type="button" class="evening-say" aria-label="Слушать">▶</button>`;
       li.querySelector('.evening-fr').textContent = t.fr;
       li.querySelector('.evening-ru').textContent = t.ru;
+      li.querySelector('.evening-how').textContent = done ? '' : HOW[id] || '';
       li.querySelector('.evening-count').textContent = t.n > 1 ? `${c}/${t.n}` : '';
       li.querySelector('.evening-say').addEventListener('click', () => audio.play(`evening/${id}`, t.fr));
       return li;
@@ -118,6 +129,12 @@ export function createEvening({ audio, player, available, sacre, storage = () =>
   button.addEventListener('click', () => toggle(panel.hidden));
   panel.querySelector('[data-close]').addEventListener('click', () => toggle(false));
   addEventListener('keydown', (e) => { if (e.key === 'Escape' && !panel.hidden) toggle(false); });
+
+  // Раз в вечер листок сам приоткрывается через несколько секунд после входа — чтобы о нём узнали
+  if (!state.shown) {
+    state.shown = true; save();
+    setTimeout(() => { if (panel.hidden) { toggle(true); setTimeout(() => toggle(false), 9000); } }, 6000);
+  }
 
   let tick = 0;
   return {
