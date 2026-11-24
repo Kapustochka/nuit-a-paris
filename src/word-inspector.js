@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { entryFor } from './entries.js';
+import { deed } from './evening.js';
 
 export function installWordInspector(canvas, scene, camera, moonDirection, audio, onInspect, review) {
   const card = document.querySelector('#word-card');
@@ -113,6 +114,7 @@ export function installWordInspector(canvas, scene, camera, moonDirection, audio
     reviewButtons[name].addEventListener('click', () => {
       if (!reviewKey || card.dataset.review !== 'answer') return;
       review.rate(reviewKey, remembered);
+      if (remembered) deed('review');
       card.dataset.review = 'rated';
       reviewButtons.again.hidden = reviewButtons.remembered.hidden = true;
       fields.status.textContent = remembered ? 'Отлично! Повторим позже.' : 'Ничего страшного — слово вернётся раньше.';

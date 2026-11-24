@@ -343,3 +343,46 @@
 #stamp-card .stamp-say { flex: none; width: 26px; height: 26px; border: 1px solid #7a526350; border-radius: 50%;
   background: #fff7ea80; color: var(--ink-rose); cursor: pointer; font-size: 11px; }
 #stamp-card .stamp-tr { margin: 2px 0 0 34px; font: 12px/1.3 system-ui, sans-serif; color: var(--ink-soft); }
+
+/* «Ce soir» — список дел на вечер (evening.js): ярлычок под «Дождём» и бумажный листок */
+#open-evening { position: fixed; z-index: 7; left: max(12px, env(safe-area-inset-left)); top: max(196px, calc(env(safe-area-inset-top) + 191px)); }
+#open-evening.all-done { color: #6c3f7e; }
+#evening {
+  box-sizing: border-box; position: fixed; z-index: 12;
+  top: max(152px, calc(env(safe-area-inset-top) + 147px)); left: max(12px, env(safe-area-inset-left));
+  width: min(350px, calc(100vw - 24px)); max-height: 64dvh; overflow: auto; padding: 18px 16px 14px;
+  color: var(--ink); border-left: 7px double #b88a8a66; border-radius: 3px 10px 8px 3px / 3px 6px 12px 3px;
+  background: repeating-linear-gradient(180deg, transparent 0 33px, #9fb0d42e 33px 34px), var(--paper);
+  box-shadow: var(--paper-edge); filter: drop-shadow(0 10px 20px #120c2380);
+  -webkit-mask: var(--deckle) center / 100% 100% no-repeat; mask: var(--deckle) center / 100% 100% no-repeat;
+}
+#evening h2 { margin: 0 30px 2px 0; font: italic 600 27px var(--serif); }
+#evening .evening-sub { margin: 0 0 10px; font: 13px system-ui, sans-serif; color: var(--ink-soft); }
+#evening [data-close] { position: absolute; top: 10px; right: 10px; width: 32px; height: 32px; border: 1px solid #7a526350;
+  border-radius: 50%; background: #fff7ea80; color: inherit; font: 23px/1 var(--serif); cursor: pointer; }
+#evening ul { margin: 0; padding: 0; list-style: none; }
+#evening li { display: grid; grid-template-columns: 20px 1fr auto 28px; gap: 10px; align-items: center; padding: 8px 2px; border-top: 1px dashed #8a5f6a45; }
+#evening .evening-tick { position: relative; width: 15px; height: 15px; border: 1.6px solid var(--ink); border-radius: 2px 4px 2px 5px; background: #fff8ec99; transform: rotate(-3deg); }
+#evening li.done .evening-tick::after { content: ''; position: absolute; left: 3px; top: -5px; width: 6px; height: 13px;
+  border: solid var(--ink-rose); border-width: 0 2.6px 2.6px 0; border-radius: 0 0 3px 0; transform: rotate(40deg); }
+#evening .evening-text { display: grid; gap: 1px; }
+#evening .evening-fr { font: italic 600 19px/1.15 var(--serif); }
+#evening .evening-ru { font: 12px/1.25 system-ui, sans-serif; color: var(--ink-soft); }
+#evening li.done .evening-fr { text-decoration: line-through 1.5px #a7646aa0; }
+#evening .evening-count { font: 600 13px var(--serif); color: var(--ink-soft); }
+#evening .evening-say { width: 26px; height: 26px; border: 1px solid #7a526350; border-radius: 50%; background: #fff7ea80; color: inherit; font-size: 11px; cursor: pointer; }
+#evening .evening-bravo { margin: 10px 0 0; font: italic 600 20px var(--serif); color: #6c3f7e; text-align: center; }
+#evening-toast {
+  position: fixed; z-index: 11; left: 50%; bottom: max(120px, calc(env(safe-area-inset-bottom) + 110px));
+  transform: translateX(-50%) rotate(-.6deg); max-width: calc(100vw - 32px); padding: 10px 18px; display: grid; gap: 2px; text-align: center;
+  color: var(--ink); background: var(--paper); border-radius: 3px 9px 4px 10px / 9px 3px 10px 4px;
+  box-shadow: 0 6px 18px #130d2980, var(--paper-edge); pointer-events: none;
+}
+#evening-toast b { font: italic 600 19px/1.2 var(--serif); }
+#evening-toast span { font: 12px system-ui, sans-serif; color: var(--ink-soft); }
+#evening-toast.big b { font-size: 26px; color: #6c3f7e; }
+#evening-toast.show { animation: stamp-in .45s ease-out; }
+@media (max-width: 490px) {
+  #open-evening { top: max(218px, calc(env(safe-area-inset-top) + 208px)); }
+  #evening { top: max(174px, calc(env(safe-area-inset-top) + 164px)); }
+}
