@@ -120,13 +120,49 @@ const FRAG = /* glsl */ `
   varying vec3 vWorld; varying vec3 vNormal; varying vec3 vColor; varying vec2 vUv;
   varying float vKind; varying float vRand;
   bool is(float k) { return abs(vKind - k) < 0.5; }
-  // силуэт человека за стеклом: голова и плечи; p — от середины груди, s — рост
-  float figure(vec2 p, float s) {
-    p /= s;
-    float head = smoothstep(0.076, 0.066, length(p - vec2(0.0, 0.155)));
-    vec2 q = abs(p - vec2(0.0, -0.22)) - vec2(0.03, 0.15);                      // плечи: прямоугольник со скруглением
-    float body = smoothstep(0.1, 0.09, length(max(q, 0.0)) + min(max(q.x, q.y), 0.0));
-    return max(head, body);
+  // Window portraits in pane-height units. The sill clips the lower body.
+  float oval(vec2 p, vec2 radii) {
+    return (length(p / radii) - 1.0) * min(radii.x, radii.y);
+  }
+  float limb(vec2 p, vec2 a, vec2 b, float startWidth, float endWidth) {
+    vec2 line = b - a;
+    float t = clamp(dot(p - a, line) / dot(line, line), 0.0, 1.0);
+    return length(p - a - t * line) - mix(startWidth, endWidth, t);
+  }
+  float figure(vec2 p, float scale, float seed, float stride) {
+    float style = min(5.0, floor(seed * 6.0));
+    bool child = style < 2.0;
+    p /= scale;
+    if (child) p = (p + vec2(0.0, 0.14)) / 0.76;
+    p.x *= (fract(seed * 17.0) < 0.5 ? -1.0 : 1.0);
+    float shoulder = child ? 0.082 : mix(0.090, 0.125, fract(seed * 11.0));
+    vec2 face = p - vec2(0.009, 0.175);
+    face /= (child ? 1.12 : 1.0);
+    float d = oval(face, vec2(0.050, 0.069));
+    d = min(d, oval(face - vec2(0.045, -0.005), vec2(0.016, 0.012))); // nose
+    d = min(d, limb(p, vec2(0.002, 0.124), vec2(-0.006, 0.075), 0.022, 0.031));
+    d = min(d, oval(face - vec2(-0.008, 0.022), vec2(0.052, 0.054)));
+    if (style == 0.0 || style == 3.0) { // ponytail or low bun
+      d = min(d, oval(face - vec2(-0.054, -0.008), vec2(0.028, style == 0.0 ? 0.055 : 0.029)));
+    } else if (style == 2.0 || style == 5.0) {
+      d = min(d, limb(face, vec2(-0.032, 0.023), vec2(-0.049, -0.074), 0.025, 0.020));
+    }
+    d = min(d, oval(p - vec2(0.0, 0.051), vec2(shoulder, 0.043)));
+    d = min(d, limb(p, vec2(0.0, 0.013), vec2(-0.005, -0.165), shoulder * 0.81, shoulder * 0.66));
+    d = min(d, limb(p, vec2(-0.005, -0.17), vec2(-0.009, -0.27), shoulder * 0.66, shoulder * 0.85));
+    for (int side = 0; side < 2; side++) {
+      float signX = side == 0 ? -1.0 : 1.0;
+      vec2 elbow = vec2(signX * (shoulder + 0.024) + stride * 0.026, -0.083);
+      vec2 wrist = elbow + vec2(-signX * 0.013 + stride * 0.041, -0.113);
+      if (side == 1 && (style == 1.0 || style == 3.0)) wrist = elbow + vec2(-0.082, 0.058);
+      d = min(d, limb(p, vec2(signX * shoulder * 0.82, 0.045), elbow, 0.026, 0.020));
+      d = min(d, limb(p, elbow, wrist, 0.020, 0.014));
+      vec2 hip = vec2(signX * shoulder * 0.42, -0.27);
+      vec2 knee = hip + vec2(signX * (0.015 + stride * 0.050), -0.22);
+      d = min(d, limb(p, hip, knee, shoulder * 0.43, 0.025));
+      d = min(d, limb(p, knee, knee + vec2(signX * 0.010, -0.20), 0.025, 0.016));
+    }
+    return 1.0 - smoothstep(-0.004, 0.005, d);
   }
   vec3 cells(vec2 p) {
     vec2 i = floor(p), f = fract(p); float f1 = 9.0, f2 = 9.0; vec2 id = vec2(0);
@@ -201,9 +237,9 @@ const FRAG = /* glsl */ `
         float who = hash(vec2(wr * 61.0, 3.3)), shade = 0.0;
         if (who < 0.26) {
           float px = 0.5 + 0.75 * sin(uLookTime * 0.11 * (0.5 + r3) + r4 * 40.0);
-          shade = figure((u - vec2(px, 0.5)) * vec2(0.55, 1.0), 1.0);
+          shade = figure((u - vec2(px, 0.5)) * vec2(0.55, 1.0), 1.0, r4, sin(uLookTime * 2.8 + wr * 50.0));
         } else if (who < 0.38) {
-          shade = figure((u - vec2(0.36 + 0.3 * r3, 0.46 + 0.012 * sin(uLookTime * 0.7 + r4 * 9.0))) * vec2(0.55, 1.0), 1.0);
+          shade = figure((u - vec2(0.36 + 0.3 * r3, 0.46 + 0.012 * sin(uLookTime * 0.7 + r4 * 9.0))) * vec2(0.55, 1.0), 1.0, r4, 0.0);
         } else if (who < 0.45) {
           vec2 c = (u - vec2(0.3 + 0.4 * r3, 0.07)) * vec2(0.55, 1.0);
           float ears = max(0.0, 0.035 - abs(abs(c.x - 0.045) - 0.022) * 1.6 - abs(c.y - 0.115) * 0.9);
@@ -216,10 +252,10 @@ const FRAG = /* glsl */ `
         vec2 c = vec2(u.x * 1.5, u.y);
         glow = mix(vec3(0.96, 0.5, 0.24), vec3(1.0, 0.8, 0.5), smoothstep(0.1, 0.9, u.y + (strokes - 0.5) * 0.4));
         float seat = floor(c.x * 2.6), sx = fract(c.x * 2.6) - 0.5, sr = hash(vec2(seat, floor(vWorld.x / 7.0)));
-        float guest = figure(vec2(sx / 2.6 + 0.01 * sin(uLookTime * 0.6 + sr * 30.0), u.y - 0.47), 0.78) * step(0.38, sr);
+        float guest = figure(vec2(sx / 2.6 + 0.01 * sin(uLookTime * 0.6 + sr * 30.0), u.y - 0.47), 0.78, fract(sr * 7.1), 0.0) * step(0.38, sr);
         float table = step(abs(u.y - 0.27), 0.012) * step(abs(sx), 0.34) + step(abs(sx), 0.02) * step(u.y, 0.27);
         float wx = fract(uLookTime * 0.02 + hash(floor(vWorld.xz / 7.0))) * 2.1 - 0.3;
-        float waiter = figure(vec2(c.x - wx, u.y - 0.6), 1.15);
+        float waiter = figure(vec2(c.x - wx, u.y - 0.6), 1.15, 0.4 + 0.59 * wr, sin(uLookTime * 2.4));
         float lampX = fract(c.x * 1.3) - 0.5;
         float bulb = smoothstep(0.06, 0.02, length(vec2(lampX / 1.3, u.y - 0.82)));
         float cone = smoothstep(0.55, 0.1, abs(lampX) / max(0.82 - u.y, 0.02) * 0.6) * step(u.y, 0.82) * 0.16;
