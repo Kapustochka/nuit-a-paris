@@ -17,6 +17,7 @@ import { createPainter } from './paint/post.js';
 import { createPeople } from './people.js';
 import { createTalk } from './talk.js';
 import { createPassport } from './passport.js';
+import { createNearbyWords } from './nearby-words.js';
 import { createRain } from './rain.js';
 import { createAmbient } from './ambient.js';
 
@@ -86,6 +87,7 @@ const lesson = createLesson((key) => inspector.show(key));
 const talk = createTalk({ audio, lesson, player });   // разговоры с прохожими (talk.js)
 const passport = createPassport(mapData, { audio, lesson, minimap, player });   // «Паспорт Монмартра»
 const inspector = installWordInspector(renderer.domElement, scene, camera, world.sky.moonDirection, audio, lesson.inspect, lesson.review);
+const updateNearbyWord = createNearbyWords(mapData.pois, inspector, minimap);
 const stars = createFallingStars(scene, camera, world, inspector, lesson.review);
 installStarToggle(stars);
 // Живые улицы: нарисованные прохожие из кода (people.js). ?no-people — без них, для сравнения.
@@ -189,6 +191,7 @@ renderer.setAnimationLoop(() => {
 
   minimap.update(p.x, p.z, facing, yaw);
   if (minimap.bigOpen) minimap.drawBig(p.x, p.z, facing);
+  updateNearbyWord(p.x, p.z);
 
   // Если кадры идут медленно — мазки мельче, потом кадр в меньшем разрешении
   if (painter && ++frames > 60) {

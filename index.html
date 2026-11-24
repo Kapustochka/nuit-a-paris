@@ -39,6 +39,10 @@
     @media (pointer: coarse) { .act { display: grid; } }
     .touch-only { display: none; }
     @media (pointer: coarse) { .touch-only { display: inline; } .mouse-only { display: none; } }
+    #nearby-word { position: fixed; left: 50%; bottom: calc(max(18px, env(safe-area-inset-bottom)) + 45px);
+      transform: translateX(-50%); max-width: min(55vw, 320px); padding: 8px 12px; border-radius: 8px;
+      border: 1px solid #f6dfb4; color: #f6dfb4; background: #241c4a; font: inherit; cursor: pointer; }
+    #nearby-word span[lang="fr"] { overflow-wrap: anywhere; }
   </style>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -60,6 +64,9 @@
     <small><span class="mouse-only">Двойной клик по предмету или упавшей звезде — слово, по прохожему рядом — разговор</span><span class="touch-only">Двойное касание предмета или звезды — слово, прохожего рядом — разговор</span></small>
   </div>
   <div id="street"></div>
+  <button id="nearby-word" type="button" lang="ru" aria-keyshortcuts="E" hidden>
+    <span lang="fr"></span><span class="mouse-only" aria-hidden="true"> · E</span>
+  </button>
   <canvas id="minimap"></canvas>
   <div id="bigmap"><span>Montmartre · M — закрыть</span><canvas></canvas></div>
   <button class="act" id="btn-punch" aria-label="Удар">✊</button>

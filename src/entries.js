@@ -4,6 +4,7 @@ import { starWords, starPhrases, starStories } from './star-words.js';
 import { starSongs } from './star-songs.js';
 import { talks } from './talk-lines.js';
 import { PLACES } from './passport.js';
+import { nearbyWords } from './nearby-words.js';
 
 const word = (entry, clip, badge) => {
   const [term, ipa, reading, translation, example, meaning] = entry;
@@ -27,6 +28,7 @@ export function entryFor(key) {
       term: title[0], translation: title[1], lines,
       say: { term: [`star/s-${id}`, lines.map(([french]) => french).join(' '), '▶ Слушать'] } };
   }
+  if (group === 'nearby' && Object.hasOwn(nearbyWords, id)) return word(nearbyWords[id], `nearby/${id}`, 'На улицах Монмартра');
   if (group === 'place') {                      // место из «Паспорта Монмартра» (passport.js)
     const place = PLACES.find(([pid]) => pid === id);
     if (!place) return null;

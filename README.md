@@ -35,6 +35,8 @@ The plan for the next walk and the list of models to look for in Meshy are in [N
 
 Some mansards have wider triangular or rounded pediments, and continuous balconies have flower boxes. The additions use the existing painted materials and chunk geometry. Add `?no-street-details` to compare the same camera without these additions. The OSM footprint and existing roof height remain unchanged. `tests/roof-accents.html` checks deterministic placement, bounds and geometry cost in a browser.
 
+Walk near a café, bakery, restaurant, bar or pub to see its French word. Press **E** or tap the word to open its card and save it to your notebook.
+
 ## Tuning the heroine
 Open `http://localhost:8080/?debug` to get sliders for the arms, legs and walking pace.
 Copy the values you like into `TUNING` in `src/heroine.js`.
