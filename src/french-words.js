@@ -49,6 +49,7 @@ export const words = {
   rat: ['le rat', 'lə ʁa', 'лё ра', 'крыса', 'Un rat court près de la poubelle.', 'Крыса бегает возле урны.'],
   flowerpot: ['le pot de fleurs', 'lə po də flœʁ', 'лё по дё флёр', 'цветочный горшок', 'Il y a un pot de fleurs devant la fenêtre.', 'Перед окном стоит горшок с цветами.'],
   crate: ['la cagette', 'la kaʒɛt', 'ла кажэт', 'ящик для фруктов', 'La cagette est pleine de pommes.', 'Ящик полон яблок.'],
+  dog: ['le chien', 'lə ʃjɛ̃', 'лё шье̃', 'собака', 'Le chien marche à côté de sa maîtresse.', 'Собака идёт рядом с хозяйкой.'],
   passant: ['le passant', 'lə pasɑ̃', 'лё паса̃', 'прохожий', 'Un passant me souhaite une bonne soirée.', 'Прохожий желает мне хорошего вечера.'],
   // Что говорят прохожие на улице (облачко над головой; двойной клик по облачку или прохожему — карточка)
   bonsoirStreet: ['Bonsoir !', 'bɔ̃swaʁ', 'бо̃суар', 'Добрый вечер!', 'Bonsoir, madame. Bonsoir, monsieur.', 'Добрый вечер, мадам. Добрый вечер, месье.'],
