@@ -3,6 +3,7 @@
 // Пока её не открыли, новая не появляется; если звезда пропала из виду, может упасть следующая.
 import * as THREE from 'three';
 import { starKeys } from './entries.js';
+import { deed } from './evening.js';
 
 const STEPS_BETWEEN = 7.5;   // метров пути между звёздами: около десяти шагов
 const FIRST_AFTER = 3;       // первая звезда падает почти сразу, чтобы её заметили
@@ -81,6 +82,7 @@ export function createFallingStars(scene, camera, world, inspector, review) {
       seen.add(key);
       try { localStorage.setItem(seenKey, JSON.stringify([...seen])); } catch { /* нет доступа к записи */ }
       inspector.show(key, x, y, hit);
+      deed('star');
     }
     state = 'opened';
     time = 0;

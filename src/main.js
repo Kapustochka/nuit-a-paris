@@ -19,6 +19,7 @@ import { createTalk } from './talk.js';
 import { createPassport } from './passport.js';
 import { createRain } from './rain.js';
 import { createAmbient } from './ambient.js';
+import { createEvening } from './evening.js';
 
 const loading = document.getElementById('loading');
 const streetEl = document.getElementById('street');
@@ -104,6 +105,13 @@ const passport = createPassport(mapData, { audio, lesson, minimap, player });   
 const inspector = installWordInspector(renderer.domElement, scene, camera, world.sky.moonDirection, audio, lesson.inspect, lesson.review);
 const stars = createFallingStars(scene, camera, world, inspector, lesson.review);
 installStarToggle(stars);
+// «Ce soir»: четыре дела на вечер, связывают разговоры, паспорт, звёзды, слова и прогулку (evening.js)
+const evening = createEvening({ audio, player, sacre: [sacreX, sacreZ], available: new Set([
+  ...(passport.found < passport.places.length ? ['place'] : []),
+  ...(stars.enabled !== false ? ['star'] : []),
+  ...(document.querySelectorAll('#notebook li').length >= 3 ? ['review'] : []),
+  // 'cafe' — когда в игре появится заказ в кафе (cafe.js), он добавит сюда 'cafe' и вызовет deed('cafe')
+]) });
 // Живые улицы: нарисованные прохожие из кода (people.js). ?no-people — без них, для сравнения.
 if (!new URLSearchParams(location.search).has('no-people')) people = createPeople(scene, world, mapData, { count: phone ? 10 : 18, inspector, camera, player, onTalk: (p, raining) => talk.start(p, raining) });
 // Мелкая жизнь в воздухе: листья, лепестки, светлячки, пар над кофе, дым из труб. ?no-ambient — без неё.
@@ -113,7 +121,7 @@ performance.mark('paris-ready');
 
 const debug = new URLSearchParams(location.search).has('debug');
 if (debug) addDebugPanel();
-window.__game = { ambient, rain, talk, passport, heroine, passersby, get people() { return people; }, world, stars, inspector, mapData, camera, controls, renderer, cityAudio, get painted() { return painter !== null; }, get painter() { return painter; } };
+window.__game = { evening, ambient, rain, talk, passport, heroine, passersby, get people() { return people; }, world, stars, inspector, mapData, camera, controls, renderer, cityAudio, get painted() { return painter !== null; }, get painter() { return painter; } };
 
 // ── Движение ─────────────────────────────────────────────────
 const MAX_WALK = 1.45, MAX_RUN = 3.8, MAX_BACK = 0.95; // м/с
@@ -187,6 +195,7 @@ renderer.setAnimationLoop(() => {
   people?.update(dt, rain.level);
   talk.update();
   passport.update(dt);
+  evening.update(dt);
   ambient?.update(dt, camera, world.air.groundY);
   shadowCasters.length = 0; shadowCasters.push(p);
   for (const actor of passersby) shadowCasters.push(actor.position);

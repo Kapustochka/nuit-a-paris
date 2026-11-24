@@ -4,6 +4,7 @@
 // В конце удачные ответы попадают в блокнот (lesson.inspect), а пройденные разговоры запоминаются,
 // чтобы в следующий раз прохожие начинали другие. Отойдёшь дальше 7 м — разговор закончится.
 import { talks, puzzled } from './talk-lines.js';
+import { deed } from './evening.js';
 
 const DONE_KEY = 'nuit-a-paris:talks-done:v1';
 const RU_KEY = 'nuit-a-paris:talk-translation';
@@ -93,6 +94,7 @@ export function createTalk({ audio, lesson, player }) {
     b.addEventListener('click', () => close(false));
     li.append(b); list.append(li);
     done.add(talkId);
+    deed('talk');
     try { localStorage.setItem(DONE_KEY, JSON.stringify([...done])); } catch { /* не страшно */ }
     const who = person;
     setTimeout(() => person === who && close(false), 4500);
