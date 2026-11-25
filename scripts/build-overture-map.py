@@ -49,6 +49,7 @@ buildings = []
 for r in read('buildings', 'building', ['height', 'num_floors', 'names', 'class']):
     g = wkb.loads(r['geometry'])
     if not g.intersects(clip): continue
+    g = g.simplify(0.000012, preserve_topology=True)   # ~1 m: the Palace outline has 730 points, the facade builder chokes on it
     h = city.get('heights', {}).get(name(r)) or r['height'] or (r['num_floors'] or 0) * 3.2
     for p in rings(g): buildings.append({'p': p, 'h': r1(h) if h > 2 else 0, 'n': name(r), 'k': r['class'] or 'yes'})
 

@@ -43,7 +43,8 @@ export class Builder {
   }
   append(other, fn = (p) => p) {
     for (let i = 0; i < other.pos.length; i += 3) this.pos.push(...fn([other.pos[i], other.pos[i + 1], other.pos[i + 2]]));
-    this.col.push(...other.col); this.uv.push(...other.uv); this.kind.push(...other.kind); this.rand.push(...other.rand);
+    // без push(...arr): у огромных зданий (Парламент в Лондоне) массивы больше предела аргументов — переполнение стека
+    for (const [to, from] of [[this.col, other.col], [this.uv, other.uv], [this.kind, other.kind], [this.rand, other.rand]]) for (let i = 0; i < from.length; i++) to.push(from[i]);
   }
   transform(fn) {
     for (let i = 0; i < this.pos.length; i += 3) {
