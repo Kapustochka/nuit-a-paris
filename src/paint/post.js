@@ -20,7 +20,7 @@ const FIGURE_A = '0.55';
 
 export function createPainter(renderer, { radius = 3, scale = 1, heroStyle = 1, shafts = 8, shaftSteps = 8, bloom = 2, reflect = 10, reflectDry = 0 } = {}) {
   const size = new THREE.Vector2(), cssSize = new THREE.Vector2();
-  const colorRT = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: Math.min(4, renderer.capabilities.maxSamples), depthTexture: new THREE.DepthTexture(1, 1) });
+  const colorRT = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: Math.min(2, renderer.capabilities.maxSamples), depthTexture: new THREE.DepthTexture(1, 1) });
   const normalRT = new THREE.WebGLRenderTarget(1, 1, { depthTexture: new THREE.DepthTexture(1, 1) });
   const normalMat = new THREE.MeshNormalMaterial({ side: THREE.DoubleSide });
   const normalInst = new THREE.MeshNormalMaterial({ side: THREE.DoubleSide });
