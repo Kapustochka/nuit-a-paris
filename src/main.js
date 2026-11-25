@@ -91,6 +91,7 @@ const near = (actor, x, z) => actor && Math.hypot(x - actor.position.x, z - acto
 const [sacreX, sacreZ] = toXZ(48.88672, 2.34306);
 let walkingPasserby = null, circularPasserby = null, distantRequested = false;
 const passersby = [];
+const PASSERBY_FAR = 50, frustum = new THREE.Frustum(), frustumMatrix = new THREE.Matrix4(), passerbySphere = new THREE.Sphere();
 // Героиня чуть реалистичнее мира вокруг: обычный свет вместо живописного и без мазков (только тонкий контур)
 heroine.root.traverse((o) => { o.userData.noPaint = true; o.userData.realistic = true; });
 world.lightHeroine(heroine.root, { clarity: !originalHero });
@@ -191,7 +192,14 @@ renderer.setAnimationLoop(() => {
     distantRequested = true;
     afterFrame(() => addPasserby(true));
   }
-  for (const actor of passersby) actor.update(dt);
+  // Две большие Meshy-прохожие (до 314 тыс. треугольников со скелетом) рисовались всегда, даже за спиной и за
+  // километр. Теперь — только вблизи и в кадре; вне кадра они стоят на месте и не считают анимацию.
+  if (passersby.length) camera.updateMatrixWorld(), frustum.setFromProjectionMatrix(frustumMatrix.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
+  for (const actor of passersby) {
+    const near = actor.position.distanceToSquared(camera.position) < PASSERBY_FAR ** 2;
+    actor.object.visible = near && frustum.intersectsSphere(passerbySphere.set(actor.position, 1.6));
+    if (actor.object.visible) actor.update(dt);
+  }
   rain.update(dt);
   people?.update(dt, rain.level);
   talk.update();
@@ -199,7 +207,7 @@ renderer.setAnimationLoop(() => {
   evening.update(dt);
   ambient?.update(dt, camera, world.air.groundY);
   shadowCasters.length = 0; shadowCasters.push(p);
-  for (const actor of passersby) shadowCasters.push(actor.position);
+  for (const actor of passersby) if (actor.object.visible) shadowCasters.push(actor.position);
   if (people) for (const one of people.people) if (one.active) shadowCasters.push(one.root.position);
   world.castShadows(shadowCasters, camera);
   stars.update(dt, p.x, p.z, facing);

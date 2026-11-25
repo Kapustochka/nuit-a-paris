@@ -89,7 +89,7 @@ export function placePasserby(scene, asset, world, player, occupied, [anchorX, a
     asset.mixer.update(step / WALK_SPEED);
   }
 
-  return { update, position };
+  return { update, position, object: root };
 }
 
 export function placeCircularPasserby(scene, asset, world, player, occupied, anchor = [player.x, player.z]) {
@@ -123,7 +123,7 @@ export function placeCircularPasserby(scene, asset, world, player, occupied, anc
   const position = hips.getWorldPosition(new THREE.Vector3());
   const nextPosition = new THREE.Vector3();
   return {
-    position,
+    position, object: model,
     update(dt) {
       const nextTime = (time + dt) % duration;
       mixer.setTime(nextTime);
