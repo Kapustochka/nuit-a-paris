@@ -37,6 +37,7 @@
       display: none; place-items: center; touch-action: none; -webkit-tap-highlight-color: transparent; }
     #btn-jump { bottom: max(26px, env(safe-area-inset-bottom)); }
     #btn-punch { bottom: calc(max(26px, env(safe-area-inset-bottom)) + 78px); }
+    #btn-dance { bottom: calc(max(26px, env(safe-area-inset-bottom)) + 156px); }
     .act:active { background: rgba(255,214,150,.35); }
     @media (pointer: coarse) { .act { display: grid; } }
     .touch-only { display: none; }
@@ -57,13 +58,14 @@
   <div id="app"></div>
   <div id="loading">Bonsoir… chargement</div>
   <div id="hint">
-    <span class="mouse-only">WASD — идти · Shift — бежать · Пробел — прыжок · F — удар · M — карта · мышь — камера</span>
+    <span class="mouse-only">WASD — идти · Shift — бежать · Пробел — прыжок · F — удар · M — карта · мышь — камера</span><span class="mouse-only dance-hint" hidden> · 1, 2 — танцы</span>
     <span class="touch-only">Слева — джойстик (до края — бег) · справа — камера</span>
     <small><span class="mouse-only">Двойной клик по предмету или упавшей звезде — слово, по прохожему рядом — разговор</span><span class="touch-only">Коснись предмета или звезды — слово, прохожего рядом — разговор</span></small>
   </div>
   <div id="street"></div>
   <canvas id="minimap"></canvas>
   <div id="bigmap"><span>Montmartre · M — закрыть</span><canvas></canvas></div>
+  <button class="act" id="btn-dance" aria-label="Танец" hidden>💃</button>
   <button class="act" id="btn-punch" aria-label="Удар">✊</button>
   <button class="act" id="btn-jump" aria-label="Прыжок">⤒</button>
   <div id="joy-base"><div id="joy-knob"></div></div>

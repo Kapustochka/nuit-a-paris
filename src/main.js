@@ -130,6 +130,8 @@ loading.textContent = isParis ? 'Bonsoir…' : 'Good evening…';
 const loadedHeroine = await heroineLoad;
 if (loadedHeroine.error) fail(loadedHeroine.error);
 const heroine = loadedHeroine.heroine;
+// Dance key hint and phone button only for a heroine that has dances
+if (heroine.actions.dance || heroine.actions.rumba) for (const el of document.querySelectorAll('#btn-dance, .dance-hint')) el.hidden = false;
 const [sx, sz] = world.freeSpot(0, 6);
 heroine.root.position.set(sx, world.heightAt(sx, sz), sz);
 const player = heroine.root.position;
@@ -200,7 +202,10 @@ renderer.setAnimationLoop(() => {
   // Прыжок и удар
   if (c.jump) { heroine.play('jump'); c.jump = false; }
   if (c.punch) { heroine.play('punch'); c.punch = false; }
-  const punching = heroine.busy === 'punch';
+  if (c.dance) { heroine.play(c.dance); c.dance = null; }
+  // Walking stops a dance. During any one-shot move she does not walk: a jump carries her by its own motion
+  if (input > 0.05 && heroine.busy && heroine.busy !== 'jump' && heroine.busy !== 'punch') heroine.stop();
+  const punching = !!heroine.busy;
 
   // «Назад» без бега — шаг назад, не поворачиваясь спиной
   const backstep = !c.run && c.move.y < -0.5 && Math.abs(c.move.x) < 0.4;
@@ -232,6 +237,13 @@ renderer.setAnimationLoop(() => {
     else if (!blocked(p.x, p.z + stepZ)) p.z += stepZ;
     else if (!tryX && !blocked(p.x + stepX, p.z)) p.x += stepX;
     else speed *= 0.5;
+  }
+
+  // Root motion of a one-shot move (the jump goes forward), along her facing
+  const fwd = heroine.rootStep();
+  if (fwd) {
+    const jx = Math.sin(facing) * fwd, jz = Math.cos(facing) * fwd;
+    if (!blocked(p.x + jx, p.z + jz)) { p.x += jx; p.z += jz; }
   }
 
   p.y = world.heightAt(p.x, p.z);

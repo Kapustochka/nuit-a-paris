@@ -7,6 +7,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 const DIR = 'assets/mixamo/';
 const LOOPS = { idle: 'idle.fbx', walk: 'walk.fbx', run: 'run.fbx', back: 'walk_back.fbx' };   // повторяются по кругу
 const ONCE = { jump: 'jump.fbx', punch: 'punch.fbx' };                                          // проигрываются один раз
+export const EMOTES = { dance: 1, rumba: 1 };   // dances: only in a GLB heroine, played once, stopped by moving
 
 const BONES = {
   leftArm: 'mixamorigLeftArm', rightArm: 'mixamorigRightArm',
@@ -30,18 +31,24 @@ export async function loadHeroine(scene, height = 1.65, glbUrl = null) {
   const { model, mesh, clips } = glbUrl ? await loadGlb(glbUrl) : await loadMixamo(names);
   mesh.castShadow = true; mesh.frustumCulled = false;
 
-  // Анимации: убираем «уезжание» вперёд — двигаем героиню сами
+  // Animations play in place: the hips' horizontal travel is removed in world space (the hips' parent
+  // may be rotated, so stripping local x/z is not enough). For one-shot moves (a jump forward) the
+  // removed travel is kept as a curve, and the game moves the heroine herself along it.
   const mixer = new THREE.AnimationMixer(model);
-  const actions = {};
-  Object.keys(names).forEach((key) => {
+  const actions = {}, rootMotion = {};
+  const hips = findHips(model);
+  model.updateMatrixWorld(true);
+  const keys = glbUrl ? [...Object.keys(names), ...Object.keys(EMOTES)] : Object.keys(names);
+  keys.forEach((key) => {
     const clip = clips[key];
-    if (!clip) { if (!glbUrl) console.warn('Нет анимации в', names[key]); return; }
+    if (!clip) { if (!glbUrl && names[key]) console.warn('Нет анимации в', names[key]); return; }
     clip.name = key;
-    for (const t of clip.tracks) {
-      if (/Hips\.position$/.test(t.name)) for (let k = 0; k < t.values.length; k += 3) { t.values[k] = t.values[0]; t.values[k + 2] = t.values[2]; }
-    }
+    const curve = hips && inPlace(clip, hips);
     const a = mixer.clipAction(clip);
-    if (ONCE[key]) { a.setLoop(THREE.LoopOnce, 1); a.clampWhenFinished = true; }
+    if (ONCE[key] || EMOTES[key]) {
+      a.setLoop(THREE.LoopOnce, 1); a.clampWhenFinished = true;
+      if (curve && glbUrl) rootMotion[key] = curve;   // the Paris jump is already in place
+    }
     actions[key] = a;
   });
 
@@ -57,6 +64,8 @@ export async function loadHeroine(scene, height = 1.65, glbUrl = null) {
   model.scale.multiplyScalar(s);
   model.position.y -= box.min.y * s;
   scene.add(root);
+  for (const c of Object.values(rootMotion)) for (let i = 0; i < c.z.length; i++) c.z[i] *= s;
+  let lastFwd = 0;
 
   const bones = {};
   for (const [k, n] of Object.entries(BONES)) bones[k] = model.getObjectByName(n);
@@ -77,7 +86,7 @@ export async function loadHeroine(scene, height = 1.65, glbUrl = null) {
   // Прыжок или удар: проигрывается один раз, потом возвращаемся к ходьбе/стойке
   function play(name) {
     if (once || !actions[name]) return false;
-    once = name;
+    once = name; lastFwd = 0;
     const a = actions[name];
     a.reset().setEffectiveWeight(1).play();
     actions[current].crossFadeTo(a, 0.12, false);
@@ -90,6 +99,24 @@ export async function loadHeroine(scene, height = 1.65, glbUrl = null) {
     e.action.crossFadeTo(back, 0.2, false);
     once = null;
   });
+
+  // Stop a dance (or any one-shot move) right away, e.g. when the player starts walking
+  function stop() {
+    if (!once) return;
+    const a = actions[once], back = actions[current];
+    back.reset().setEffectiveWeight(1).play();
+    a.crossFadeTo(back, 0.2, false);
+    once = null;
+  }
+
+  // How far forward (metres) the current one-shot move travelled since the last call
+  function rootStep() {
+    const c = once && rootMotion[once];
+    if (!c) return 0;
+    const t = actions[once].time, f = sample(c, t), d = f - lastFwd;
+    lastFwd = f;
+    return d;
+  }
 
   function update(dt, speed = 0) {
     const sp = Math.abs(speed);
@@ -107,7 +134,7 @@ export async function loadHeroine(scene, height = 1.65, glbUrl = null) {
     if (l) { bones.leftUpLeg.rotation.z -= l; bones.rightUpLeg.rotation.z += l; }
   }
 
-  return { root, model, mesh, mixer, actions, setState, play, update, get state() { return current; }, get busy() { return once; } };
+  return { root, model, mesh, mixer, actions, setState, play, stop, rootStep, update, get state() { return current; }, get busy() { return once; } };
 }
 
 // Героиня Paris: модель и анимации Mixamo в FBX, развёртку текстуры возвращаем из исходной модели Meshy
@@ -158,9 +185,41 @@ async function loadGlb(url) {
   const byName = Object.fromEntries(gltf.animations.map((c) => [c.name.toLowerCase(), c]));
   const walk = byName.walk || byName.walking;
   const clips = {
+    dance: byName.dance, rumba: byName.rumba,
     idle: byName.idle || gltf.animations[0], walk,
     run: byName.run || walk?.clone(), back: byName.walk_back || byName.back || walk?.clone(),
     jump: byName.jump, punch: byName.punch,
   };
   return { model, mesh, clips };
+}
+
+function findHips(model) {
+  let h = null;
+  model.traverse((o) => { if (!h && o.isBone && /Hips$/.test(o.name)) h = o; });
+  return h;
+}
+
+// Keep the hips at their first-frame horizontal place (in the model's space), keep the vertical motion.
+// Returns the removed forward travel (model +z) as { t, z } for root motion.
+function inPlace(clip, hips) {
+  const track = clip.tracks.find((t) => t.name === hips.name + '.position');
+  if (!track) return null;
+  const m = hips.parent.matrixWorld, inv = m.clone().invert();
+  const v = track.values, w = new THREE.Vector3(), w0 = new THREE.Vector3(v[0], v[1], v[2]).applyMatrix4(m);
+  const z = new Float32Array(track.times.length);
+  for (let i = 0; i < track.times.length; i++) {
+    w.set(v[i * 3], v[i * 3 + 1], v[i * 3 + 2]).applyMatrix4(m);
+    z[i] = w.z - w0.z;
+    w.x = w0.x; w.z = w0.z;
+    w.applyMatrix4(inv);
+    v[i * 3] = w.x; v[i * 3 + 1] = w.y; v[i * 3 + 2] = w.z;
+  }
+  return { t: track.times, z };
+}
+
+function sample(c, t) {
+  const { t: ts, z } = c;
+  if (t <= ts[0]) return z[0];
+  for (let i = 1; i < ts.length; i++) if (t <= ts[i]) return z[i - 1] + (z[i] - z[i - 1]) * (t - ts[i - 1]) / (ts[i] - ts[i - 1]);
+  return z[z.length - 1];
 }
