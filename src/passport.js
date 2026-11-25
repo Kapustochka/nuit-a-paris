@@ -4,10 +4,13 @@
 // по-французски с переводом и голосом (assets/voice/place/, scripts/build-place-voice.py).
 // Место попадает в блокнот («place:<id>»), а на большой карте (M) найденные отмечены штампом,
 // ненайденные — знаком «?». Прогресс хранится в браузере.
+import { CITY_PREFIX } from './city.js';
+import { isParis } from './city.js';
+import * as london from './content/london.js';
 import { deed } from './evening.js';
 
 // [id, как искать в OSM, название, по-русски, фраза, перевод]
-export const PLACES = [
+const PARIS_PLACES = [
   ['sacre', 'road:Parvis du Sacré-Cœur', 'Le Sacré-Cœur', 'Базилика Сакре-Кёр', 'La basilique est toute blanche, même la nuit.', 'Базилика совсем белая, даже ночью.'],
   ['tertre', 'road:Place du Tertre', 'La place du Tertre', 'Площадь Тертр', 'Ici, les peintres travaillent dehors.', 'Здесь художники работают под открытым небом.'],
   ['maisonRose', 'poi:La Maison Rose', 'La Maison Rose', 'Розовый дом', 'C’est une petite maison rose au coin de la rue.', 'Это маленький розовый дом на углу улицы.'],
@@ -19,11 +22,19 @@ export const PLACES = [
   ['abreuvoir', 'road:Rue de l\'Abreuvoir', 'La rue de l’Abreuvoir', 'Улица Абрёвуар', 'C’est une des plus jolies rues de Paris.', 'Это одна из самых красивых улиц Парижа.'],
   ['consulat', 'poi:Le Consulat', 'Le Consulat', 'Кафе «Консулат»', 'Les artistes venaient boire un café ici.', 'Художники приходили сюда выпить кофе.'],
 ];
-const KEY = 'nuit-a-paris:places:v1';
+const KEY = CITY_PREFIX + 'places:v1';
 
 // Точка места на карте: кафе — его координаты, улица — середина самого длинного её отрезка
 export function locate(data, how) {
   const [kind, name] = [how.slice(0, how.indexOf(':')), how.slice(how.indexOf(':') + 1)];
+  if (kind === 'building') {                    // Лондон: центр контура здания
+    const b = data.buildings.find((q) => q.n === name);
+    if (!b) return null;
+    let x = 0, z = 0; const n = b.p.length / 2;
+    for (let i = 0; i < n; i++) { x += b.p[i * 2]; z += b.p[i * 2 + 1]; }
+    let r = 0; for (let i = 0; i < n; i++) r = Math.max(r, Math.hypot(b.p[i * 2] - x / n, b.p[i * 2 + 1] - z / n));
+    return { x: x / n, z: z / n, r: Math.min(60, r + 12) };
+  }
   if (kind === 'poi') {
     const p = data.pois.find((q) => q.n === name);
     return p ? { x: p.x, z: p.z, r: 11 } : null;
@@ -96,3 +107,5 @@ export function createPassport(data, { audio, lesson, minimap, player }) {
     },
   };
 }
+
+export const PLACES = isParis ? PARIS_PLACES : london.PLACES;

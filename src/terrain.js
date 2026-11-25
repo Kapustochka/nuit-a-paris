@@ -2,12 +2,14 @@
 // assets/terrain.json: сетка высот с шагом 4 м (данные AWS Terrain Tiles / Mapzen, собраны scripts/build-terrain.py).
 // Высота 0 — площадь Тертр (начало координат), вниз по склону — отрицательные значения.
 import * as THREE from 'three';
+import { CITY } from './city.js';
 
 const CITY_DROP = -48;     // уровень Парижа под холмом, далеко за краем карты
 
 export async function loadTerrain() {
+  if (!CITY.terrain) return createTerrain(null);
   try {
-    const r = await fetch('assets/terrain.json');
+    const r = await fetch(CITY.terrain);
     if (r.ok) return createTerrain(await r.json());
   } catch { /* нет файла — ровная земля */ }
   return createTerrain(null);

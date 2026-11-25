@@ -2,6 +2,8 @@
 import * as THREE from 'three';
 import { loadHeroine, TUNING } from './heroine.js';
 import { loadMapData, clearMapCache, toXZ } from './osm.js';
+import { CITY, isParis } from './city.js';
+import { installLanguage } from './i18n.js';
 import { buildParis } from './world.js';
 import { loadTerrain } from './terrain.js';
 import { createControls } from './controls.js';
@@ -23,6 +25,13 @@ import { createAmbient } from './ambient.js';
 import { createEvening } from './evening.js';
 
 const loading = document.getElementById('loading');
+installLanguage();                   // интерфейс на языке города (i18n.js)
+if (!isParis) {                      // та же игра, другой город (city.js)
+  document.title = CITY.title;
+  document.documentElement.lang = 'en';
+  const label = document.querySelector('#bigmap span');
+  if (label) label.textContent = label.textContent.replace('Montmartre', CITY.mapName);
+}
 const streetEl = document.getElementById('street');
 const fail = (e) => { loading.textContent = String(e.message || e); throw e; };
 
@@ -108,7 +117,7 @@ addEventListener('resize', () => {
 
 const streetProps = loadStreetProps();
 // Героиня загружается одновременно с картой и реквизитом, а не после сборки всего города.
-const heroineLoad = loadHeroine(scene).then((heroine) => ({ heroine }), (error) => ({ error }));
+const heroineLoad = loadHeroine(scene, 1.65, CITY.heroine).then((heroine) => ({ heroine }), (error) => ({ error }));
 const terrainLoad = loadTerrain();
 const mapData = await loadMapData((t) => { loading.textContent = t; }).catch(fail);
 const world = buildParis(scene, renderer, mapData, { terrain: await terrainLoad }, await streetProps);
@@ -117,7 +126,7 @@ const controls = createControls(renderer.domElement);
 controls.state.camDist = 3.6;
 const minimap = createMinimap(document.getElementById('minimap'), mapData);
 
-loading.textContent = 'Bonsoir…';
+loading.textContent = isParis ? 'Bonsoir…' : 'Good evening…';
 const loadedHeroine = await heroineLoad;
 if (loadedHeroine.error) fail(loadedHeroine.error);
 const heroine = loadedHeroine.heroine;
@@ -127,7 +136,7 @@ const player = heroine.root.position;
 const near = (actor, x, z) => actor && Math.hypot(x - actor.position.x, z - actor.position.z) < 0.75;
 // Две прохожие гуляют в разных местах: одна у площади Тертр, другая на смотровой площадке перед Сакре-Кёр.
 // (Возможно, потом станут альтернативными героинями.)
-const [sacreX, sacreZ] = toXZ(48.88672, 2.34306);
+const [sacreX, sacreZ] = toXZ(CITY.landmark.lat, CITY.landmark.lon);
 let walkingPasserby = null, circularPasserby = null, distantRequested = false;
 const passersby = [];
 const PASSERBY_FAR = 50, frustum = new THREE.Frustum(), frustumMatrix = new THREE.Matrix4(), passerbySphere = new THREE.Sphere();
@@ -250,7 +259,7 @@ renderer.setAnimationLoop(() => {
   camera.lookAt(look);
 
   world.update(dt, p.x, p.z, camera);
-  if (!distantRequested && Math.hypot(p.x - sacreX, p.z - sacreZ - 60) < 100) {
+  if (isParis && !distantRequested && Math.hypot(p.x - sacreX, p.z - sacreZ - 60) < 100) {
     distantRequested = true;
     afterFrame(() => addPasserby(true));
   }
@@ -311,10 +320,10 @@ async function addPasserby(distant) {
   asset.model.traverse((o) => { if (o.userData.word) inspector.addTarget(o); });
   passersby.push(actor);
 }
-afterFrame(() => addPasserby(false));
+if (isParis) afterFrame(() => addPasserby(false));   // обе Meshy-прохожие гуляют по местам Монмартра
 // 3D-прохожие со скелетом (people-3d.js) — в дополнение к нарисованным. Грузятся по одному после первого кадра.
 // ?no-3d — без них.
-if (people && !new URLSearchParams(location.search).has('no-3d')) afterFrame(async () => {
+if (isParis && people && !new URLSearchParams(location.search).has('no-3d')) afterFrame(async () => {
   for (const one of CAST_3D) {
     try {
       const home = one.sacre ? [sacreX + one.sacre[0], sacreZ + one.sacre[1]] : one.home;

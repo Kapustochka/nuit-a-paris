@@ -3,10 +3,11 @@
 // трёх вариантов. Подходящий ответ ведёт разговор дальше, неподходящий — прохожий переспрашивает.
 // В конце удачные ответы попадают в блокнот (lesson.inspect), а пройденные разговоры запоминаются,
 // чтобы в следующий раз прохожие начинали другие. Отойдёшь дальше 7 м — разговор закончится.
+import { CITY_PREFIX } from './city.js';
 import { talks, puzzled } from './talk-lines.js';
 import { deed } from './evening.js';
 
-const DONE_KEY = 'nuit-a-paris:talks-done:v1';
+const DONE_KEY = CITY_PREFIX + 'talks-done:v1';
 const RU_KEY = 'nuit-a-paris:talk-translation';
 
 export function createTalk({ audio, lesson, player }) {

@@ -1,4 +1,9 @@
 import { starSongs } from './star-songs.js';
+import { CITY, isParis } from './city.js';
+
+// Язык озвучки: Париж — французские клипы и голос fr-FR; Лондон — пока британский голос браузера (en-GB)
+const LANG = isParis ? /^fr(?:[-_]|$)/i : /^en(?:[-_]|$)/i, LOCAL = isParis ? /^fr[-_]FR$/i : /^en[-_]GB$/i;
+const NICE = isParis ? /audrey|amélie|denise|flo|hortense|marie|sandy|shelley|vivienne/i : /sonia|libby|ryan|serena|daniel|kate|arthur|martha|google uk english/i;
 
 // Музыкальная шкатулка для песенок со звёзд: мягкие колокольчики через Web Audio, без файлов
 const FREQ = { C: -9, D: -7, E: -5, F: -4, G: -2, A: 0, B: 2 };
@@ -74,7 +79,7 @@ export function createFrenchAudio({ onActivity = () => {} } = {}) {
     }
     player.onended = done;
     // Слова с улицы лежат в WAV, находки из звёзд и разговоры — в сжатом MP3.
-    player.src = `assets/voice/${clip}.${/^(star|talk|people|place|evening)\//.test(clip) ? 'mp3' : 'wav'}`;
+    if (isParis) player.src = `assets/voice/${clip}.${/^(star|talk|people|place|evening)\//.test(clip) ? 'mp3' : 'wav'}`;
     let fallingBack = false;
     const fallback = () => {
       if (attempt !== revision) return;
@@ -83,12 +88,12 @@ export function createFrenchAudio({ onActivity = () => {} } = {}) {
       const synth = window.speechSynthesis;
       if (!synth || !window.SpeechSynthesisUtterance) { report('Озвучка недоступна.'); done(); return; }
       const voices = synth.getVoices();
-      const french = voices.filter(({ lang }) => /^fr(?:[-_]|$)/i.test(lang));
-      const preferred = french.find(({ name }) => /audrey|amélie|denise|flo|hortense|marie|sandy|shelley|vivienne/i.test(name));
+      const french = voices.filter(({ lang }) => LANG.test(lang));
+      const preferred = french.filter(({ lang }) => LOCAL.test(lang)).find(({ name }) => NICE.test(name)) || french.find(({ name }) => NICE.test(name));
       if (voices.length && !french.length) { report('Французская озвучка недоступна.'); done(); return; }
       const utterance = new SpeechSynthesisUtterance(text);
-      utterance.voice = preferred || french.find(({ lang }) => /^fr[-_]FR$/i.test(lang)) || french[0] || null;
-      utterance.lang = utterance.voice?.lang || 'fr-FR';
+      utterance.voice = preferred || french.find(({ lang }) => LOCAL.test(lang)) || french[0] || null;
+      utterance.lang = utterance.voice?.lang || (isParis ? 'fr-FR' : 'en-GB');
       utterance.rate = 0.88;
       utterance.onend = done;
       utterance.onerror = ({ error }) => {
@@ -98,6 +103,7 @@ export function createFrenchAudio({ onActivity = () => {} } = {}) {
       try { synth.speak(utterance); } catch { report('Озвучка недоступна.'); done(); }
     };
     player.onerror = fallback;
+    if (!isParis) { fallback(); return; }          // своих клипов у Лондона пока нет
     player.play().catch(fallback);
   }
   document.addEventListener('visibilitychange', () => { if (document.hidden) stop(); });

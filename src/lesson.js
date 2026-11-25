@@ -1,8 +1,9 @@
+import { CITY_PREFIX } from './city.js';
 import { entryFor } from './entries.js';
 import { createWordReview } from './word-review.js';
 import { deed } from './evening.js';
 
-const notebookKey = 'nuit-a-paris:words:v1';
+const notebookKey = CITY_PREFIX + 'words:v1';
 
 // Блокнот найденных слов (квест в булочной убран — позже придумаем другие задания)
 export function createLesson(openWord) {

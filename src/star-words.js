@@ -1,7 +1,10 @@
 // Словарь падающих звёзд: слова, которых нет среди предметов на улице,
 // отдельные фразы и короткие истории или факты. Формат слова такой же, как в french-words.js:
 // [слово с артиклем, IPA, примерное чтение, перевод, французская фраза, перевод фразы].
-export const starWords = {
+import { isParis } from './city.js';
+import * as london from './content/london.js';
+import * as londonExtra from './content/london-extra.js';
+const parisStarWords = {
   // Животные
   chat: ['le chat', 'lə ʃa', 'лё ша', 'кот', 'Le chat dort sur le canapé.', 'Кот спит на диване.'],
   chien: ['le chien', 'lə ʃjɛ̃', 'лё шьэ̃', 'собака', 'Le chien attend son maître devant la porte.', 'Собака ждёт хозяина у двери.'],
@@ -251,7 +254,7 @@ export const starWords = {
 };
 
 // Отдельные фразы: [по-французски, по-русски]
-export const starPhrases = [
+const parisStarPhrases = [
   ['Il fait beau aujourd’hui.', 'Сегодня хорошая погода.'],
   ['Où se trouve la station de métro la plus proche ?', 'Где ближайшая станция метро?'],
   ['Je voudrais un café crème, s’il vous plaît.', 'Мне кофе со сливками, пожалуйста.'],
@@ -295,7 +298,7 @@ export const starPhrases = [
 ];
 
 // Истории и факты: заголовок и до пяти предложений, каждое с переводом.
-export const starStories = [
+const parisStarStories = [
   { kind: 'fact', title: ['La tour Eiffel', 'Эйфелева башня'], lines: [
     ['La tour Eiffel a été construite pour l’Exposition universelle de 1889.', 'Эйфелеву башню построили к Всемирной выставке 1889 года.'],
     ['Au début, beaucoup de Parisiens la trouvaient laide.', 'Сначала многие парижане считали её уродливой.'],
@@ -427,3 +430,7 @@ export const starStories = [
     ['Une phrase célèbre dit : « On ne voit bien qu’avec le cœur. »', 'Знаменитая фраза гласит: «Зорко одно лишь сердце».'],
   ] },
 ];
+
+export const starWords = isParis ? parisStarWords : { ...londonExtra.starWords, ...london.starWords };
+export const starPhrases = isParis ? parisStarPhrases : [...london.starPhrases, ...londonExtra.starPhrases];
+export const starStories = isParis ? parisStarStories : [...london.starStories, ...londonExtra.starStories];
