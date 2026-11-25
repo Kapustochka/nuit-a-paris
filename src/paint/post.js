@@ -20,7 +20,7 @@ const FIGURE_A = '0.55';
 
 export function createPainter(renderer, { radius = 3, scale = 1, heroStyle = 1, shafts = 8, shaftSteps = 8, bloom = 2, reflect = 10, reflectDry = 0 } = {}) {
   const size = new THREE.Vector2(), cssSize = new THREE.Vector2();
-  const colorRT = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: Math.min(4, renderer.capabilities.maxSamples), depthTexture: new THREE.DepthTexture(1, 1) });
+  const colorRT = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: Math.min(2, renderer.capabilities.maxSamples), depthTexture: new THREE.DepthTexture(1, 1) });
   const normalRT = new THREE.WebGLRenderTarget(1, 1, { depthTexture: new THREE.DepthTexture(1, 1) });
   const normalMat = new THREE.MeshNormalMaterial({ side: THREE.DoubleSide });
   const normalInst = new THREE.MeshNormalMaterial({ side: THREE.DoubleSide });
@@ -247,6 +247,11 @@ export function createPainter(renderer, { radius = 3, scale = 1, heroStyle = 1, 
           col = 1.0 - (1.0 - col) * (1.0 - min(glowB * uBloom, 1.0));   // «экран»: свет добавляется, но не выгорает
         #endif
 
+        // сказочный тон: тени уходят в глубокий синий, свет — в мёд, чуть больше цвета
+        float Y = dot(col, vec3(0.3, 0.59, 0.11));
+        vec3 tone = mix(vec3(0.96, 0.95, 1.04), vec3(1.12, 1.0, 0.82), smoothstep(0.08, 0.55, Y));
+        col = mix(col, max(mix(vec3(Y), col, 1.18) * tone, 0.0), 1.0 - 0.6 * real * uHeroStyle);
+
         // бумага: лист один на весь экран и не зависит от плотности пикселей
         vec2 pp = vUv * uCssRes;
         float fibre = vnoise(vec2(pp.x / 46.0, pp.y / 3.2) + 3.0) * 0.6 + vnoise(vec2(pp.x / 4.0, pp.y / 61.0) + 11.0) * 0.4;
@@ -258,7 +263,7 @@ export function createPainter(renderer, { radius = 3, scale = 1, heroStyle = 1, 
         col += vec3(0.05, 0.04, 0.03) * max(tooth - 0.62, 0.0) * uPaper * (1.0 - keep);   // светлые ворсинки листа
         // виньетка уводит углы в фиолетовую тень, а не в чёрный
         vec2 q = vUv - 0.5; float vg = smoothstep(0.18, 0.85, dot(q, q) * 1.9) * uVignette;
-        col = mix(col, col * vec3(0.5, 0.46, 0.66), vg * 0.75);
+        col = mix(col, col * vec3(0.52, 0.44, 0.56), vg * 0.75);
         gl_FragColor = vec4(col, 1.0);
       }`,
     depthTest: false, depthWrite: false,

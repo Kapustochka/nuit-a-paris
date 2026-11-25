@@ -42,10 +42,10 @@ const plainView = new URLSearchParams(location.search).has('plain');
 const originalHero = new URLSearchParams(location.search).has('original-hero');
 let painter = plainView ? null : createPainter(renderer, { radius: phone ? 2 : 3, heroStyle: originalHero ? 0 : 1, shafts: phone ? 4 : 8, shaftSteps: phone ? 5 : 8, bloom: phone ? 1 : 2, reflect: phone ? 6 : 10 });
 painter?.setSize();
-// Качество под скорость кадра. Главный рычаг — разрешение: пост-проход (кисть, тушь, воздух) считается на каждый
-// пиксель экрана, поэтому подбираем pixel ratio плавно, по 15 % за шаг, и возвращаем его, когда запас появился.
-// Медленно и при минимальном разрешении — упрощаем кисть, лучи, свечение и отражения (это пересборка шейдера).
-const MAX_PR = Math.min(devicePixelRatio, phone ? 1.25 : 1.5), MIN_PR = phone ? 0.6 : 0.7;
+// Качество под скорость кадра. Если медленнее ~48 кадров/с — по шагу раз в 1,5 с упрощаем лучи, кисть, свечение и
+// отражения, и только потом снижаем разрешение (на ПК не ниже 85 %, на телефоне 75 %): меньшее разрешение мылит
+// всю картинку. Разрешение возвращается, когда запас появился.
+const MAX_PR = Math.min(devicePixelRatio, phone ? 1.25 : 1.5), MIN_PR = Math.min(MAX_PR, phone ? 0.75 : 0.85);
 const frameMs = [];
 let pr = MAX_PR, windowT = 0, goodWindows = 0, ceilingPr = Infinity, ceilingUntil = 0, warmup = 6;
 function setPr(next) {
@@ -68,13 +68,12 @@ function quality() {
   const now = performance.now();
   if (ms > 21) {                                                     // медленнее ~48 кадров/с
     goodWindows = 0;
-    if (pr > MIN_PR) { ceilingPr = pr; ceilingUntil = now + 60000; setPr(pr * 0.85); }
-    else if (ms > 30) {
-      if (painter.radius > 1) painter.setRadius(painter.radius - 1);
-      else if (painter.shafts > 2) painter.setShafts(2, 4);          // лучи только у двух ближайших фонарей
-      else if (painter.bloom > 1) painter.setBloom(1);               // свечение только узкое
-      else if (painter.reflect > 0) painter.setReflect(0);           // без отражений в мокрой мостовой
-    }
+    // сначала то, что почти не видно глазу, и только потом — разрешение (оно размывает всю картинку)
+    if (painter.shafts > 2) painter.setShafts(2, 4);                 // лучи только у двух ближайших фонарей
+    else if (painter.radius > 1) painter.setRadius(1);               // мазки мельче (радиус 2 стоит столько же, сколько 3)
+    else if (painter.bloom > 1) painter.setBloom(1);                 // свечение только узкое
+    else if (painter.reflect > 0) painter.setReflect(0);             // без отражений в мокрой мостовой
+    else if (pr > MIN_PR) { ceilingPr = pr; ceilingUntil = now + 60000; setPr(pr * 0.9); }
   } else if (ms < 17.5 && pr < MAX_PR) {                             // идёт с частотой экрана — пробуем вернуть чёткость
     if (++goodWindows >= 4) {
       goodWindows = 0;
@@ -293,7 +292,7 @@ renderer.setAnimationLoop(() => {
   rain.render(camera);                // штрихи дождя поверх картины
 });
 
-// 38 МБ второстепенных моделей не задерживают вход. Дальняя прохожая нужна только у базилики.
+// Второстепенные модели (после сжатия ~2 МБ) не задерживают вход. Дальняя прохожая нужна только у базилики.
 function afterFrame(task) {
   requestAnimationFrame(() => {
     if ('requestIdleCallback' in window) requestIdleCallback(task, { timeout: 2000 });

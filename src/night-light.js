@@ -9,7 +9,7 @@ import * as THREE from 'three';
 const PX_PER_M = 3.6;        // ~28 см на пиксель
 const MAX_SIZE = 2048;
 const SIDEWALK = 1.7;        // ширина тротуара, м
-const LAMP_R = 8.5;          // радиус пятна под фонарём, м
+const LAMP_R = 11;          // радиус пятна под фонарём, м
 
 export function createNightLight(bounds, terrain = null) {
   const w = bounds.maxX - bounds.minX, h = bounds.maxZ - bounds.minZ;
@@ -21,6 +21,8 @@ export function createNightLight(bounds, terrain = null) {
   const X = (x) => (x - bounds.minX) * k, Z = (z) => (z - bounds.minZ) * k;
 
   const texture = new THREE.CanvasTexture(c);
+  // Both the canvas row and the shader's V coordinate increase with world Z.
+  texture.flipY = false;
   texture.colorSpace = THREE.NoColorSpace;
   texture.minFilter = THREE.LinearFilter; texture.generateMipmaps = false;
   const uniforms = {
@@ -49,12 +51,23 @@ export function createNightLight(bounds, terrain = null) {
     g.globalCompositeOperation = 'lighter';
     const gr = g.createRadialGradient(X(x), Z(z), 0, X(x), Z(z), r * k);
     const s = (v) => `rgba(255,0,0,${(v * strength).toFixed(3)})`;
-    gr.addColorStop(0, s(0.95)); gr.addColorStop(0.18, s(0.7)); gr.addColorStop(0.45, s(0.3)); gr.addColorStop(1, s(0));
+    gr.addColorStop(0, s(0.8)); gr.addColorStop(0.25, s(0.6)); gr.addColorStop(0.55, s(0.28)); gr.addColorStop(1, s(0));
     g.fillStyle = gr; g.fillRect(X(x) - r * k, Z(z) - r * k, 2 * r * k, 2 * r * k);
   }
   // Полоса света из витрины на мостовую
   function shopSpill(x, z, nx, nz, width) {
-    for (let i = -1; i <= 1; i++) light(x + nz * width * 0.3 * i + nx * 1.2, z - nx * width * 0.3 * i + nz * 1.2, 3.6, 0.55);
+    // A single footprint, stretched along the glass, keeps the terrace in reflected light.
+    g.save();
+    g.transform(nz * (width * 0.5 + 1.4) * k, -nx * (width * 0.5 + 1.4) * k,
+      nx * 3.2 * k, nz * 3.2 * k, X(x + nx * 0.8), Z(z + nz * 0.8));
+    g.globalCompositeOperation = 'lighter';
+    const pool = g.createRadialGradient(0, 0, 0, 0, 0, 1);
+    pool.addColorStop(0, 'rgba(255,0,0,0.62)');
+    pool.addColorStop(0.55, 'rgba(255,0,0,0.37)');
+    pool.addColorStop(1, 'rgba(255,0,0,0)');
+    g.fillStyle = pool;
+    g.fillRect(-1, -1, 2, 2);
+    g.restore();
   }
   const done = () => { texture.needsUpdate = true; };
   return { uniforms, defines, buildings, light, shopSpill, done, canvas: c };

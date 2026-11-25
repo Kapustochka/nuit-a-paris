@@ -1,12 +1,13 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 
 const RADIUS = 0.34;
 const WALK_SPEED = 1.3;
 
 export async function loadPasserby(file, clip) {
   try {
-    const { scene, animations } = await new GLTFLoader().loadAsync(`assets/people/${file}`);
+    const { scene, animations } = await new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).loadAsync(`assets/people/${file}`);
     const walking = animations.find(({ name }) => name === clip);
     if (!walking) throw new Error(`Анимация ${clip} отсутствует`);
     scene.traverse((part) => {
