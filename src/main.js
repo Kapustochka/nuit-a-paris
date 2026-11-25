@@ -17,7 +17,7 @@ import { createCityAudio } from './city-audio.js';
 import { loadPasserby, placePasserby, placeCircularPasserby, passerbyBlocksStep } from './passerby.js';
 import { createPainter } from './paint/post.js';
 import { createPeople } from './people.js';
-import { CAST_3D, loadWalker } from './people-3d.js';
+import { CAST_3D, LONDON_HOMES, loadWalker } from './people-3d.js';
 import { createTalk } from './talk.js';
 import { createPassport } from './passport.js';
 import { createRain } from './rain.js';
@@ -139,6 +139,8 @@ const near = (actor, x, z) => actor && Math.hypot(x - actor.position.x, z - acto
 // Две прохожие гуляют в разных местах: одна у площади Тертр, другая на смотровой площадке перед Сакре-Кёр.
 // (Возможно, потом станут альтернативными героинями.)
 const [sacreX, sacreZ] = toXZ(CITY.landmark.lat, CITY.landmark.lon);
+// where the second Meshy walker circles: the terrace before Sacré-Cœur, or the Parliament Square green
+const CIRCLE_SPOT = isParis ? [sacreX, sacreZ + 60] : [-40, 30];
 let walkingPasserby = null, circularPasserby = null, distantRequested = false;
 const passersby = [];
 const PASSERBY_FAR = 50, frustum = new THREE.Frustum(), frustumMatrix = new THREE.Matrix4(), passerbySphere = new THREE.Sphere();
@@ -271,7 +273,7 @@ renderer.setAnimationLoop(() => {
   camera.lookAt(look);
 
   world.update(dt, p.x, p.z, camera);
-  if (isParis && !distantRequested && Math.hypot(p.x - sacreX, p.z - sacreZ - 60) < 100) {
+  if (!distantRequested && Math.hypot(p.x - CIRCLE_SPOT[0], p.z - CIRCLE_SPOT[1]) < 100) {
     distantRequested = true;
     afterFrame(() => addPasserby(true));
   }
@@ -324,7 +326,7 @@ async function addPasserby(distant) {
   const asset = await loadPasserby(distant ? 'athletic-walk-in-circle.glb' : 'sporty-walking.glb', distant ? 'Walk In Circle' : 'Walking');
   if (!asset) return;
   const actor = distant
-    ? placeCircularPasserby(scene, asset, world, player, (x, z) => near(walkingPasserby, x, z), [sacreX, sacreZ + 60])
+    ? placeCircularPasserby(scene, asset, world, player, (x, z) => near(walkingPasserby, x, z), CIRCLE_SPOT)
     : placePasserby(scene, asset, world, player, (x, z) => near(circularPasserby, x, z), [-6, -4]);
   if (!actor) return;
   if (distant) circularPasserby = actor; else walkingPasserby = actor;
@@ -332,13 +334,13 @@ async function addPasserby(distant) {
   asset.model.traverse((o) => { if (o.userData.word) inspector.addTarget(o); });
   passersby.push(actor);
 }
-if (isParis) afterFrame(() => addPasserby(false));   // обе Meshy-прохожие гуляют по местам Монмартра
+afterFrame(() => addPasserby(false));   // the Meshy walker: Place du Tertre in Paris, Parliament Square in London
 // 3D-прохожие со скелетом (people-3d.js) — в дополнение к нарисованным. Грузятся по одному после первого кадра.
 // ?no-3d — без них.
-if (isParis && people && !new URLSearchParams(location.search).has('no-3d')) afterFrame(async () => {
+if (people && !new URLSearchParams(location.search).has('no-3d')) afterFrame(async () => {
   for (const one of CAST_3D) {
     try {
-      const home = one.sacre ? [sacreX + one.sacre[0], sacreZ + one.sacre[1]] : one.home;
+      const home = !isParis ? LONDON_HOMES[one.file] : one.sacre ? [sacreX + one.sacre[0], sacreZ + one.sacre[1]] : one.home;
       const owner = people.addModel(await loadWalker(one.file), { woman: one.woman, home, range: one.range });
       if (one.dog) people.addModel(await loadWalker(one.dog), { woman: false, scale: 1.5, owner, word: 'dog' });
     } catch (error) { console.warn('3D-прохожий не загрузился:', one.file, error); }
