@@ -19,6 +19,7 @@ import { Builder, K } from './paint/builder.js';
 import { foliage, leafTexture, basilicaMesh } from './paint/props.js';
 import { buildLondonLandmarks } from './london.js';
 import { placeLondonProps } from './london-props.js';
+import { riverMaterial } from './london-river.js';
 
 const CELL = 24;              // ячейка сетки для столкновений
 
@@ -49,10 +50,12 @@ export function buildParis(scene, renderer, data, city, props = {}) {
 
   // ── Вода (Темза в Лондоне): тёмная гладь поверх земли, по ней не ходят ──
   const waters = (data.water || []).map((w) => makePoly(w.p));
+  let river = null;
   if (waters.length) {
     const shapes = waters.map(({ p }) => new THREE.Shape(Array.from({ length: p.length / 2 }, (_, i) => new THREE.Vector2(p[i * 2], -p[i * 2 + 1]))));
     const geo = new THREE.ShapeGeometry(shapes); geo.rotateX(-Math.PI / 2); geo.translate(0, 0.06, 0);
-    const water = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color: new THREE.Color().setRGB(0.08, 0.13, 0.2, THREE.LinearSRGBColorSpace) }));
+    river = riverMaterial(look, CITY.palette || {});
+    const water = new THREE.Mesh(geo, river.material);
     water.userData.word = 'river';
     scene.add(water);
   }
@@ -216,6 +219,15 @@ export function buildParis(scene, renderer, data, city, props = {}) {
       scene.add(wall);
     }
   }
+  if (river) {                                         // what the Thames reflects: lamps by the water, Big Ben, the Eye
+    const warm = new THREE.Color(1.0, 0.72, 0.38), face = new THREE.Color(1.0, 0.85, 0.55), eye = new THREE.Color(0.55, 0.75, 1.0);
+    const near = (x, z) => waters.some((w) => x > w.minX - 6 && x < w.maxX + 6 && z > w.minZ - 6 && z < w.maxZ + 6);
+    const glow = lamps.filter(([x, z]) => near(x, z)).map(([x, z]) => [x, 3.8, z, 1, warm]);
+    glow.push([towerSpot.x, 57, towerSpot.z, 9, face]);
+    const [ex, ez] = toXZ(51.5033, -0.1196);
+    for (let k = 0; k < 6; k++) { const a = k / 6 * Math.PI * 2; glow.push([ex, 70 + Math.sin(a) * 60, ez + Math.cos(a) * 20, 2.5, eye]); }
+    river.setLights(glow);
+  }
   const propRandom = mulberry(27);
   const { lights: lampLights, detailed: detailedLamps } = buildLamps(scene, lamps, props, propRandom);
   for (const [x, z] of lamps) night.light(x, z);
@@ -325,6 +337,7 @@ export function buildParis(scene, renderer, data, city, props = {}) {
   function update(dt, hx, hz, camera) {
     sky.update(dt);
     landmarks?.update(dt, hx, hz);
+    river?.update(dt);
     look.uLookTime.value += dt;
     const gy = standAt(hx, hz);
     air.groundY = air.started ? air.groundY + (gy - air.groundY) * (1 - Math.exp(-dt * 2)) : gy;
