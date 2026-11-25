@@ -92,6 +92,17 @@ export function buildParis(scene, renderer, data, city, props = {}) {
   const R = 0.35;
   let benches = [];
   const solids = [];                       // киоск, урны, велосипеды, скутеры, горшки
+  // тонкие препятствия для прохожих (people.js): фонари, столбики, деревья, мольберты — [x, z, радиус] по клеткам 4 м
+  const posts = new Map();
+  const addPost = (x, z, r) => { const k = Math.floor(x / 4) + ':' + Math.floor(z / 4); (posts.get(k) || posts.set(k, []).get(k)).push([x, z, r]); };
+  const post = (x, z, r = 0) => {
+    const cx = Math.floor(x / 4), cz = Math.floor(z / 4);
+    for (let i = cx - 1; i <= cx + 1; i++) for (let j = cz - 1; j <= cz + 1; j++) {
+      const cell = posts.get(i + ':' + j);
+      if (cell) for (const [px, pz, pr] of cell) if ((x - px) ** 2 + (z - pz) ** 2 < (pr + r) ** 2) return true;
+    }
+    return false;
+  };
   const hitsBox = (x, z, box) => {
     const dx = x - box.x, dz = z - box.z;
     return Math.abs(dx * box.cos - dz * box.sin) < box.halfWidth + R &&
@@ -129,7 +140,8 @@ export function buildParis(scene, renderer, data, city, props = {}) {
   const propRandom = mulberry(27);
   const { lights: lampLights, detailed: detailedLamps } = buildLamps(scene, lamps, props, propRandom);
   for (const [x, z] of lamps) night.light(x, z);
-  buildBollards(scene, lamps, inside);
+  for (const [x, z] of lamps) addPost(x, z, 0.25);
+  for (const [x, z] of buildBollards(scene, lamps, inside)) addPost(x, z, 0.12);
   benches = placeBenches(props['park-bench'], data.roads, lamps, data.trees, blocked, propRandom);
   addPropInstances(scene, props['park-bench'], benches);
   const pigeons = placePigeons(scene, props, benches, blocked, propRandom);
@@ -138,6 +150,7 @@ export function buildParis(scene, renderer, data, city, props = {}) {
 
   // ── Деревья: изогнутый ствол и крона из мазков ─────────────
   buildTrees(scene, look, data.trees.length ? data.trees : [], inside, rnd, terrain.flat ? () => 0 : heightAt);
+  for (let i = 0; i < data.trees.length; i += 2) addPost(data.trees[i], data.trees[i + 1], 0.4);
 
   // ── Кафе, бистро, булочные (настоящие названия) ───────────
   const shopFronts = [], terraces = [];
@@ -151,7 +164,7 @@ export function buildParis(scene, renderer, data, city, props = {}) {
   const streetLife = placeStreetLife(scene, props, { benches, lamps, wallSpots, shopFronts, blocked, solids, random: propRandom });
 
   // ── Площадь Тертр: мольберты художников ───────────────────
-  buildEasels(scene, inside, rnd);
+  for (const [x, z] of buildEasels(scene, inside, rnd)) addPost(x, z, 0.45);
 
   // ── Сакре-Кёр, Эйфелева башня и огни вдали ─────────────────
   buildBasilica(scene, look, SACRE[0], SACRE[1]);
@@ -295,7 +308,7 @@ export function buildParis(scene, renderer, data, city, props = {}) {
   }
 
   return {
-    blocked, inside, streetAt, freeSpot, update, castShadows, sky, night, look, air, houses: plan.houses, paint, facades, lightHeroine, heightAt: (x, z) => standAt(x, z),
+    blocked, post, inside, streetAt, freeSpot, update, castShadows, sky, night, look, air, houses: plan.houses, paint, facades, lightHeroine, heightAt: (x, z) => standAt(x, z),
     soundSpots: shopFronts.filter((s) => ['cafe', 'restaurant', 'bar', 'pub'].includes(s.kind)),
     stats: { stairs: stairs.count, buildings: polys.length, lamps: lamps.length, detailedLamps, benches: benches.length, pigeons, ...streetLife },
   };
@@ -576,6 +589,7 @@ function buildEasels(scene, inside, rnd) {
     return new THREE.MeshBasicMaterial({ map: tex(c), color: 0xbcb5ad });
   });
   const frameGeo = new THREE.BoxGeometry(0.06, 1.7, 0.06), canvGeo = new THREE.PlaneGeometry(0.62, 0.8);
+  const spots = [];
   for (let i = 0; i < 16; i++) {
     const a = i / 16 * Math.PI * 2 + 0.2, r = 9 + (i % 2) * 2.2, x = Math.cos(a) * r, z = Math.sin(a) * r;
     if (inside(x, z)) continue;
@@ -586,7 +600,9 @@ function buildEasels(scene, inside, rnd) {
     g.traverse((part) => { if (part.isMesh) part.userData.word = part === cv ? 'painting' : 'easel'; });
     g.position.set(x, 0, z); g.rotation.y = Math.atan2(x, z) + Math.PI + (rnd() - 0.5) * 0.6;
     scene.add(g);
+    spots.push([x, z]);
   }
+  return spots;
 }
 
 // ═══ Эйфелева башня и огни города ═══════════════════════════
@@ -617,7 +633,7 @@ function buildBollards(scene, lamps, inside) {
     const bx = x + tx * d, bz = z + tz * d;
     if (!inside(bx, bz) && !inside(bx + 0.3, bz) && !inside(bx - 0.3, bz) && !inside(bx, bz + 0.3) && !inside(bx, bz - 0.3)) list.push([bx, bz]);
   }
-  if (!list.length) return;
+  if (!list.length) return list;
   const mat = new THREE.MeshStandardMaterial({ color: 0x0e0e14, roughness: 0.3, metalness: 0.85 });
   // по клеткам 48 м: столбики за спиной и вдали не рисуются (раньше все 1400 шли в каждый кадр)
   const cells = new Map();
@@ -631,6 +647,7 @@ function buildBollards(scene, lamps, inside) {
     post.userData.inkRange = ball.userData.inkRange = 40;
     scene.add(post, ball);
   }
+  return list;
 }
 
 // ═══ Плющ и глициния на стенах ═══════════════════════════════
@@ -687,6 +704,7 @@ function buildVines(scene, spots, inside, rnd, groundAt) {
   }
   kinds.forEach((m, i) => {
     m.count = count[i]; m.frustumCulled = false;
+    m.userData.noLift = true; // Height already sampled at the wall.
     m.userData.word = i === 0 ? 'ivy' : 'wisteria';
     scene.add(m);
   });
@@ -739,6 +757,7 @@ function buildPlaques(scene, roads, polys, inside, groundAt) {
     const m = new THREE.Mesh(geo, mat);
     m.position.set(best.x + best.nx * 0.16, groundAt(best.x + best.nx * 0.6, best.z + best.nz * 0.6) + 2.75, best.z + best.nz * 0.16);   // от земли у стены
     m.rotation.y = Math.atan2(best.nx, best.nz);
+    m.userData.noLift = true; // Keep the wall height through the scene-wide terrain pass.
     m.userData.word = 'plaque';
     scene.add(m);
     seen.set(rd.n, seen.get(rd.n) + 1); made++;
