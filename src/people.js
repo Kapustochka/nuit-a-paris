@@ -90,7 +90,7 @@ function walkNetwork(roads) {
   return { ways, lengths, total, branches: (w, i) => nodes.get(key(ways[w].p[i * 2], ways[w].p[i * 2 + 1])) || [] };
 }
 
-export function createPeople(scene, world, mapData, { count = 16, inspector, camera, player, onTalk = null } = {}) {
+export function createPeople(scene, world, mapData, { count = 16, inspector, camera, player, onTalk = null, far3d = 85 } = {}) {
   const net = walkNetwork(mapData.roads);
   const loader = new THREE.TextureLoader();
   const cast = CAST.map((name) => {
@@ -118,7 +118,7 @@ export function createPeople(scene, world, mapData, { count = 16, inspector, cam
     if (world.blocked(x, z) || world.post?.(x, z, RADIUS)) return false;
     if ((x - player.x) ** 2 + (z - player.z) ** 2 < 0.62 ** 2) return false;
     for (const o of people) {
-      if (o === person || !o.active) continue;
+      if (o === person || !o.active || o === person.dog || o === person.owner) continue;
       const q = o.root.position, ox = x - q.x, oz = z - q.z;
       // ближе 0,55 м к другому — нельзя, но если уже стоим вплотную, разрешаем расходиться
       if (ox * ox + oz * oz < 0.55 ** 2 && ox * ox + oz * oz < (person.root.position.x - q.x) ** 2 + (person.root.position.z - q.z) ** 2) return false;
@@ -138,10 +138,19 @@ export function createPeople(scene, world, mapData, { count = 16, inspector, cam
     }
     return [p[i * 2], p[i * 2 + 1]];
   }
-  function randomRoadPoint() {
+  function randomRoadPoint(person) {
+    if (person?.home) {                              // 3D-прохожий: точка в его районе
+      const pts = person.homePoints ??= homePoints(person.home, person.range);
+      if (pts.length) return pts[Math.floor(rnd() * pts.length)];
+    }
     let t = rnd() * net.total, w = 0;
     while (w < net.ways.length - 1 && t > net.lengths[w]) { t -= net.lengths[w]; w++; }
     return [w, Math.floor(rnd() * (net.ways[w].p.length / 2))];
+  }
+  function homePoints([hx, hz], range) {
+    const out = [];
+    net.ways.forEach((w, wi) => { for (let i = 0; i < w.p.length; i += 2) if (Math.hypot(w.p[i] - hx, w.p[i + 1] - hz) < range) out.push([wi, i / 2]); });
+    return out;
   }
   function inView(x, y, z) {
     return frustum.containsPoint(tmp.set(x, y + 1, z));
@@ -149,12 +158,13 @@ export function createPeople(scene, world, mapData, { count = 16, inspector, cam
   // появиться на тротуаре в кольце [near, far] от героини, по возможности вне кадра
   function spawn(person, near, far, hidden) {
     for (let attempt = 0; attempt < 40; attempt++) {
-      const [w, i] = randomRoadPoint();
+      const [w, i] = randomRoadPoint(person);
       const p = net.ways[w].p, n = p.length / 2;
       person.way = w; person.dir = i === 0 ? 1 : i === n - 1 ? -1 : rnd() < 0.5 ? 1 : -1;
       const [x, z] = waypoint(person, w, i);
       const d = Math.hypot(x - player.x, z - player.z);
-      if (d < near || d > far || !free(x, z)) continue;
+      if (!person.home && (d < near || d > far)) continue;
+      if (!free(x, z) || (person.home && d < 6 && attempt < 30)) continue;
       const y = world.heightAt(x, z);
       if (hidden && attempt < 30 && inView(x, y, z) && d < 60) continue;
       if (people.some((o) => o !== person && o.active && Math.hypot(o.root.position.x - x, o.root.position.z - z) < 2)) continue;
@@ -163,10 +173,12 @@ export function createPeople(scene, world, mapData, { count = 16, inspector, cam
       nextTarget(person, true);
       person.root.rotation.y = Math.atan2(person.target[0] - x, person.target[1] - z);
       person.active = true; person.root.visible = true;
+      if (person.dog) placeDog(person.dog, person, true);
       person.pause = 0; person.wait = 0; person.stuck = 0; person.detour = 0; person.check = 4; person.lastD = 1e9; person.greeted = -1e9;
       return true;
     }
     person.active = false; person.root.visible = false;
+    if (person.dog) { person.dog.active = false; person.dog.root.visible = false; }
     return false;
   }
   // следующая вершина; на перекрёстке иногда сворачиваем
@@ -181,11 +193,18 @@ export function createPeople(scene, world, mapData, { count = 16, inspector, cam
         person.dir = i === 0 ? 1 : i === n - 1 ? -1 : rnd() < 0.5 ? 1 : -1;
       }
       // иногда останавливаются: посмотреть на витрину, на город, в телефон
-      if (rnd() < 0.07) person.pause = 1.5 + rnd() * 4;
+      if (!person.model && rnd() < 0.07) person.pause = 1.5 + rnd() * 4;   // 3D-клип — только ходьба, без остановок
     }
     const n = net.ways[person.way].p.length / 2;
     let i = person.index + person.dir;
     if (i < 0 || i >= n) { person.dir = -person.dir; i = person.index + person.dir; }
+    // 3D-прохожий не уходит из своего района: у границы разворачивается
+    if (person.home) {
+      const p = net.ways[person.way].p, j = Math.max(0, Math.min(n - 1, i));
+      if (Math.hypot(p[j * 2] - person.home[0], p[j * 2 + 1] - person.home[1]) > person.range) {
+        person.dir = -person.dir; i = Math.max(0, Math.min(n - 1, person.index + person.dir));
+      }
+    }
     person.index = Math.max(0, Math.min(n - 1, i));
     person.target = waypoint(person, person.way, person.index);
   }
@@ -236,7 +255,8 @@ export function createPeople(scene, world, mapData, { count = 16, inspector, cam
   if (anyUmbrella) world.paint(anyUmbrella.umbrella);
 
   // поворот к камере, выбор вида и «шаг»: покачивание вверх-вниз и с боку на бок
-  function pose(person, dt, moving) {
+  function pose(person, dt, moving, step = 0) {
+    if (person.model) { animateModel(person, step); return; }
     person.amp += ((moving ? 1 : 0) - person.amp) * (1 - Math.exp(-dt * 6));
     const a = person.amp, s = Math.sin(person.phase), c = Math.cos(person.phase);
     const root = person.root, mesh = person.mesh, yaw = root.rotation.y;
@@ -284,9 +304,11 @@ export function createPeople(scene, world, mapData, { count = 16, inspector, cam
     const now = performance.now();
     for (const person of people) {
       const pos = person.root.position;
+      if (person.owner) { followOwner(person, dt); continue; }
       if (!person.active) { if (rnd() < dt * 2) spawn(person, 35, 75, true); continue; }
       const toX = player.x - pos.x, toZ = player.z - pos.z, dist = Math.hypot(toX, toZ);
-      if (dist > 90) { spawn(person, 35, 75, true); continue; }
+      if (dist > 90 && !person.home) { spawn(person, 35, 75, true); continue; }
+      if (person.model) person.root.visible = dist < far3d;   // 3D-прохожие живут в своём районе и вдали просто не рисуются
       const yaw = person.root.rotation.y, fx = Math.sin(yaw), fz = Math.cos(yaw);
       const facingHero = dist > 0.01 ? (toX * fx + toZ * fz) / dist : 0;
 
@@ -316,7 +338,7 @@ export function createPeople(scene, world, mapData, { count = 16, inspector, cam
         say(person, dist < 1.4 ? 'pardon' : key);
       }
 
-      let moving = false;
+      let moving = false, walked = 0;
       if (person.pause > 0) person.pause -= dt;
       else {
         const dx = person.target[0] - pos.x, dz = person.target[1] - pos.z, d = Math.hypot(dx, dz);
@@ -348,7 +370,7 @@ export function createPeople(scene, world, mapData, { count = 16, inspector, cam
             if (clear(person, nx, nz)) {
               pos.x = nx; pos.z = nz; pos.y = world.heightAt(nx, nz);
               person.phase += step / person.stride * Math.PI * 2;
-              moving = step > 0.0001;
+              moving = step > 0.0001; walked = step;
             }
           }
           // не продвигается к цели несколько секунд — следующая точка, а если и так никак — появиться заново
@@ -361,13 +383,81 @@ export function createPeople(scene, world, mapData, { count = 16, inspector, cam
           }
         }
       }
-      if (dist < 70) pose(person, dt, moving);
+      if (dist < 70) pose(person, dt, moving, walked);
     }
     bubble.update(camera);
   }
 
+  // ── 3D-прохожие (people-3d.js) ──
+  // Клип крутится ровно на пройденный путь: время = путь / «скорость стопы» клипа — ноги не скользят.
+  function animateModel(person, step) {
+    if (!person.root.visible || !inView(person.root.position.x, person.root.position.y, person.root.position.z)) { person.lag += step; return; }
+    person.model.mixer.update((step + person.lag) / person.gait);
+    person.lag = 0;
+  }
+  // собака идёт слева от хозяйки, чуть позади, на своём скелете и своём клипе
+  function placeDog(dog, owner, snap) {
+    const o = owner.root.position, yaw = owner.root.rotation.y;
+    const fx = Math.sin(yaw), fz = Math.cos(yaw);
+    for (const [side, back] of [[0.62, 0.15], [-0.62, 0.15], [0, 0.9]]) {
+      const x = o.x + fz * side - fx * back, z = o.z - fx * side - fz * back;   // слева: (fz, -fx)
+      if (!world.blocked(x, z)) { dog.want = [x, z]; break; }
+    }
+    if (snap && dog.want) {
+      dog.root.position.set(dog.want[0], world.heightAt(dog.want[0], dog.want[1]), dog.want[1]);
+      dog.root.rotation.y = yaw;
+    }
+    dog.active = owner.active; dog.root.visible = owner.root.visible;
+  }
+  function followOwner(dog, dt) {
+    const owner = dog.owner;
+    placeDog(dog, owner, !dog.active && owner.active);
+    if (!dog.active || !dog.want) return;
+    const pos = dog.root.position, dx = dog.want[0] - pos.x, dz = dog.want[1] - pos.z, d = Math.hypot(dx, dz);
+    if (d > 4) { placeDog(dog, owner, true); return; }        // отстала (хозяйка развернулась в узком месте) — рядом снова
+    // догоняет быстрее, если отстала; стоит, если уже на месте
+    const speed = Math.min(owner.speed * 1.6, owner.speed * (0.4 + d * 1.6));
+    const step = d < 0.05 ? 0 : Math.min(d, speed * dt);
+    if (step > 0) {
+      const nx = pos.x + dx / d * step, nz = pos.z + dz / d * step;
+      if (!world.blocked(nx, nz)) { pos.x = nx; pos.z = nz; pos.y = world.heightAt(nx, nz); }
+    }
+    // смотрит туда, куда идёт, а стоя — туда же, куда хозяйка
+    const want = step > 0.002 ? Math.atan2(dx, dz) : owner.root.rotation.y;
+    const delta = Math.atan2(Math.sin(want - dog.root.rotation.y), Math.cos(want - dog.root.rotation.y));
+    dog.root.rotation.y += delta * (1 - Math.exp(-dt * 8));
+    if (Math.hypot(player.x - pos.x, player.z - pos.z) < 70) animateModel(dog, step);
+  }
+  function addModel(asset, { woman, home, range, scale = 1, owner = null, word } = {}) {
+    const root = new THREE.Group();
+    root.name = woman ? 'Passante' : 'Passant';
+    root.add(asset.model);
+    root.scale.setScalar(scale);
+    scene.add(root);
+    world.paint(asset.model);
+    const person = {
+      root, mesh: null, model: asset, woman, home, range, owner,
+      gait: asset.speed * scale, speed: asset.speed * scale, lag: 0, stride: 1, phase: 0, amp: 0,
+      side: 1, way: 0, index: 0, dir: 1, target: [0, 0],
+      pause: 0, wait: 0, stuck: 0, detour: 0, check: 4, lastD: 1e9, active: false, greeted: -1e9, saying: null, sayUntil: 0, look: 0,
+    };
+    // идёт со «своей» скоростью клипа, но не медленнее 0,95 и не быстрее 1,5 м/с; клип подстраивается под шаг
+    person.speed = THREE.MathUtils.clamp(person.speed, 0.75, 1.5);
+    const wordOf = () => (person.saying && performance.now() < person.sayUntil + 6000 ? person.saying : word ?? (woman ? 'passerby' : 'passant'));
+    asset.model.traverse((o) => {
+      if (!o.isMesh) return;
+      o.userData.word = wordOf;
+      if (onTalk && !owner) o.userData.onInspect = (x, y) => { if (!onTalk(person, rain > 0.25)) inspector?.show(wordOf(), x, y, o); };
+      inspector?.addTarget(o);
+    });
+    people.push(person);
+    if (owner) { owner.dog = person; placeDog(person, owner, true); }
+    else spawn(person, 0, 1e9, false);
+    return person;
+  }
+
   return {
-    people, update, count, say,
+    people, update, count, say, addModel,
     // для столкновений героини: прохожий как столбик радиусом RADIUS
     blocksStep(x, z) {
       for (const p of people) {
