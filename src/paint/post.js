@@ -20,7 +20,7 @@ const FIGURE_A = '0.55';
 
 export function createPainter(renderer, { radius = 3, scale = 1, heroStyle = 1, shafts = 8, shaftSteps = 8, bloom = 2, reflect = 10, reflectDry = 0 } = {}) {
   const size = new THREE.Vector2(), cssSize = new THREE.Vector2();
-  const colorRT = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: Math.min(2, renderer.capabilities.maxSamples), depthTexture: new THREE.DepthTexture(1, 1) });   // MSAA 2×: кисть и так смягчает края, 4× в half-float дорог
+  const colorRT = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: Math.min(4, renderer.capabilities.maxSamples), depthTexture: new THREE.DepthTexture(1, 1) });
   const normalRT = new THREE.WebGLRenderTarget(1, 1, { depthTexture: new THREE.DepthTexture(1, 1) });
   const normalMat = new THREE.MeshNormalMaterial({ side: THREE.DoubleSide });
   const normalInst = new THREE.MeshNormalMaterial({ side: THREE.DoubleSide });
@@ -89,45 +89,10 @@ export function createPainter(renderer, { radius = 3, scale = 1, heroStyle = 1, 
     }
   }
 
-  // ── Кисть (фильтр Кувахары) — отдельным проходом в половинном разрешении: мазки крупнее пикселя,
-  // поэтому половины хватает, а выборок на кадр вчетверо меньше. Пост-проход берёт её с билинейным растяжением.
-  const brushRT = new THREE.WebGLRenderTarget(1, 1, { depthBuffer: false });
-  const brushMat = new THREE.ShaderMaterial({
-    defines: { RADIUS: radius },
-    uniforms: { tColor: { value: colorRT.texture }, uPx: { value: new THREE.Vector2() } },
-    vertexShader: fsVert, depthTest: false, depthWrite: false,
-    fragmentShader: /* glsl */ `
-      uniform sampler2D tColor; uniform vec2 uPx; varying vec2 vUv;
-      vec3 srgb(vec3 c) { return pow(clamp(c, 0.0, 1.0), vec3(1.0 / 2.2)); }
-      vec3 tap(vec2 uv) { return srgb(texture2D(tColor, uv).rgb); }
-      vec3 kuwahara(vec2 uv, vec2 px) {
-        vec3 m[4]; vec3 s[4];
-        for (int k = 0; k < 4; k++) { m[k] = vec3(0); s[k] = vec3(0); }
-        // Каждая выборка стоит между пикселями и усредняет сразу четыре (линейный фильтр текстуры):
-        // на четверть 4×4 пикселя уходит 4 выборки вместо 16, на весь фильтр — 16 вместо 49.
-        const int T = (RADIUS + 2) / 2; const float STEP = float(RADIUS + 1) / float(T);
-        for (int k = 0; k < 4; k++) {
-          vec2 dir = vec2(k == 1 || k == 3 ? 1.0 : -1.0, k >= 2 ? 1.0 : -1.0);
-          for (int j = 0; j < T; j++) for (int i = 0; i < T; i++) {
-            vec3 c = tap(uv + dir * ((vec2(i, j) + 0.5) * STEP - 0.5) * px);
-            m[k] += c; s[k] += c * c;
-          }
-        }
-        float n = float(T * T), best = 1e9; vec3 res = vec3(0);
-        for (int k = 0; k < 4; k++) {
-          vec3 mean = m[k] / n, v = abs(s[k] / n - mean * mean);
-          float sig = v.r + v.g + v.b;
-          if (sig < best) { best = sig; res = mean; }
-        }
-        return res;
-      }
-      void main() { gl_FragColor = vec4(kuwahara(vUv, uPx), 1.0); }`,
-  });
-
   const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({
-    defines: { BLOOM: bloom, SHAFTS: Math.min(shafts, MAX_SHAFTS), SHAFT_STEPS: shaftSteps, REFLECT: reflect, REFLECT_DRY: reflectDry.toFixed(2) },
+    defines: { RADIUS: radius, BLOOM: bloom, SHAFTS: Math.min(shafts, MAX_SHAFTS), SHAFT_STEPS: shaftSteps, REFLECT: reflect, REFLECT_DRY: reflectDry.toFixed(2) },
     uniforms: {
-      tColor: { value: colorRT.texture }, tBrush: { value: brushRT.texture }, tNormal: { value: normalRT.texture }, tDepth: { value: colorRT.depthTexture }, tInkDepth: { value: normalRT.depthTexture }, uInkFar: { value: INK_FAR },
+      tColor: { value: colorRT.texture }, tNormal: { value: normalRT.texture }, tDepth: { value: colorRT.depthTexture }, tInkDepth: { value: normalRT.depthTexture }, uInkFar: { value: INK_FAR },
       uRes: { value: new THREE.Vector2() }, uNear: { value: 0.1 }, uFar: { value: 600 },
       uCssRes: { value: new THREE.Vector2(1, 1) }, uHeroLine: { value: 0.65 }, uHeroStyle: { value: heroStyle },
       ...airUniforms(),
@@ -138,7 +103,7 @@ export function createPainter(renderer, { radius = 3, scale = 1, heroStyle = 1, 
     },
     vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
     fragmentShader: /* glsl */ `
-      uniform sampler2D tColor, tBrush, tNormal, tDepth, tInkDepth, tBloom, tBloomWide; uniform float uInkFar; uniform float uBloom, uPaper, uVignette; uniform vec2 uRes, uCssRes; uniform float uNear, uFar, uPaint, uEdges, uLine, uHeroLine, uHeroStyle; uniform vec3 uInk;
+      uniform sampler2D tColor, tNormal, tDepth, tInkDepth, tBloom, tBloomWide; uniform float uInkFar; uniform float uBloom, uPaper, uVignette; uniform vec2 uRes, uCssRes; uniform float uNear, uFar, uPaint, uEdges, uLine, uHeroLine, uHeroStyle; uniform vec3 uInk;
       varying vec2 vUv;
       ${NOISE}
       float lin(float d) { float z = d * 2.0 - 1.0; return 2.0 * uNear * uFar / (uFar + uNear - z * (uFar - uNear)); }
@@ -197,11 +162,32 @@ export function createPainter(renderer, { radius = 3, scale = 1, heroStyle = 1, 
         return col + rc * lit * amt * fres * 0.42;                // светящееся — окна и фонари — горит в воде ярче
       }
       #endif
+      vec3 kuwahara(vec2 uv, vec2 px) {
+        vec3 m[4]; vec3 s[4];
+        for (int k = 0; k < 4; k++) { m[k] = vec3(0); s[k] = vec3(0); }
+        // Каждая выборка стоит между пикселями и усредняет сразу четыре (линейный фильтр текстуры):
+        // на четверть 4×4 пикселя уходит 4 выборки вместо 16, на весь фильтр — 16 вместо 49.
+        const int T = (RADIUS + 2) / 2; const float STEP = float(RADIUS + 1) / float(T);
+        for (int k = 0; k < 4; k++) {
+          vec2 dir = vec2(k == 1 || k == 3 ? 1.0 : -1.0, k >= 2 ? 1.0 : -1.0);
+          for (int j = 0; j < T; j++) for (int i = 0; i < T; i++) {
+            vec3 c = tap(uv + dir * ((vec2(i, j) + 0.5) * STEP - 0.5) * px);
+            m[k] += c; s[k] += c * c;
+          }
+        }
+        float n = float(T * T), best = 1e9; vec3 res = vec3(0);
+        for (int k = 0; k < 4; k++) {
+          vec3 mean = m[k] / n, v = abs(s[k] / n - mean * mean);
+          float sig = v.r + v.g + v.b;
+          if (sig < best) { best = sig; res = mean; }
+        }
+        return res;
+      }
       void main() {
         vec2 px = 1.0 / uRes, sp = vUv * uRes;
         vec4 center = texture2D(tNormal, vUv);
         float real = 1.0 - center.a;                           // героиня: чёткий кадр без мазков
-        vec3 col = uPaint > 0.5 && real < 0.7 ? texture2D(tBrush, vUv).rgb : tap(vUv);
+        vec3 col = uPaint > 0.5 && real < 0.7 ? kuwahara(vUv, px) : tap(vUv);
         if (real > 0.2 && real < 0.7) col = mix(col, tap(vUv), 0.85);     // прохожие: кисть едва заметна
 
         float w = uLine * (0.5 + 1.3 * vnoise(sp / 80.0));
@@ -286,7 +272,6 @@ export function createPainter(renderer, { radius = 3, scale = 1, heroStyle = 1, 
     renderer.getDrawingBufferSize(size);
     const w = Math.max(1, Math.round(size.x * curScale)), h = Math.max(1, Math.round(size.y * curScale));
     colorRT.setSize(w, h); normalRT.setSize(w, h); U.uRes.value.set(w, h);
-    brushRT.setSize(Math.max(1, w >> 1), Math.max(1, h >> 1)); brushMat.uniforms.uPx.value.set(1 / w, 1 / h);
     const bw = Math.max(1, w >> 2), bh = Math.max(1, h >> 2);
     bloomRT[0].setSize(bw, bh); bloomRT[1].setSize(bw, bh);
     bloomRT[2].setSize(Math.max(1, bw >> 1), Math.max(1, bh >> 1)); bloomRT[3].setSize(Math.max(1, bw >> 1), Math.max(1, bh >> 1));
@@ -327,11 +312,10 @@ export function createPainter(renderer, { radius = 3, scale = 1, heroStyle = 1, 
     camera.layers.mask = mask;
     camera.layers.enableAll();
     renderer.setRenderTarget(colorRT); renderer.setClearColor(0x000000, 1); renderer.clear(); renderer.render(scene, camera);
-    if (U.uPaint.value > 0.5) pass(brushMat, brushRT);
     renderBloom();
     renderer.setRenderTarget(null); renderer.render(postScene, postCam);
   }
-  function setRadius(r) { brushMat.defines.RADIUS = r; brushMat.needsUpdate = true; }
+  function setRadius(r) { quad.material.defines.RADIUS = r; quad.material.needsUpdate = true; }
   function setScale(s) { curScale = s; setSize(); }
   function setBloom(levels) { bloomLevels = levels; quad.material.defines.BLOOM = levels; quad.material.needsUpdate = true; }
   // воздух: world.air даёт фонари для лучей, маяк-базилику и высоту земли под героиней
@@ -339,5 +323,5 @@ export function createPainter(renderer, { radius = 3, scale = 1, heroStyle = 1, 
   function setAir(air) { airSrc = air; U.uShaftPos.value = air.shaftPos; U.uBeacon.value = air.beacon; if (air.tower) U.uTower.value = air.tower; }
   function setShafts(n, steps = n) { quad.material.defines.SHAFTS = Math.min(n, MAX_SHAFTS); quad.material.defines.SHAFT_STEPS = steps; quad.material.needsUpdate = true; }
   function setReflect(n) { quad.material.defines.REFLECT = n; quad.material.needsUpdate = true; }
-  return { render, setSize, uniforms: U, setRadius, setScale, setAir, setShafts, setBloom, setReflect, get reflect() { return quad.material.defines.REFLECT; }, get bloom() { return bloomLevels; }, get shafts() { return quad.material.defines.SHAFTS; }, get radius() { return brushMat.defines.RADIUS; } };
+  return { render, setSize, uniforms: U, setRadius, setScale, setAir, setShafts, setBloom, setReflect, get reflect() { return quad.material.defines.REFLECT; }, get bloom() { return bloomLevels; }, get shafts() { return quad.material.defines.SHAFTS; }, get radius() { return quad.material.defines.RADIUS; } };
 }
