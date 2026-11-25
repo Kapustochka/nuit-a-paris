@@ -10,6 +10,11 @@ The compact Montmartre map is bundled in `assets/montmartre.json`, so entering t
 
 To refresh the OSM snapshot, run `node scripts/cache-map.mjs` (or pass a downloaded raw OSM JSON file). Attribution and ODbL metadata are stored with the snapshot. Runtime fallback to browser cache / Overpass remains available if the file is missing.
 
+## Night in London
+
+The same game for London (Westminster, Big Ben) opens at https://kapustochka.github.io/nuit-a-paris/london/ (or `?city=london`).
+City settings live in `src/city.js`; the Westminster map is `assets/london/map.json`, built with `python scripts/build-overture-map.py london` (OpenStreetMap data via Overture Maps, ODbL).
+
 ## Running locally
 Double-click `start.bat` (Windows) — a browser opens at http://localhost:8080.
 (Opening `index.html` directly does not work: browsers block loading 3D models from disk.)

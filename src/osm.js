@@ -1,9 +1,11 @@
 // osm.js — настоящая карта Монмартра из OpenStreetMap (© участники OpenStreetMap, лицензия ODbL)
 // Порядок: 1) assets/montmartre.json, 2) сохранённая копия в браузере, 3) загрузка из интернета.
 
-export const CENTER = { lat: 48.88655, lon: 2.34065 };           // площадь Тертр
-const BBOX = [48.8848, 2.3368, 48.8884, 2.3442];                  // юг, запад, север, восток
-const KEY = 'nuit-a-paris:montmartre:v2';
+import { CITY } from './city.js';
+
+export const CENTER = CITY.center;
+const BBOX = CITY.bbox;                                           // юг, запад, север, восток
+const KEY = CITY.cacheKey;
 const MIRRORS = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter'];
 
 const MX = Math.cos(CENTER.lat * Math.PI / 180) * 111320, MZ = 110574;
@@ -11,7 +13,7 @@ export const toXZ = (lat, lon) => [(lon - CENTER.lon) * MX, -(lat - CENTER.lat) 
 
 export async function loadMapData(status = () => {}) {
   try {
-    const r = await fetch('assets/montmartre.json');
+    const r = await fetch(CITY.map);
     if (r.ok) return await r.json();
   } catch { /* файла нет — идём дальше */ }
   try {
@@ -19,7 +21,7 @@ export async function loadMapData(status = () => {}) {
     if (c) return JSON.parse(c);
   } catch { /* хранилище недоступно */ }
 
-  status('Chargement de la carte de Montmartre…');
+  status(CITY.loading);
   const b = BBOX.join(',');
   const q = `[out:json][timeout:60];(
     way["building"](${b}); relation["building"](${b}); way["highway"](${b});

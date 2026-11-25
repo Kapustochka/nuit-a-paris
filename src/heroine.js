@@ -2,6 +2,7 @@
 // стойка, ходьба, бег, шаг назад, прыжок, удары. Цвета берём из исходной модели Meshy.
 import * as THREE from 'three';
 import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 const DIR = 'assets/mixamo/';
 const LOOPS = { idle: 'idle.fbx', walk: 'walk.fbx', run: 'run.fbx', back: 'walk_back.fbx' };   // повторяются по кругу
@@ -24,45 +25,17 @@ export const TUNING = {
   backSpeed: 0.95,
 };
 
-export async function loadHeroine(scene, height = 1.65) {
-  const fbx = new FBXLoader();
-  const tl = new THREE.TextureLoader();
-  const loadTex = async (name, srgb) => {
-    const t = await tl.loadAsync(DIR + name);
-    t.flipY = false; if (srgb) t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
-    return t;
-  };
+export async function loadHeroine(scene, height = 1.65, glbUrl = null) {
   const names = { ...LOOPS, ...ONCE };
-  const [model, uvBuf, color, normal, mr, ...animFiles] = await Promise.all([
-    fbx.loadAsync(DIR + 'base.fbx'),
-    fetch(DIR + 'heroine_uv.bin').then((r) => { if (!r.ok) throw new Error('нет heroine_uv.bin'); return r.arrayBuffer(); }),
-    loadTex('heroine_color.jpg', true), loadTex('heroine_normal.jpg'), loadTex('heroine_mr.jpg'),
-    ...Object.values(names).map((f) => fbx.loadAsync(DIR + f)),
-  ]);
-
-  // Меш и развёртка текстуры (Mixamo её не сохранил — возвращаем из исходной модели)
-  let mesh = null;
-  model.traverse((o) => { if (o.isSkinnedMesh && !mesh) mesh = o; });
-  if (!mesh) throw new Error('В base.fbx нет модели со скелетом');
-  const dv = new DataView(uvBuf), nPV = dv.getUint32(0, true), nCP = dv.getUint32(4, true);
-  const idx = new Uint16Array(uvBuf, 8, nPV), uvs = new Uint16Array(uvBuf, 8 + (nPV + (nPV % 2)) * 2, nCP * 2);
-  const count = mesh.geometry.attributes.position.count;
-  if (count !== nPV) console.warn(`Развёртка: вершин ${count}, ожидалось ${nPV} — цвета могут лечь неверно`);
-  const uv = new Float32Array(count * 2);
-  for (let i = 0; i < Math.min(count, nPV); i++) { uv[i * 2] = uvs[idx[i] * 2] / 65535; uv[i * 2 + 1] = uvs[idx[i] * 2 + 1] / 65535; }
-  mesh.geometry.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
-  mesh.material = new THREE.MeshStandardMaterial({
-    map: color, normalMap: normal, normalScale: new THREE.Vector2(1, -1),
-    roughnessMap: mr, metalnessMap: mr, roughness: 1, metalness: 1, side: THREE.DoubleSide,
-  });
+  const { model, mesh, clips } = glbUrl ? await loadGlb(glbUrl) : await loadMixamo(names);
   mesh.castShadow = true; mesh.frustumCulled = false;
 
   // Анимации: убираем «уезжание» вперёд — двигаем героиню сами
   const mixer = new THREE.AnimationMixer(model);
   const actions = {};
-  Object.keys(names).forEach((key, i) => {
-    const clip = animFiles[i].animations[0];
-    if (!clip) { console.warn('Нет анимации в', names[key]); return; }
+  Object.keys(names).forEach((key) => {
+    const clip = clips[key];
+    if (!clip) { if (!glbUrl) console.warn('Нет анимации в', names[key]); return; }
     clip.name = key;
     for (const t of clip.tracks) {
       if (/Hips\.position$/.test(t.name)) for (let k = 0; k < t.values.length; k += 3) { t.values[k] = t.values[0]; t.values[k + 2] = t.values[2]; }
@@ -135,4 +108,59 @@ export async function loadHeroine(scene, height = 1.65) {
   }
 
   return { root, model, mesh, mixer, actions, setState, play, update, get state() { return current; }, get busy() { return once; } };
+}
+
+// Героиня Paris: модель и анимации Mixamo в FBX, развёртку текстуры возвращаем из исходной модели Meshy
+async function loadMixamo(names) {
+  const fbx = new FBXLoader();
+  const tl = new THREE.TextureLoader();
+  const loadTex = async (name, srgb) => {
+    const t = await tl.loadAsync(DIR + name);
+    t.flipY = false; if (srgb) t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
+    return t;
+  };
+  const [model, uvBuf, color, normal, mr, ...animFiles] = await Promise.all([
+    fbx.loadAsync(DIR + 'base.fbx'),
+    fetch(DIR + 'heroine_uv.bin').then((r) => { if (!r.ok) throw new Error('нет heroine_uv.bin'); return r.arrayBuffer(); }),
+    loadTex('heroine_color.jpg', true), loadTex('heroine_normal.jpg'), loadTex('heroine_mr.jpg'),
+    ...Object.values(names).map((f) => fbx.loadAsync(DIR + f)),
+  ]);
+
+  // Меш и развёртка текстуры (Mixamo её не сохранил — возвращаем из исходной модели)
+  let mesh = null;
+  model.traverse((o) => { if (o.isSkinnedMesh && !mesh) mesh = o; });
+  if (!mesh) throw new Error('В base.fbx нет модели со скелетом');
+  const dv = new DataView(uvBuf), nPV = dv.getUint32(0, true), nCP = dv.getUint32(4, true);
+  const idx = new Uint16Array(uvBuf, 8, nPV), uvs = new Uint16Array(uvBuf, 8 + (nPV + (nPV % 2)) * 2, nCP * 2);
+  const count = mesh.geometry.attributes.position.count;
+  if (count !== nPV) console.warn(`Развёртка: вершин ${count}, ожидалось ${nPV} — цвета могут лечь неверно`);
+  const uv = new Float32Array(count * 2);
+  for (let i = 0; i < Math.min(count, nPV); i++) { uv[i * 2] = uvs[idx[i] * 2] / 65535; uv[i * 2 + 1] = uvs[idx[i] * 2 + 1] / 65535; }
+  mesh.geometry.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+  mesh.material = new THREE.MeshStandardMaterial({
+    map: color, normalMap: normal, normalScale: new THREE.Vector2(1, -1),
+    roughnessMap: mr, metalnessMap: mr, roughness: 1, metalness: 1, side: THREE.DoubleSide,
+  });
+  const clips = {};
+  Object.keys(names).forEach((key, i) => { clips[key] = animFiles[i].animations[0]; });
+  return { model, mesh, clips };
+}
+
+// Героиня одним GLB (London): текстуры и анимации внутри файла. Каких клипов нет — заменяем похожими:
+// бег — та же ходьба быстрее, шаг назад — ходьба медленнее; без прыжка и удара она просто не прыгает.
+async function loadGlb(url) {
+  const gltf = await new GLTFLoader().loadAsync(url);
+  const model = gltf.scene;
+  let mesh = null;
+  model.traverse((o) => { if (o.isSkinnedMesh && !mesh) mesh = o; });
+  if (!mesh) throw new Error('В ' + url + ' нет модели со скелетом');
+  model.traverse((o) => { if (o.isMesh) { o.material.side = THREE.DoubleSide; if (o.material.map) o.material.map.anisotropy = 4; } });
+  const byName = Object.fromEntries(gltf.animations.map((c) => [c.name.toLowerCase(), c]));
+  const walk = byName.walk || byName.walking;
+  const clips = {
+    idle: byName.idle || gltf.animations[0], walk,
+    run: byName.run || walk?.clone(), back: byName.walk_back || byName.back || walk?.clone(),
+    jump: byName.jump, punch: byName.punch,
+  };
+  return { model, mesh, clips };
 }

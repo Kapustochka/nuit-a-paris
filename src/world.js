@@ -2,6 +2,7 @@
 // фиолетовое небо, тёплые фонари, мокрая брусчатка, кремовые дома со ставнями, бордовые маркизы.
 import * as THREE from 'three';
 import { toXZ } from './osm.js';
+import { CITY, isParis } from './city.js';
 import { createNightSky } from './night-sky.js';
 import { addPropInstances, placeBenches, placePigeons } from './street-props.js';
 import { placeStreetLife, terraceSet } from './street-life.js';
@@ -34,11 +35,47 @@ export function buildParis(scene, renderer, data, city, props = {}) {
   ground.userData.word = 'cobble';
   scene.add(ground);
 
+  // ── Вода (Темза в Лондоне): тёмная гладь поверх земли, по ней не ходят ──
+  const waters = (data.water || []).map((w) => makePoly(w.p));
+  if (waters.length) {
+    const shapes = waters.map(({ p }) => new THREE.Shape(Array.from({ length: p.length / 2 }, (_, i) => new THREE.Vector2(p[i * 2], -p[i * 2 + 1]))));
+    const geo = new THREE.ShapeGeometry(shapes); geo.rotateX(-Math.PI / 2); geo.translate(0, 0.06, 0);
+    const water = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color: new THREE.Color().setRGB(0.08, 0.13, 0.2, THREE.LinearSRGBColorSpace) }));
+    water.userData.word = 'river';
+    scene.add(water);
+  }
+  // мосты (дороги с bridge в карте) проходят над водой — по ним ходить можно
+  const bridges = data.roads.filter((r) => r.bridge).map((r) => r.p);
+  const onBridge = (x, z) => bridges.some((p) => {
+    for (let i = 0; i + 3 < p.length; i += 2) {
+      const ax = p[i], az = p[i + 1], dx = p[i + 2] - ax, dz = p[i + 3] - az, l = dx * dx + dz * dz || 1;
+      const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / l));
+      if (Math.hypot(x - ax - dx * t, z - az - dz * t) < 11) return true;
+    }
+    return false;
+  });
+  // настил моста над водой: камень и низкие парапеты (сам мост с арками и фонарями — следующий этап)
+  if (waters.length && bridges.length) {
+    const deck = new THREE.MeshLambertMaterial({ color: new THREE.Color().setRGB(0.42, 0.38, 0.33, THREE.LinearSRGBColorSpace) });
+    const rail = new THREE.MeshLambertMaterial({ color: new THREE.Color().setRGB(0.1, 0.22, 0.16, THREE.LinearSRGBColorSpace) });
+    for (const p of bridges) for (let i = 0; i + 3 < p.length; i += 2) {
+      const ax = p[i], az = p[i + 1], dx = p[i + 2] - ax, dz = p[i + 3] - az, L = Math.hypot(dx, dz);
+      if (L < 0.5) continue;
+      const g = new THREE.Group();
+      g.position.set(ax + dx / 2, 0, az + dz / 2); g.rotation.y = Math.atan2(-dz, dx);
+      const slab = new THREE.Mesh(new THREE.BoxGeometry(L + 0.6, 0.3, 24), deck); slab.position.y = 0.0; g.add(slab);
+      for (const side of [-12, 12]) { const r = new THREE.Mesh(new THREE.BoxGeometry(L + 0.6, 1.1, 0.5), rail); r.position.set(0, 0.55, side); g.add(r); }
+      g.userData.word = 'bridge';
+      scene.add(g);
+    }
+  }
+  const inWater = (x, z) => waters.some((w) => x >= w.minX && x <= w.maxX && z >= w.minZ && z <= w.maxZ && pointIn(w.p, x, z)) && !onBridge(x, z);
+
   // ── Дома на настоящих контурах (рисуются в paint/facades.js) ──
   const rnd = mulberry(7);
   const polys = [];                       // для столкновений
   const wallSpots = [];
-  const SACRE = toXZ(48.88672, 2.34306);
+  const SACRE = toXZ(CITY.landmark.lat, CITY.landmark.lon);   // главная достопримечательность города
   const TINTS = [[1, 1, 1], [1.05, 0.98, 0.92], [0.94, 0.96, 1.04], [1.04, 1.0, 0.9], [0.97, 0.93, 0.97]];
   const pending = [];
 
@@ -60,10 +97,10 @@ export function buildParis(scene, renderer, data, city, props = {}) {
     cx /= n; cz /= n; area /= 2;
     if (Math.abs(area) < 6) continue;
     const nearSacre = Math.hypot(cx - SACRE[0], cz - SACRE[1]) < 55;
-    if (/Sacr/i.test(bd.n) || (nearSacre && (Math.abs(area) > 900 || /church|cathedral|basilica/.test(bd.k)))) { polys.push(makePoly(p)); continue; }
+    if (isParis && (/Sacr/i.test(bd.n) || (nearSacre && (Math.abs(area) > 900 || /church|cathedral|basilica/.test(bd.k))))) { polys.push(makePoly(p)); continue; }
     if (area > 0) { const q = []; for (let i = n - 1; i >= 0; i--) q.push(p[i * 2], p[i * 2 + 1]); p = q; }
     const A = Math.abs(area);
-    const H = A < 45 ? 7 + rnd() * 2.5 : bd.h ? Math.min(22, Math.max(10, bd.h + 3)) : 11 + rnd() * 8;   // +3 м на крышу
+    const H = A < 45 ? 7 + rnd() * 2.5 : bd.h ? Math.min(CITY.maxHeight, Math.max(10, bd.h + 3)) : 11 + rnd() * 8;   // +3 м на крышу
     polys.push(makePoly(p));
     pending.push({ p, n, H, A, tint: TINTS[Math.floor(rnd() * TINTS.length)] });
   }
@@ -106,7 +143,7 @@ export function buildParis(scene, renderer, data, city, props = {}) {
   const blocked = (x, z) =>
     x < b.minX + 8 || x > b.maxX - 8 || z < b.minZ + 8 || z > b.maxZ - 8 ||
     inside(x, z) || inside(x + R, z) || inside(x - R, z) || inside(x, z + R) || inside(x, z - R) ||
-    propCollisions.contains(x, z);
+    propCollisions.contains(x, z) || (waters.length > 0 && inWater(x, z));
 
   // ── Рисованные дома: план фасадов (сами дома строятся ниже, когда известны витрины) ──
   const plan = planFacades(pending, heightAt, inside, terrain.flat);
@@ -160,12 +197,12 @@ export function buildParis(scene, renderer, data, city, props = {}) {
   const streetLife = placeStreetLife(scene, props, { benches, lamps, wallSpots, shopFronts, blocked, addSolid: propCollisions.add, random: propRandom });
 
   // ── Площадь Тертр: мольберты художников ───────────────────
-  for (const [x, z] of buildEasels(scene, inside, rnd)) addPost(x, z, 0.45);
+  if (isParis) for (const [x, z] of buildEasels(scene, inside, rnd)) addPost(x, z, 0.45);
 
   // ── Сакре-Кёр, Эйфелева башня и огни вдали ─────────────────
-  buildBasilica(scene, look, SACRE[0], SACRE[1]);
+  if (isParis) buildBasilica(scene, look, SACRE[0], SACRE[1]);
   const drop = terrain.flat ? 0 : terrain.heightAt(1e4, 1e4);
-  buildFarParis(scene, drop);
+  if (isParis) buildFarParis(scene, drop);
 
   // ── Лестницы Монмартра, смотровая площадка и город внизу ───
   const stairs = terrain.flat ? { lift: () => 0, count: 0 } : buildStairs(scene, data.roads, heightAt, null);
@@ -213,7 +250,7 @@ export function buildParis(scene, renderer, data, city, props = {}) {
   // Воздух для пост-прохода (paint/air.js): ближайшие фонари дают лучи, базилика светит сквозь дымку
   const air = {
     shaftPos: Array.from({ length: MAX_SHAFTS }, () => new THREE.Vector4(0, -100, 0, 0)),
-    beacon: new THREE.Vector4(SACRE[0], standAt(SACRE[0], SACRE[1]) + 46, SACRE[1], 0.5),
+    beacon: new THREE.Vector4(SACRE[0], standAt(SACRE[0], SACRE[1]) + 46, SACRE[1], isParis ? 0.5 : 0),
     tower: new THREE.Vector4(-1050, drop + 158, 1050, terrain.flat ? 0 : 1),     // верх Эйфелевой башни (buildFarParis)
     groundY: 0, started: false,
   };
@@ -778,4 +815,12 @@ function buildBasilica(scene, look, x, z) {
   const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture('rgba(255,224,176,0.10)', 'rgba(255,207,144,0.04)'), blending: THREE.AdditiveBlending, depthWrite: false }));
   halo.position.set(x, 45, z); halo.scale.set(200, 180, 1);
   scene.add(halo);
+}
+
+function pointIn(p, x, z) {
+  let c = false;
+  for (let i = 0, j = p.length - 2; i < p.length; j = i, i += 2) {
+    if ((p[i + 1] > z) !== (p[j + 1] > z) && x < (p[j] - p[i]) * (z - p[i + 1]) / (p[j + 1] - p[i + 1]) + p[i]) c = !c;
+  }
+  return c;
 }
