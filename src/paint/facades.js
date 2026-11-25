@@ -293,7 +293,7 @@ function buildFar(h, F, deform, shops) {
           const [, ya, yb, yc] = fl.rows;
           const paintCol = shop?.kind === 'bakery' ? BAKERY_TEAL : Lo.style[1];
           B.quad([xa, fl.y0, 0.02], [xb, fl.y0, 0.02], [xb, ya, 0.02], [xa, ya, 0.02], paintCol, K.PAINT);
-          B.quad([xa, ya, 0.03], [xb, ya, 0.03], [xb, yb, 0.03], [xa, yb, 0.03], [0.35, 0.22, 0.18], K.SHOP, [0, 0, 1, 1], shop?.kind === 'bakery' ? 0.97 : 0.9);
+          B.quad([xa, ya, 0.03], [xb, ya, 0.03], [xb, yb, 0.03], [xa, yb, 0.03], [0.35, 0.22, 0.18], K.SHOP, [0, 0, 1, 1], shop.glass);
           B.quad([xa, yb, 0.02], [xb, yb, 0.02], [xb, yc, 0.02], [xa, yc, 0.02], paintCol, K.PAINT);
           if (Lo.look.awning < 2) B.quad([xa, yb + 0.02, 0.05], [xb, yb + 0.02, 0.05], [xb, yb - 0.5, 1.3], [xa, yb - 0.5, 1.3], Lo.style[2], K.AWNING, [xa, 0, xb, 0.85]);
         }
@@ -348,7 +348,7 @@ function* buildNear(h, N, Rl, planters, deform, shops) {
           continue;
         }
         if (type === 'shop') {
-          B.quad([xa, ya, zb], [xb, ya, zb], [xb, yb, zb], [xa, yb, zb], [0.35, 0.22, 0.18], K.SHOP, [0, 0, 1, 1], shop?.kind === 'bakery' ? 0.97 : 0.9);
+          B.quad([xa, ya, zb], [xb, ya, zb], [xb, yb, zb], [xa, yb, zb], [0.35, 0.22, 0.18], K.SHOP, [0, 0, 1, 1], shop.glass);
           const x0 = xa + 0.05, x1 = xb - 0.05, yA = rows[2] + 0.02, kindA = STREET_DETAILS ? Lo.look.awning : 0;
           if (kindA === 0) {                                     // маркиза: изогнутое полотно в полоску с фестоном
             const out = 1.35, drop = 0.6;
@@ -495,7 +495,13 @@ export function buildFacades(scene, look, plan, shopFronts, { progressive = fals
         bd = off; best = { seg, e, h, at: Math.max(seg.x0 + 0.5, Math.min(seg.x1 - 0.5, along)), w: s.w, name: s.name, kind: s.kind };
       }
     }
-    if (best && !shops.has(best.seg)) shops.set(best.seg, best);
+    if (best && !shops.has(best.seg)) {
+      // Three bands in aRand: shelves, dining room, bakery. Keep clear of band boundaries.
+      const dining = ['cafe', 'restaurant', 'bar', 'pub'].includes(s.kind);
+      const style = s.kind === 'bakery' ? 2 : dining ? 1 : 0;
+      best.glass = (style + 0.1 + 0.8 * mulberry(best.seg.seed)()) / 3;
+      shops.set(best.seg, best);
+    }
   }
 
   // кварталы

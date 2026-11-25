@@ -1,0 +1,40 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Night light world coordinates</title>
+<pre>Running…</pre>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js"}}</script>
+<script type="module">
+import * as THREE from 'three';
+import { createNightLight } from '../src/night-light.js';
+
+try {
+  const night = createNightLight({ minX: -10, minZ: -10, maxX: 10, maxZ: 10 });
+  night.light(2, -5, 2);
+  night.done();
+  const material = new THREE.ShaderMaterial({
+    uniforms: night.uniforms,
+    vertexShader: 'void main() { gl_Position = vec4(position.xy, 0., 1.); }',
+    fragmentShader: `
+      uniform sampler2D uNightMap;
+      uniform vec4 uNightBounds;
+      void main() {
+        vec2 world = vec2(2., gl_FragCoord.x < 1. ? -5. : 5.);
+        gl_FragColor = texture2D(uNightMap, (world - uNightBounds.xy) * uNightBounds.zw);
+      }`,
+  });
+  const renderer = new THREE.WebGLRenderer();
+  const target = new THREE.WebGLRenderTarget(2, 1);
+  const scene = new THREE.Scene();
+  scene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), material));
+  renderer.setRenderTarget(target);
+  renderer.render(scene, new THREE.Camera());
+  const pixels = new Uint8Array(8);
+  renderer.readRenderTargetPixels(target, 0, 0, 2, 1, pixels);
+  const [atLamp, opposite] = [pixels[0], pixels[4]];
+  if (atLamp < 150 || opposite > 5) throw Error(`Red channel at lamp: ${atLamp}, across map: ${opposite}`);
+  window.__testResults = { passed: 1, atLamp, opposite };
+} catch (error) {
+  window.__testResults = { error: error.message };
+}
+document.querySelector('pre').textContent = JSON.stringify(window.__testResults);
+</script>
