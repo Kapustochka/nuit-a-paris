@@ -41,6 +41,9 @@ export const words = {
   umbrella: ['the umbrella', 'ði ʌmˈbrelə', 'зі амбреле', 'парасолька', 'In London, always take an umbrella.', 'У Лондоні завжди бери парасольку.'],
   river: ['the river', 'ðə ˈrɪvə', 'зе ріве', 'річка', 'The Thames is a long river.', 'Темза — довга річка.'],
   bridge: ['the bridge', 'ðə brɪdʒ', 'зе бридж', 'міст', 'Let’s walk across the bridge.', 'Перейдімо міст.'],
+  phoneBox: ['the phone box', 'ðə fəʊn bɒks', 'зе фоун бокс', 'телефонна будка', 'The red phone box is a symbol of London.', 'Червона телефонна будка — символ Лондона.'],
+  postbox: ['the postbox', 'ðə ˈpəʊstbɒks', 'зе поустбокс', 'поштова скринька', 'I post a postcard in the postbox.', 'Я вкидаю листівку в поштову скриньку.'],
+  bus: ['the double-decker', 'ðə ˌdʌbl ˈdekə', 'зе дабл деке', 'двоповерховий автобус', 'Let’s sit upstairs on the double-decker!', 'Сядьмо нагорі в двоповерховому автобусі!'],
   clockTower: ['the clock tower', 'ðə klɒk ˈtaʊə', 'зе клок тауе', 'годинникова вежа', 'The clock tower is called the Elizabeth Tower.', 'Годинникова вежа називається вежею Єлизавети.'],
   // what passers-by say (keys kept from Paris so people.js works unchanged)
   passant: ['Good evening!', 'ɡʊd ˈiːvnɪŋ', 'гуд івнін', 'Добрий вечір!', 'Good evening! Lovely night, isn’t it?', 'Добрий вечір! Чудова ніч, правда?'],
