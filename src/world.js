@@ -145,8 +145,8 @@ export function buildParis(scene, renderer, data, city, props = {}) {
   benches = placeBenches(props['park-bench'], data.roads, lamps, data.trees, blocked, propRandom);
   addPropInstances(scene, props['park-bench'], benches);
   const pigeons = placePigeons(scene, props, benches, blocked, propRandom);
-  buildVines(scene, wallSpots, inside, rnd);
-  buildPlaques(scene, data.roads, polys, inside);
+  buildVines(scene, wallSpots, inside, rnd, terrain.flat ? () => 0 : heightAt);
+  buildPlaques(scene, data.roads, polys, inside, terrain.flat ? () => 0 : heightAt);
 
   // ── Деревья: изогнутый ствол и крона из мазков ─────────────
   buildTrees(scene, look, data.trees.length ? data.trees : [], inside, rnd, terrain.flat ? () => 0 : heightAt);
@@ -683,7 +683,8 @@ function vineTexture(kind, seed) {
   for (let k = 0; k < 120; k++) leaf(rnd() * 256, rnd() * 30, 6 + rnd() * 4, rnd() * 6.3, leaves[Math.floor(rnd() * leaves.length)]);   // гуща у карниза
   return tex(c);
 }
-function buildVines(scene, spots, inside, rnd) {
+// Плющ и глициния растут от земли у стены: высота считается от рельефа, иначе на склоне они висят в воздухе
+function buildVines(scene, spots, inside, rnd, groundAt) {
   const pick = spots.filter(([x, z, nx, nz]) => !inside(x + nx * 1.5, z + nz * 1.5) && !inside(x + nx * 3.5, z + nz * 3.5) && rnd() < 0.3).slice(0, 220);
   if (!pick.length) return;
   const geo = new THREE.PlaneGeometry(1, 1);
@@ -696,12 +697,14 @@ function buildVines(scene, spots, inside, rnd) {
   for (const [x, z, nx, nz, len, H] of pick) {
     const k = rnd() < 0.62 ? 0 : 1, w = Math.min(len * 0.8, 3.5 + rnd() * 3), h = 3 + rnd() * 2.6;
     const topY = Math.min(H, 3.2 + rnd() * 4.5), sh = (rnd() - 0.5) * (len - w) * 0.6;
+    const ground = groundAt(x + nx * 0.6 + nz * sh, z + nz * 0.6 - nx * sh);
     Q.setFromAxisAngle(Yax, Math.atan2(nx, nz));
-    M.compose(P.set(x + nx * 0.2 + nz * sh, topY - h / 2, z + nz * 0.2 - nx * sh), Q, S.set(w, h, 1));
+    M.compose(P.set(x + nx * 0.2 + nz * sh, ground + topY - h / 2, z + nz * 0.2 - nx * sh), Q, S.set(w, h, 1));
     kinds[k].setMatrixAt(count[k]++, M);
   }
   kinds.forEach((m, i) => {
     m.count = count[i]; m.frustumCulled = false;
+    m.userData.noLift = true; // Height already sampled at the wall.
     m.userData.word = i === 0 ? 'ivy' : 'wisteria';
     scene.add(m);
   });
@@ -726,7 +729,7 @@ function plaqueTexture(name) {
   });
   return tex(c);
 }
-function buildPlaques(scene, roads, polys, inside) {
+function buildPlaques(scene, roads, polys, inside, groundAt) {
   const seen = new Map(), geo = new THREE.PlaneGeometry(1.15, 0.72);
   let made = 0;
   const sorted = roads.filter((r) => r.n && r.p.length >= 4).sort((a, c) => Math.hypot(a.p[0], a.p[1]) - Math.hypot(c.p[0], c.p[1]));
@@ -742,18 +745,23 @@ function buildPlaques(scene, roads, polys, inside) {
         if (l2 < 6) continue;
         const t = Math.max(0.15, Math.min(0.85, ((rx - ax) * dx + (rz - az) * dz) / l2));
         const x = ax + dx * t, z = az + dz * t, d = (x - rx) ** 2 + (z - rz) ** 2;
-        if (d < bd) { const len = Math.sqrt(l2); bd = d; best = { x, z, nx: -dz / len, nz: dx / len }; }
+        if (d >= bd) continue;
+        const len = Math.sqrt(l2);
+        let nx = -dz / len, nz = dx / len;
+        if ((rx - x) * nx + (rz - z) * nz < 0) { nx = -nx; nz = -nz; }
+        if (inside(x + nx * 0.8, z + nz * 0.8)) continue;
+        bd = d;
+        best = { x, z, nx, nz };
       }
     }
     if (!best) continue;
-    if ((rx - best.x) * best.nx + (rz - best.z) * best.nz < 0) { best.nx = -best.nx; best.nz = -best.nz; }
-    if (inside(best.x + best.nx * 0.8, best.z + best.nz * 0.8)) continue;
     if (!seen.has(rd.n)) seen.set(rd.n, 0);
     const mat = seen.get('tex:' + rd.n) || new THREE.MeshBasicMaterial({ map: plaqueTexture(rd.n), transparent: true, color: 0xd8d0e8 });
     seen.set('tex:' + rd.n, mat);
     const m = new THREE.Mesh(geo, mat);
-    m.position.set(best.x + best.nx * 0.16, 2.75, best.z + best.nz * 0.16);
+    m.position.set(best.x + best.nx * 0.16, groundAt(best.x + best.nx * 0.6, best.z + best.nz * 0.6) + 2.75, best.z + best.nz * 0.16);   // от земли у стены
     m.rotation.y = Math.atan2(best.nx, best.nz);
+    m.userData.noLift = true; // Keep the wall height through the scene-wide terrain pass.
     m.userData.word = 'plaque';
     scene.add(m);
     seen.set(rd.n, seen.get(rd.n) + 1); made++;
