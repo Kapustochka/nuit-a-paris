@@ -293,7 +293,7 @@ renderer.setAnimationLoop(() => {
   rain.render(camera);                // штрихи дождя поверх картины
 });
 
-// 38 МБ второстепенных моделей не задерживают вход. Дальняя прохожая нужна только у базилики.
+// Второстепенные модели (после сжатия ~2 МБ) не задерживают вход. Дальняя прохожая нужна только у базилики.
 function afterFrame(task) {
   requestAnimationFrame(() => {
     if ('requestIdleCallback' in window) requestIdleCallback(task, { timeout: 2000 });
