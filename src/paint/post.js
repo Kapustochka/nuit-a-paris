@@ -14,6 +14,10 @@ import { AIR_GLSL, airUniforms, MAX_SHAFTS } from './air.js';
 
 const INK_FAR = 90;        // дальше этого расстояния сцена не рисуется во второй раз (нормали для туши)
 
+// Рисованные прохожие: в канале alpha нормалей 0.55 → «полугероиня»: мазков кисти и бумаги меньше,
+// контур по силуэту, но не такой ровный, как у героини (у неё alpha 0).
+const FIGURE_A = '0.55';
+
 export function createPainter(renderer, { radius = 3, scale = 1, heroStyle = 1, shafts = 8, shaftSteps = 8, bloom = 2, reflect = 10, reflectDry = 0 } = {}) {
   const size = new THREE.Vector2(), cssSize = new THREE.Vector2();
   const colorRT = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: Math.min(4, renderer.capabilities.maxSamples), depthTexture: new THREE.DepthTexture(1, 1) });
@@ -26,17 +30,18 @@ export function createPainter(renderer, { radius = 3, scale = 1, heroStyle = 1, 
   const normalReal = new THREE.MeshNormalMaterial({ opacity: 0, transparent: true,
     blending: THREE.NoBlending, side: THREE.DoubleSide, forceSinglePass: true });
   const leafMats = new Map();
-  const leafNormal = (map) => {
-    if (!leafMats.has(map)) leafMats.set(map, new THREE.ShaderMaterial({
+  const leafNormal = (map, figure = false) => {
+    const key = figure ? map.uuid + ':figure' : map;
+    if (!leafMats.has(key)) leafMats.set(key, new THREE.ShaderMaterial({
       uniforms: { uMap: { value: map } }, side: THREE.DoubleSide,
       vertexShader: `varying vec2 vUv; void main() { vUv = uv; vec4 p = vec4(position, 1.0);
         #ifdef USE_INSTANCING
           p = instanceMatrix * p;
         #endif
         gl_Position = projectionMatrix * modelViewMatrix * p; }`,
-      fragmentShader: 'uniform sampler2D uMap; varying vec2 vUv; void main() { if (texture2D(uMap, vUv).a < 0.5) discard; gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0); }',
+      fragmentShader: 'uniform sampler2D uMap; varying vec2 vUv; void main() { if (texture2D(uMap, vUv).a < 0.5) discard; gl_FragColor = vec4(0.0, 0.0, 0.0, ' + (figure ? FIGURE_A : '1.0') + '); }',
     }));
-    return leafMats.get(map);
+    return leafMats.get(key);
   };
 
   // ── Свечение: яркие места кадра → 1/4 и 1/8 размера → размытие по двум осям ──
@@ -182,7 +187,8 @@ export function createPainter(renderer, { radius = 3, scale = 1, heroStyle = 1, 
         vec2 px = 1.0 / uRes, sp = vUv * uRes;
         vec4 center = texture2D(tNormal, vUv);
         float real = 1.0 - center.a;                           // героиня: чёткий кадр без мазков
-        vec3 col = uPaint > 0.5 && real < 0.5 ? kuwahara(vUv, px) : tap(vUv);
+        vec3 col = uPaint > 0.5 && real < 0.7 ? kuwahara(vUv, px) : tap(vUv);
+        if (real > 0.2 && real < 0.7) col = mix(col, tap(vUv), 0.85);     // прохожие: кисть едва заметна
 
         float w = uLine * (0.5 + 1.3 * vnoise(sp / 80.0));
         vec2 c = vUv + (vec2(vnoise(sp / 19.0), vnoise(sp / 19.0 + 31.0)) - 0.5) * 1.8 * px;
@@ -191,7 +197,7 @@ export function createPainter(renderer, { radius = 3, scale = 1, heroStyle = 1, 
         vec4 left = texture2D(tNormal, c - dx), right = texture2D(tNormal, c + dx);
         vec4 down = texture2D(tNormal, c - dy), up = texture2D(tNormal, c + dy);
         // Используем уже прочитанные маркеры: тонкая линия с обеих сторон силуэта, без новых texture taps.
-        float hero = step(0.05, max(real, 1.0 - min(min(left.a, right.a), min(down.a, up.a)))) * uHeroStyle;
+        float hero = step(0.7, max(real, 1.0 - min(min(left.a, right.a), min(down.a, up.a)))) * uHeroStyle;
         float heroWidth = max(0.6, uHeroLine * uRes.x / uCssRes.x);
         w = mix(w, heroWidth, hero);
         c = mix(c, vUv, hero);                                 // на героине — ровный контур без дрожания туши
@@ -281,7 +287,7 @@ export function createPainter(renderer, { radius = 3, scale = 1, heroStyle = 1, 
         if (skip(m) || (o.userData.inkRange && o.boundingSphere && o.boundingSphere.center.distanceTo(camera.position) - o.boundingSphere.radius > o.userData.inkRange)) { hidden.push(o); return; }
         swap.push([o, o.material]);
         o.material = o.userData.realistic ? (U.uHeroStyle.value > 0.5 ? normalReal : normalLegacy) : o.userData.leafMap ? leafNormal(o.userData.leafMap)
-          : m.alphaTest > 0 && m.map ? leafNormal(m.map)
+          : m.alphaTest > 0 && m.map ? leafNormal(m.map, !!o.userData.figure)
           : o.isInstancedMesh ? normalInst : normalMat;
       } else if (o.isPoints || o.isSprite || o.isLine) hidden.push(o);
     });

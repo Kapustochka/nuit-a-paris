@@ -25,7 +25,6 @@ export function createControls(dom) {
     if (el) el.addEventListener('pointerdown', (e) => { state[key] = true; e.preventDefault(); e.stopPropagation(); });
   }
   addEventListener('keyup', (e) => keys.delete(e.code));
-  addEventListener('blur', () => keys.clear());
 
   // ── Джойстик ──────────────────────────────────────────────
   const base = document.getElementById('joy-base');
@@ -37,6 +36,15 @@ export function createControls(dom) {
   let camId = null, lastX = 0, lastY = 0;
   const cameraTouches = new Map();
   let pinchDist = 0;
+
+  addEventListener('blur', () => {
+    keys.clear();
+    cameraTouches.clear();
+    camId = joyId = null;
+    jx = jy = 0;
+    state.jump = state.punch = false;
+    base.style.display = 'none';
+  });
 
   dom.addEventListener('pointerdown', (e) => {
     dom.setPointerCapture(e.pointerId);

@@ -68,6 +68,19 @@ try {
   assert(state.camYaw === finalYaw, 'Lost camera capture should end rotation');
   results.push('The joystick and camera remain independent and release cleanly');
 
+  touch('pointerdown', 4, 40);
+  touch('pointermove', 4, 40, 42);
+  touch('pointerdown', 5, right);
+  touch('pointerdown', 6, right + 80);
+  window.dispatchEvent(new Event('blur'));
+  const zoomAfterBlur = state.camDist;
+  touch('pointermove', 6, right + 120);
+  assert(state.camDist === zoomAfterBlur && controls.update().move.y === 0 && joystick.style.display === 'none', 'Blur should clear pinch and joystick input');
+  touch('pointerdown', 7, right);
+  touch('pointermove', 7, right + 20);
+  assert(state.camYaw !== finalYaw, 'A fresh touch should rotate after blur');
+  results.push('Switching away releases the joystick and pinch');
+
   window.__testResults = { passed: results.length, results };
 } catch (error) {
   window.__testResults = { error: error.message, results };

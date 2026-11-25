@@ -15,10 +15,12 @@ import { createCityAudio } from './city-audio.js';
 import { loadPasserby, placePasserby, placeCircularPasserby, passerbyBlocksStep } from './passerby.js';
 import { createPainter } from './paint/post.js';
 import { createPeople } from './people.js';
+import { CAST_3D, loadWalker } from './people-3d.js';
 import { createTalk } from './talk.js';
 import { createPassport } from './passport.js';
 import { createRain } from './rain.js';
 import { createAmbient } from './ambient.js';
+import { createEvening } from './evening.js';
 
 const loading = document.getElementById('loading');
 const streetEl = document.getElementById('street');
@@ -104,8 +106,15 @@ const passport = createPassport(mapData, { audio, lesson, minimap, player });   
 const inspector = installWordInspector(renderer.domElement, scene, camera, world.sky.moonDirection, audio, lesson.inspect, lesson.review);
 const stars = createFallingStars(scene, camera, world, inspector, lesson.review);
 installStarToggle(stars);
+// «Ce soir»: четыре дела на вечер, связывают разговоры, паспорт, звёзды, слова и прогулку (evening.js)
+const evening = createEvening({ audio, player, sacre: [sacreX, sacreZ], available: new Set([
+  ...(passport.found < passport.places.length ? ['place'] : []),
+  ...(stars.enabled !== false ? ['star'] : []),
+  ...(document.querySelectorAll('#notebook li').length >= 3 ? ['review'] : []),
+  // 'cafe' — когда в игре появится заказ в кафе (cafe.js), он добавит сюда 'cafe' и вызовет deed('cafe')
+]) });
 // Живые улицы: нарисованные прохожие из кода (people.js). ?no-people — без них, для сравнения.
-if (!new URLSearchParams(location.search).has('no-people')) people = createPeople(scene, world, mapData, { count: phone ? 10 : 18, inspector, camera, player, onTalk: (p, raining) => talk.start(p, raining) });
+if (!new URLSearchParams(location.search).has('no-people')) people = createPeople(scene, world, mapData, { count: phone ? 10 : 18, far3d: phone ? 45 : 85, inspector, camera, player, onTalk: (p, raining) => talk.start(p, raining) });
 // Мелкая жизнь в воздухе: листья, лепестки, светлячки, пар над кофе, дым из труб. ?no-ambient — без неё.
 const ambient = new URLSearchParams(location.search).has('no-ambient') ? null : createAmbient(scene, world, { phone });
 loading.remove();
@@ -113,7 +122,7 @@ performance.mark('paris-ready');
 
 const debug = new URLSearchParams(location.search).has('debug');
 if (debug) addDebugPanel();
-window.__game = { ambient, rain, talk, passport, heroine, passersby, get people() { return people; }, world, stars, inspector, mapData, camera, controls, renderer, cityAudio, get painted() { return painter !== null; }, get painter() { return painter; } };
+window.__game = { evening, ambient, rain, talk, passport, heroine, passersby, get people() { return people; }, world, stars, inspector, mapData, camera, controls, renderer, cityAudio, get painted() { return painter !== null; }, get painter() { return painter; } };
 
 // ── Движение ─────────────────────────────────────────────────
 const MAX_WALK = 1.45, MAX_RUN = 3.8, MAX_BACK = 0.95; // м/с
@@ -187,6 +196,7 @@ renderer.setAnimationLoop(() => {
   people?.update(dt, rain.level);
   talk.update();
   passport.update(dt);
+  evening.update(dt);
   ambient?.update(dt, camera, world.air.groundY);
   shadowCasters.length = 0; shadowCasters.push(p);
   for (const actor of passersby) shadowCasters.push(actor.position);
@@ -247,6 +257,17 @@ async function addPasserby(distant) {
   passersby.push(actor);
 }
 afterFrame(() => addPasserby(false));
+// 3D-прохожие со скелетом (people-3d.js) — в дополнение к нарисованным. Грузятся по одному после первого кадра.
+// ?no-3d — без них.
+if (people && !new URLSearchParams(location.search).has('no-3d')) afterFrame(async () => {
+  for (const one of CAST_3D) {
+    try {
+      const home = one.sacre ? [sacreX + one.sacre[0], sacreZ + one.sacre[1]] : one.home;
+      const owner = people.addModel(await loadWalker(one.file), { woman: one.woman, home, range: one.range });
+      if (one.dog) people.addModel(await loadWalker(one.dog), { woman: false, scale: 1.5, owner, word: 'dog' });
+    } catch (error) { console.warn('3D-прохожий не загрузился:', one.file, error); }
+  }
+});
 
 // Галочка «Падающие звёзды»: выбор запоминается в браузере
 function installStarToggle(stars) {

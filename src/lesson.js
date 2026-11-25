@@ -1,5 +1,6 @@
 import { entryFor } from './entries.js';
 import { createWordReview } from './word-review.js';
+import { deed } from './evening.js';
 
 const notebookKey = 'nuit-a-paris:words:v1';
 
@@ -59,6 +60,7 @@ export function createLesson(openWord) {
     if (!found.has(key)) {
       found.add(key);
       review.learn(key);
+      if (!/^(talk|place):/.test(key)) deed('word');
       addWord(key);
       refreshBook();
       try { localStorage.setItem(notebookKey, JSON.stringify([...found])); } catch { /* нет доступа к записи */ }

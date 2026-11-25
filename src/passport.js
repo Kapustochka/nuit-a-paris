@@ -4,6 +4,7 @@
 // по-французски с переводом и голосом (assets/voice/place/, scripts/build-place-voice.py).
 // Место попадает в блокнот («place:<id>»), а на большой карте (M) найденные отмечены штампом,
 // ненайденные — знаком «?». Прогресс хранится в браузере.
+import { deed } from './evening.js';
 
 // [id, как искать в OSM, название, по-русски, фраза, перевод]
 export const PLACES = [
@@ -87,6 +88,7 @@ export function createPassport(data, { audio, lesson, minimap, player }) {
         found.add(p.id);
         try { localStorage.setItem(KEY, JSON.stringify([...found])); } catch { /* не страшно */ }
         lesson.inspect(`place:${p.id}`);
+        deed('place');
         minimap.setPlaces?.(markers(), `${found.size}/${places.length}`);
         show(p);
         break;

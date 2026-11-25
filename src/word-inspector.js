@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { entryFor } from './entries.js';
+import { deed } from './evening.js';
 
 export function installWordInspector(canvas, scene, camera, moonDirection, audio, onInspect, review) {
   const card = document.querySelector('#word-card');
@@ -113,6 +114,7 @@ export function installWordInspector(canvas, scene, camera, moonDirection, audio
     reviewButtons[name].addEventListener('click', () => {
       if (!reviewKey || card.dataset.review !== 'answer') return;
       review.rate(reviewKey, remembered);
+      if (remembered) deed('review');
       card.dataset.review = 'rated';
       reviewButtons.again.hidden = reviewButtons.remembered.hidden = true;
       fields.status.textContent = remembered ? 'Отлично! Повторим позже.' : 'Ничего страшного — слово вернётся раньше.';
@@ -127,17 +129,22 @@ export function installWordInspector(canvas, scene, camera, moonDirection, audio
   });
   canvas.addEventListener('pointermove', (event) => {
     if (gesture?.id !== event.pointerId) return;
-    if (Math.hypot(gesture.x - event.clientX, gesture.y - event.clientY) > 6) gesture = lastTap = null;
+    // палец дрожит сильнее мыши: на сенсорном экране тапу разрешено сдвинуться до 12 px
+    if (Math.hypot(gesture.x - event.clientX, gesture.y - event.clientY) > (event.pointerType === 'touch' ? 12 : 6)) gesture = lastTap = null;
   });
   canvas.addEventListener('pointercancel', () => { gesture = lastTap = null; });
   canvas.addEventListener('pointerup', (event) => {
     const start = gesture;
     gesture = null;
-    if (start?.id !== event.pointerId || event.timeStamp - start.time > 320 ||
-        Math.hypot(start.x - event.clientX, start.y - event.clientY) > 6) {
+    const touch = event.pointerType === 'touch';
+    if (start?.id !== event.pointerId || event.timeStamp - start.time > (touch ? 450 : 320) ||
+        Math.hypot(start.x - event.clientX, start.y - event.clientY) > (touch ? 12 : 6)) {
       lastTap = null;
       return;
     }
+    // На телефоне карточку открывает один тап: двойной тап там почти никто не пробует,
+    // а при тяжёлых кадрах второй тап легко не попадает в окно. Мышью — как раньше, двойной клик.
+    if (touch) { lastTap = null; inspect(event.clientX, event.clientY); return; }
     const tap = { x: event.clientX, y: event.clientY, time: event.timeStamp, type: event.pointerType };
     const radius = tap.type === 'touch' ? 25 : 12;
     if (lastTap?.type === tap.type && tap.time - lastTap.time <= 450 &&

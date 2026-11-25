@@ -1,8 +1,9 @@
-// people.js — живые улицы: нарисованные прохожие, собранные прямо в коде.
-// Никаких внешних моделей: тело из простых форм (эллипсоиды, конусы, пальто-«колокол»),
-// шаг считается формулой (синус фазы шага → бедро, колено, руки, покачивание плеч).
-// Каждый прохожий — один меш на одном общем материале, поэтому живописный свет (paint.js)
-// и контуры тушью (post.js) ложатся на них так же, как на дома.
+// people.js — живые улицы: рисованные прохожие.
+// Каждый — картинка в стиле аниме-акварели, стоящая в 3D и всегда повёрнутая к камере (как в Paper Mario
+// или Octopath). Листы с четырьмя видами (спереди, сбоку в шаге, сзади, вполоборота) нарезаны
+// scripts/build-people-sprites.py в assets/people/painted/; вид выбирается по углу между тем, куда человек идёт,
+// и камерой, сбоку и вполоборота ещё и зеркалится. Шаг — покачивание, лёгкий наклон и смена вида.
+// Живописный свет (paint.js) ложится на картинку так же, как на дома, а тушь обводит силуэт.
 // Прохожие ходят по настоящим тротуарам и пешеходным улицам из OSM, поворачивают на перекрёстках,
 // держатся правой стороны и обходят героиню. Те, кто ушёл далеко, тихо появляются снова
 // за спиной камеры — так рядом всегда кто-то есть, а телефон считает не больше дюжины человек.
@@ -11,6 +12,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { words } from './french-words.js';
+import { SHEETS } from './people-sheets.js';
 
 // Что говорят прохожие (ключи карточек из french-words.js; голос — assets/voice/people/<ключ>-f|m.mp3)
 const GREETINGS = ['bonsoirStreet', 'bonsoirMademoiselle', 'bonneSoiree', 'salut', 'belleNuit', 'ilFaitFrais', 'bonneNuit', 'pardon'];
@@ -21,150 +23,11 @@ const UMBRELLAS = [0x1a1820, 0x1a1820, 0x1a1820, 0x8a1e2a, 0x24305a, 0x2f5a4e, 0
 // По каким дорогам ходят и как далеко от оси дороги их тротуар (м)
 const WALK_OFFSET = { footway: [0.45, 0], path: [0.4, 0], steps: [0.45, 0], pedestrian: [2.4, 1.4, 0.6], living_street: [2.4, 1.4, 0.6], residential: [3.6, 2.8, 2, 1.2] };
 const RADIUS = 0.3;
-
-// ── Палитра парижской ночи (sRGB) ────────────────────────────
-const COATS = [0x3b4a7a, 0x7a2f3a, 0x9a6a3a, 0x2f5a4e, 0x5a3a6a, 0x2a2a34, 0xb08850, 0x8a3a2a, 0x4a5a78, 0x6a4a3a, 0x9a4a5a];
-const TROUSERS = [0x23263a, 0x2c3a5f, 0x4a3f36, 0x2a2a30, 0x5a5a66, 0x3a4a6f];
-const ACCENTS = [0xd8402e, 0xe8b040, 0x2f9aa0, 0xf0e2c4, 0xb45aa0, 0xd06a40, 0x7aa85a, 0xf4b8b0];
-const SKIN = [0xf1d0b5, 0xe2b48f, 0xc98f67, 0x9b6544, 0x6e4630, 0xf5dcc6];
-const HAIR = [0x1c1412, 0x3a2418, 0x6b4426, 0xa77a4a, 0xd8c08a, 0x8a3b24, 0x9a9a9e];
-const SHOES = [0x161418, 0x2e1f17, 0x3c2a22];
-
-// Суставы стоящего человека ростом 1,70 м (лицо смотрит в +z; левая рука — +x)
-const J = {
-  hips: [0, 0.94, 0], spine: [0, 1.06, 0], head: [0, 1.5, 0],
-  thighL: [0.095, 0.92, 0], shinL: [0.095, 0.5, 0.005], thighR: [-0.095, 0.92, 0], shinR: [-0.095, 0.5, 0.005],
-  armL: [0.195, 1.42, -0.01], foreL: [0.215, 1.14, -0.02], armR: [-0.195, 1.42, -0.01], foreR: [-0.215, 1.14, -0.02],
-};
-const BONES = Object.keys(J);
-const B = Object.fromEntries(BONES.map((name, i) => [name, i]));
-const PARENT = { spine: 'hips', head: 'spine', thighL: 'hips', shinL: 'thighL', thighR: 'hips', shinR: 'thighR', armL: 'spine', foreL: 'armL', armR: 'spine', foreR: 'armR' };
+// в какие стороны пробовать обойти препятствие (радианы от прямого пути; + вправо)
+const DETOURS = [0, 0.4, -0.4, 0.8, -0.8, 1.25, -1.25, 1.7];
 
 function mulberry(a) {
   return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
-}
-
-// ── Сборка фигуры ────────────────────────────────────────────
-function figureGeometry(rnd) {
-  const pick = (list) => list[Math.floor(rnd() * list.length)];
-  const woman = rnd() < 0.55;
-  const parts = [];
-  const color = new THREE.Color();
-  // weight(x, y, z) → [кость A, кость B, вес B] — по умолчанию вся деталь на одной кости
-  function add(geometry, hex, bone, weight = null) {
-    const g = geometry;
-    g.deleteAttribute('uv');
-    const n = g.attributes.position.count, pos = g.attributes.position;
-    const col = new Float32Array(n * 3), si = new Uint16Array(n * 4), sw = new Float32Array(n * 4);
-    color.set(hex);
-    const shade = (0.94 + rnd() * 0.12) * 2.2;      // ночью живописный свет сильно темнит — ткань чуть светлее
-    for (let i = 0; i < n; i++) {
-      col[i * 3] = Math.min(1, color.r * shade); col[i * 3 + 1] = Math.min(1, color.g * shade); col[i * 3 + 2] = Math.min(1, color.b * shade);
-      if (weight) {
-        const [a, b, w] = weight(pos.getX(i), pos.getY(i), pos.getZ(i));
-        si[i * 4] = a; si[i * 4 + 1] = b; sw[i * 4] = 1 - w; sw[i * 4 + 1] = w;
-      } else { si[i * 4] = bone; sw[i * 4] = 1; }
-    }
-    g.setAttribute('color', new THREE.BufferAttribute(col, 3));
-    g.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(si, 4));
-    g.setAttribute('skinWeight', new THREE.BufferAttribute(sw, 4));
-    parts.push(g.index ? g.toNonIndexed() : g);
-  }
-  const blob = ([x, y, z], [rx, ry, rz], w = 14, h = 10) => new THREE.SphereGeometry(1, w, h).scale(rx, ry, rz).translate(x, y, z);
-  // конус между двумя точками
-  const limb = (a, b, r0, r1, seg = 12) => {
-    const A = new THREE.Vector3(...a), Bv = new THREE.Vector3(...b), d = Bv.clone().sub(A), len = d.length();
-    const g = new THREE.CylinderGeometry(r1, r0, len, seg, 3, true);
-    // чуть «мышечный» профиль: середина толще концов, а не ровный цилиндр
-    const pos = g.attributes.position;
-    for (let i = 0; i < pos.count; i++) {
-      const t = pos.getY(i) / len + 0.5, k = 1 + Math.sin(t * Math.PI) * 0.12;
-      pos.setX(i, pos.getX(i) * k); pos.setZ(i, pos.getZ(i) * k);
-    }
-    g.computeVertexNormals();
-    g.translate(0, len / 2, 0);
-    g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize()));
-    return g.translate(...a);
-  };
-  // «колокол» по профилю [радиус, высота] снизу вверх, сплющенный спереди-назад
-  const bell = (profile, depth = 0.72, seg = 20) => new THREE.LatheGeometry(profile.map(([r, y]) => new THREE.Vector2(r, y)), seg).scale(1, 1, depth);
-
-  const skin = pick(SKIN), hair = pick(HAIR), shoes = pick(SHOES);
-  const coat = pick(COATS), legs = pick(TROUSERS), accent = pick(ACCENTS);
-  const outfit = woman ? pick(['coat', 'coat', 'dress', 'jacket']) : pick(['coat', 'coat', 'jacket', 'jacket']);
-
-  // ноги и обувь; шарики в коленях скругляют сгиб
-  for (const [side, x] of [['L', 0.095], ['R', -0.095]]) {
-    const legColor = outfit === 'dress' ? 0x241c26 : legs;
-    const knee = woman ? 0.05 : 0.058;
-    add(limb([x, 0.97, 0], [x, 0.5, 0.005], woman ? 0.072 : 0.078, knee), legColor, B['thigh' + side]);
-    add(blob([x, 0.5, 0.008], [knee, knee * 1.1, knee]), legColor, B['shin' + side]);
-    add(limb([x, 0.5, 0.005], [x, 0.08, -0.005], knee * 0.98, woman ? 0.032 : 0.042), legColor, B['shin' + side]);
-    add(blob([x, 0.05, 0.035], [0.046, 0.042, woman ? 0.1 : 0.115]), shoes, B['shin' + side]);
-  }
-  // туловище: внизу на тазу, вверху на позвоночнике, между ними плавно; покатые плечи
-  const torsoWeight = (x, y) => [B.hips, B.spine, THREE.MathUtils.smoothstep(y, 0.98, 1.14)];
-  const top = outfit === 'jacket' ? accent : coat;
-  const hip = woman ? 0.175 : 0.16, waist = woman ? 0.13 : 0.15, chest = woman ? 0.16 : 0.18, sh = woman ? 0.17 : 0.195;
-  add(bell([[0.001, 0.84], [hip * 0.8, 0.85], [hip, 0.9], [hip * 0.97, 0.97], [waist, 1.06], [chest * 0.97, 1.18], [chest, 1.26],
-    [sh, 1.34], [sh * 0.93, 1.39], [sh * 0.72, 1.43], [0.07, 1.46], [0.045, 1.47]], woman ? 0.66 : 0.62), outfit === 'jacket' ? coat : top, 0, torsoWeight);
-  // воротник
-  add(new THREE.TorusGeometry(0.058, 0.022, 8, 18).rotateX(Math.PI / 2).translate(0, 1.445, 0.0), outfit === 'jacket' ? coat : top, B.spine);
-  // полы пальто или юбка: низ качается вместе с бедром своей стороны
-  const hem = outfit === 'coat' ? (woman ? 0.5 : 0.56) : outfit === 'dress' ? 0.6 : 0;
-  if (hem) {
-    const flare = outfit === 'dress' ? 0.26 : 0.22;
-    add(bell([[flare, hem], [flare - 0.005, hem + 0.04], [flare - 0.03, hem + 0.15], [hip + 0.02, 0.85], [hip + 0.01, 0.92], [waist + 0.01, 1.02]], 0.74, 22),
-      outfit === 'dress' ? accent : coat, 0, (x, y) => {
-        const t = THREE.MathUtils.clamp((0.95 - y) / 0.45, 0, 1), s = Math.min(1, Math.abs(x) / 0.1);
-        return [B.hips, x > 0 ? B.thighL : B.thighR, t * s * 0.6];
-      });
-  }
-  // руки: плечо-шарик, рукав, локоть, предплечье, кисть
-  for (const [side, sx] of [['L', 1], ['R', -1]]) {
-    const [ax, ay, az] = J['arm' + side];
-    add(blob([ax - 0.012 * sx, ay - 0.005, az], [0.062, 0.06, 0.062]), coat, B['arm' + side]);
-    add(limb([ax, ay, az], [0.212 * sx, 1.14, -0.02], 0.056, 0.046), coat, B['arm' + side]);
-    add(blob([0.213 * sx, 1.14, -0.02], [0.045, 0.047, 0.045]), coat, B['fore' + side]);
-    add(limb([0.213 * sx, 1.14, -0.02], [0.22 * sx, 0.91, 0.0], 0.045, 0.04), coat, B['fore' + side]);
-    add(blob([0.221 * sx, 0.86, 0.008], [0.028, 0.052, 0.04], 10, 8), skin, B['fore' + side]);
-  }
-  // шея, голова (с подбородком и носом), волосы
-  add(limb([0, 1.42, -0.005], [0, 1.56, 0.0], 0.043, 0.04), skin, B.head);
-  add(blob([0, 1.605, 0.008], [0.088, 0.108, 0.098], 18, 14), skin, B.head);
-  add(blob([0, 1.545, 0.04], [0.052, 0.04, 0.06], 12, 8), skin, B.head);          // подбородок и щёки
-  add(blob([0, 1.6, 0.104], [0.013, 0.024, 0.02], 8, 6), skin, B.head);           // нос
-  add(blob([0, 1.648, -0.028], [0.098, 0.098, 0.098], 18, 14), hair, B.head);
-  if (woman) {
-    add(blob([0, 1.665, 0.055], [0.085, 0.035, 0.05], 12, 8), hair, B.head);      // чёлка
-    const style = rnd();
-    if (style < 0.45) add(blob([0, 1.5, -0.055], [0.098, 0.17, 0.062], 14, 12), hair, B.head);  // длинные
-    else if (style < 0.75) add(blob([0, 1.665, -0.105], [0.05, 0.05, 0.05], 10, 8), hair, B.head); // пучок
-  }
-  // шарф
-  if (rnd() < 0.6) {
-    add(new THREE.TorusGeometry(0.07, 0.03, 8, 18).rotateX(Math.PI / 2).scale(1, 1, 0.9).translate(0, 1.45, 0.005), accent === top ? pick(ACCENTS) : accent, B.spine);
-    add(new THREE.BoxGeometry(0.06, 0.24, 0.022).translate(0.045, 1.32, 0.11), accent === top ? pick(ACCENTS) : accent, B.spine);
-  }
-  // головной убор
-  const hat = rnd();
-  if (woman && hat < 0.3) add(blob([0.02, 1.705, -0.01], [0.115, 0.035, 0.115]).rotateZ(-0.15), pick([0x7b2230, 0x1f1d24, 0x2c3a5a, accent]), B.head);
-  else if (!woman && hat < 0.22) {
-    add(new THREE.CylinderGeometry(0.085, 0.095, 0.08, 16).translate(0, 1.73, -0.005), 0x23212a, B.head);
-    add(new THREE.CylinderGeometry(0.15, 0.15, 0.012, 18).translate(0, 1.69, -0.005), 0x23212a, B.head);
-  } else if (!woman && hat < 0.4) add(blob([0, 1.69, 0.02], [0.105, 0.04, 0.12]), pick([0x3a3d48, 0x5a4a3a]), B.head);   // кепка
-  // что несут
-  const carry = rnd();
-  let busyArm = null;
-  if (carry < 0.16) {           // багет под мышкой
-    add(limb([-0.25, 1.2, 0.2], [-0.23, 1.0, -0.24], 0.03, 0.026, 6), 0xc8954e, B.armR);
-    busyArm = 'R';
-  } else if (woman && carry < 0.5) add(new THREE.BoxGeometry(0.06, 0.2, 0.24).translate(0.25, 0.86, 0.0), pick([0x3a2418, 0x1f1d24, 0x7b2230, 0x9a7a52]), B.foreL);   // сумка
-  else if (!woman && carry < 0.32) add(new THREE.BoxGeometry(0.27, 0.34, 0.12).translate(0, 1.22, -0.17), pick([0x2c3247, 0x3b3530, 0x4b5a3a]), B.spine);       // рюкзак
-
-  const geometry = mergeGeometries(parts);
-  for (const p of parts) p.dispose();      // нормали у каждой детали свои, гладкие
-  return { geometry, woman, busyArm, height: woman ? 1.58 + rnd() * 0.14 : 1.7 + rnd() * 0.17 };
 }
 
 // Зонт: восемь клиньев купола, спица-ручка; держится в кисти и всегда смотрит вверх
@@ -183,17 +46,32 @@ function umbrellaGeometry(hex) {
   return mergeGeometries(parts);
 }
 
-function makeSkeleton() {
-  const bones = BONES.map((name) => { const b = new THREE.Bone(); b.name = name; return b; });
-  BONES.forEach((name, i) => {
-    const parent = PARENT[name], p = J[name];
-    if (parent) {
-      const q = J[parent];
-      bones[i].position.set(p[0] - q[0], p[1] - q[1], p[2] - q[2]);
-      bones[B[parent]].add(bones[i]);
-    } else bones[i].position.set(...p);
-  });
-  return bones;
+// ── Рисованные фигуры ────────────────────────────────────────
+const CAST = Object.keys(SHEETS);
+// 4 вида × (как есть, зеркально): плоскость с ногами в начале координат, своя полоска листа в UV
+function figureGeometries(sheet) {
+  const h = sheet.h / sheet.fig * sheet.height, w = sheet.cell / sheet.h * h, foot = (sheet.h - sheet.foot) / sheet.h * h;
+  const list = [];
+  for (let view = 0; view < sheet.cells; view++) for (const mirror of [false, true]) {
+    const g = new THREE.PlaneGeometry(w, h).translate(0, h / 2 - foot, 0);
+    const uv = g.attributes.position.array, u = g.attributes.uv, nrm = g.attributes.normal;
+    for (let i = 0; i < u.count; i++) {
+      const right = uv[i * 3] > 0 !== mirror;
+      u.setX(i, (view + (right ? 1 : 0)) / sheet.cells);
+      nrm.setXYZ(i, 0, 0.45, 0.89);         // свет как на стоящего человека, а не на лист бумаги
+    }
+    list.push(g);
+  }
+  return list;
+}
+// Какой вид показать: угол камеры относительно того, куда человек смотрит (0 — камера прямо перед ним)
+const FRONT = 0, SIDE = 1, BACK = 2, THREE_QUARTER = 3;
+function viewFor(angle) {
+  const a = Math.abs(angle), right = angle > 0;         // камера справа от человека
+  if (a < 0.45) return FRONT * 2;
+  if (a < 1.1) return THREE_QUARTER * 2 + (right ? 1 : 0);
+  if (a < 2.25) return SIDE * 2 + (right ? 0 : 1);
+  return BACK * 2;
 }
 
 // ── Сеть тротуаров ───────────────────────────────────────────
@@ -212,9 +90,15 @@ function walkNetwork(roads) {
   return { ways, lengths, total, branches: (w, i) => nodes.get(key(ways[w].p[i * 2], ways[w].p[i * 2 + 1])) || [] };
 }
 
-export function createPeople(scene, world, mapData, { count = 16, inspector, camera, player, onTalk = null } = {}) {
+export function createPeople(scene, world, mapData, { count = 16, inspector, camera, player, onTalk = null, far3d = 85 } = {}) {
   const net = walkNetwork(mapData.roads);
-  const material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9 });
+  const loader = new THREE.TextureLoader();
+  const cast = CAST.map((name) => {
+    const map = loader.load(`assets/people/painted/${name}.webp`);
+    map.colorSpace = THREE.SRGBColorSpace;
+    map.anisotropy = 4;
+    return { name, sheet: SHEETS[name], map, geometries: figureGeometries(SHEETS[name]) };
+  });
   const rnd = mulberry(4242);
   const umbrellaMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.6, side: THREE.DoubleSide });
   const umbrellaShapes = new Map();
@@ -229,6 +113,18 @@ export function createPeople(scene, world, mapData, { count = 16, inspector, cam
   if (!net.ways.length) return { people, update() {}, count: 0 };
 
   const free = (x, z) => !world.blocked(x, z);
+  // свободно ли место для прохожего: дома, скамейки, столики, фонари, деревья, столбики, героиня и другие люди
+  function clear(person, x, z) {
+    if (world.blocked(x, z) || world.post?.(x, z, RADIUS)) return false;
+    if ((x - player.x) ** 2 + (z - player.z) ** 2 < 0.62 ** 2) return false;
+    for (const o of people) {
+      if (o === person || !o.active || o === person.dog || o === person.owner) continue;
+      const q = o.root.position, ox = x - q.x, oz = z - q.z;
+      // ближе 0,55 м к другому — нельзя, но если уже стоим вплотную, разрешаем расходиться
+      if (ox * ox + oz * oz < 0.55 ** 2 && ox * ox + oz * oz < (person.root.position.x - q.x) ** 2 + (person.root.position.z - q.z) ** 2) return false;
+    }
+    return true;
+  }
   // точка пути: вершина дороги, сдвинутая на тротуар своей стороны
   function waypoint(person, w, i) {
     const p = net.ways[w].p, n = p.length / 2;
@@ -242,10 +138,19 @@ export function createPeople(scene, world, mapData, { count = 16, inspector, cam
     }
     return [p[i * 2], p[i * 2 + 1]];
   }
-  function randomRoadPoint() {
+  function randomRoadPoint(person) {
+    if (person?.home) {                              // 3D-прохожий: точка в его районе
+      const pts = person.homePoints ??= homePoints(person.home, person.range);
+      if (pts.length) return pts[Math.floor(rnd() * pts.length)];
+    }
     let t = rnd() * net.total, w = 0;
     while (w < net.ways.length - 1 && t > net.lengths[w]) { t -= net.lengths[w]; w++; }
     return [w, Math.floor(rnd() * (net.ways[w].p.length / 2))];
+  }
+  function homePoints([hx, hz], range) {
+    const out = [];
+    net.ways.forEach((w, wi) => { for (let i = 0; i < w.p.length; i += 2) if (Math.hypot(w.p[i] - hx, w.p[i + 1] - hz) < range) out.push([wi, i / 2]); });
+    return out;
   }
   function inView(x, y, z) {
     return frustum.containsPoint(tmp.set(x, y + 1, z));
@@ -253,12 +158,13 @@ export function createPeople(scene, world, mapData, { count = 16, inspector, cam
   // появиться на тротуаре в кольце [near, far] от героини, по возможности вне кадра
   function spawn(person, near, far, hidden) {
     for (let attempt = 0; attempt < 40; attempt++) {
-      const [w, i] = randomRoadPoint();
+      const [w, i] = randomRoadPoint(person);
       const p = net.ways[w].p, n = p.length / 2;
       person.way = w; person.dir = i === 0 ? 1 : i === n - 1 ? -1 : rnd() < 0.5 ? 1 : -1;
       const [x, z] = waypoint(person, w, i);
       const d = Math.hypot(x - player.x, z - player.z);
-      if (d < near || d > far || !free(x, z)) continue;
+      if (!person.home && (d < near || d > far)) continue;
+      if (!free(x, z) || (person.home && d < 6 && attempt < 30)) continue;
       const y = world.heightAt(x, z);
       if (hidden && attempt < 30 && inView(x, y, z) && d < 60) continue;
       if (people.some((o) => o !== person && o.active && Math.hypot(o.root.position.x - x, o.root.position.z - z) < 2)) continue;
@@ -267,14 +173,17 @@ export function createPeople(scene, world, mapData, { count = 16, inspector, cam
       nextTarget(person, true);
       person.root.rotation.y = Math.atan2(person.target[0] - x, person.target[1] - z);
       person.active = true; person.root.visible = true;
-      person.pause = 0; person.wait = 0; person.stuck = 0; person.greeted = -1e9;
+      if (person.dog) placeDog(person.dog, person, true);
+      person.pause = 0; person.wait = 0; person.stuck = 0; person.detour = 0; person.check = 4; person.lastD = 1e9; person.greeted = -1e9;
       return true;
     }
     person.active = false; person.root.visible = false;
+    if (person.dog) { person.dog.active = false; person.dog.root.visible = false; }
     return false;
   }
   // следующая вершина; на перекрёстке иногда сворачиваем
   function nextTarget(person, first = false) {
+    person.lastD = 1e9; person.check = 4;
     if (!first) {
       const options = net.branches(person.way, person.index).filter(([w]) => w !== person.way);
       if (options.length && rnd() < 0.45) {
@@ -284,33 +193,44 @@ export function createPeople(scene, world, mapData, { count = 16, inspector, cam
         person.dir = i === 0 ? 1 : i === n - 1 ? -1 : rnd() < 0.5 ? 1 : -1;
       }
       // иногда останавливаются: посмотреть на витрину, на город, в телефон
-      if (rnd() < 0.07) person.pause = 1.5 + rnd() * 4;
+      if (!person.model && rnd() < 0.07) person.pause = 1.5 + rnd() * 4;   // 3D-клип — только ходьба, без остановок
     }
     const n = net.ways[person.way].p.length / 2;
     let i = person.index + person.dir;
     if (i < 0 || i >= n) { person.dir = -person.dir; i = person.index + person.dir; }
+    // 3D-прохожий не уходит из своего района: у границы разворачивается
+    if (person.home) {
+      const p = net.ways[person.way].p, j = Math.max(0, Math.min(n - 1, i));
+      if (Math.hypot(p[j * 2] - person.home[0], p[j * 2 + 1] - person.home[1]) > person.range) {
+        person.dir = -person.dir; i = Math.max(0, Math.min(n - 1, person.index + person.dir));
+      }
+    }
     person.index = Math.max(0, Math.min(n - 1, i));
     person.target = waypoint(person, person.way, person.index);
   }
 
+  const camLocal = new THREE.Vector3();
   for (let k = 0; k < count; k++) {
-    const { geometry, woman, busyArm, height } = figureGeometry(mulberry(1000 + k * 7919));
-    const bones = makeSkeleton();
-    const mesh = new THREE.SkinnedMesh(geometry, material);
-    mesh.add(bones[0]);
-    mesh.bind(new THREE.Skeleton(bones));
+    const who = cast[k % cast.length], woman = who.sheet.woman;
+    // тот же лист, но чуть другой оттенок и рост — двойники не так бросаются в глаза
+    // часть собственного цвета картинки не зависит от ночного света — прохожие не тонут в фиолетовой мгле
+    const material = new THREE.MeshLambertMaterial({ map: who.map, alphaTest: 0.5, emissiveMap: who.map, emissive: new THREE.Color(0.42, 0.4, 0.38) });
+    const tone = 1.25 + rnd() * 0.12;                 // ночью живописный свет сильно темнит — картинка светлее
+    material.color.setRGB(tone * (0.97 + rnd() * 0.06), tone * (0.97 + rnd() * 0.06), tone * (0.97 + rnd() * 0.06));
+    const mesh = new THREE.Mesh(who.geometries[0], material);
+    mesh.userData.figure = true;                    // post.js: меньше мазков кисти, чтобы прохожие читались
     const root = new THREE.Group();
     root.name = woman ? 'Passante' : 'Passant';
     root.add(mesh);
-    root.scale.setScalar(height / 1.7);
+    const scale = 0.97 + rnd() * 0.06;
+    root.scale.setScalar(scale);
     scene.add(root);
-    mesh.geometry.computeBoundingSphere();
-    mesh.geometry.boundingSphere.radius += 0.4;     // руки и полы пальто в движении
+    world.paint(mesh);
     const person = {
-      root, mesh, bones, woman, busyArm, rest: bones[0].position.y,
-      speed: (woman ? 1.15 : 1.25) + rnd() * 0.3, stride: 1.32 * height / 1.7,
+      root, mesh, who, woman, view: 0,
+      speed: (woman ? 1.15 : 1.25) + rnd() * 0.3, stride: 1.32 * who.sheet.height * scale / 1.7,
       phase: rnd() * 6.28, amp: 0, side: 1, way: 0, index: 0, dir: 1, target: [0, 0],
-      pause: 0, wait: 0, stuck: 0, active: false, greeted: -1e9, saying: null, sayUntil: 0, look: 0,
+      pause: 0, wait: 0, stuck: 0, detour: 0, check: 4, lastD: 1e9, active: false, greeted: -1e9, saying: null, sayUntil: 0, look: 0,
     };
     mesh.userData.word = () => (person.saying && performance.now() < person.sayUntil + 6000 ? person.saying : woman ? 'passerby' : 'passant');
     // двойной клик по прохожему рядом — разговор (talk.js); издалека — карточка слова
@@ -320,59 +240,48 @@ export function createPeople(scene, world, mapData, { count = 16, inspector, cam
     if (rnd() < 0.68) {
       const hex = UMBRELLAS[Math.floor(rnd() * UMBRELLAS.length)];
       if (!umbrellaShapes.has(hex)) umbrellaShapes.set(hex, umbrellaGeometry(hex));
-      const side = busyArm === 'R' ? 'L' : 'R';
       const umbrella = new THREE.Mesh(umbrellaShapes.get(hex), umbrellaMat);
-      umbrella.position.set(side === 'R' ? -0.005 : 0.005, -0.285, 0.0);
-      umbrella.rotation.x = 1.6;                      // компенсирует поднятую руку: спица вертикальна
+      umbrella.position.set(-0.16, who.sheet.height - 0.82, 0.08);   // купол чуть выше головы, спица у правой руки
       umbrella.visible = false;
       umbrella.userData.word = 'umbrella';
-      bones[B['fore' + side]].add(umbrella);
+      root.add(umbrella);
       inspector?.addTarget(umbrella);
-      person.umbrella = umbrella; person.umbrellaSide = side; person.open = 0;
+      person.umbrella = umbrella; person.open = 0;
     }
     people.push(person);
     spawn(person, 4, 70, false);
   }
-  if (people[0]) world.paint(people[0].root);   // материал общий на всех
   const anyUmbrella = people.find((p) => p.umbrella);
   if (anyUmbrella) world.paint(anyUmbrella.umbrella);
 
-  function pose(person, dt, moving) {
-    const b = person.bones;
+  // поворот к камере, выбор вида и «шаг»: покачивание вверх-вниз и с боку на бок
+  function pose(person, dt, moving, step = 0) {
+    if (person.model) { animateModel(person, step); return; }
     person.amp += ((moving ? 1 : 0) - person.amp) * (1 - Math.exp(-dt * 6));
     const a = person.amp, s = Math.sin(person.phase), c = Math.cos(person.phase);
-    b[B.thighL].rotation.x = -0.42 * s * a;
-    b[B.thighR].rotation.x = 0.42 * s * a;
-    b[B.shinL].rotation.x = (0.05 + 0.65 * Math.max(0, c)) * a;
-    b[B.shinR].rotation.x = (0.05 + 0.65 * Math.max(0, -c)) * a;
-    b[B.armL].rotation.set(0.32 * s * a, 0, 0.07);
-    b[B.armR].rotation.set(person.busyArm === 'R' ? 0.05 : -0.32 * s * a, 0, person.busyArm === 'R' ? -0.16 : -0.07);
-    b[B.foreL].rotation.x = -(0.18 + 0.3 * Math.max(0, -s) * a);
-    b[B.foreR].rotation.x = person.busyArm === 'R' ? -1.0 : -(0.18 + 0.3 * Math.max(0, s) * a);
-    // зонт: рука поднята и согнута, спица смотрит вверх, купол раскрывается
+    const root = person.root, mesh = person.mesh, yaw = root.rotation.y;
+    camLocal.copy(camera.position).sub(root.position);
+    const fx = Math.sin(yaw), fz = Math.cos(yaw);
+    // правая рука человека, смотрящего вдоль (fx, fz), — это (-fz, fx)
+    const angle = Math.atan2(-camLocal.x * fz + camLocal.z * fx, camLocal.x * fx + camLocal.z * fz);
+    // рядом с героиней и в разговоре он поворачивается к ней — «вперёд» сдвигается на часть look
+    const turned = angle + person.look * 0.6 * (1 - a);
+    const view = viewFor(Math.atan2(Math.sin(turned), Math.cos(turned)));
+    if (view !== person.view) { person.view = view; mesh.geometry = person.who.geometries[view]; }
+    mesh.rotation.y = Math.atan2(camLocal.x, camLocal.z) - yaw;
+    const idle = Math.sin(performance.now() / 900 + person.speed * 10) * (1 - a);
+    mesh.position.y = (Math.abs(c) - 0.6) * 0.04 * a;
+    mesh.rotation.z = 0.022 * s * a + 0.006 * idle;
+    mesh.scale.y = 1 - 0.012 * a * Math.abs(s) + 0.004 * idle;
+    // зонт раскрывается в дождь
     if (person.umbrella) {
       const want = rain > 0.25 ? 1 : rain < 0.1 ? 0 : person.open > 0.5 ? 1 : 0;
       person.open += (want - person.open) * (1 - Math.exp(-dt * 4));
-      const o = person.open, side = person.umbrellaSide, sx = side === 'L' ? 1 : -1;
-      if (o > 0.02) {
-        const arm = b[B['arm' + side]], fore = b[B['fore' + side]];
-        arm.rotation.set(THREE.MathUtils.lerp(arm.rotation.x, -0.2, o), 0, THREE.MathUtils.lerp(arm.rotation.z, 0.12 * sx, o));
-        fore.rotation.x = THREE.MathUtils.lerp(fore.rotation.x, -1.15, o);
-        const k = 0.15 + 0.85 * THREE.MathUtils.smoothstep(o, 0.3, 1);
-        person.umbrella.rotation.x = -(arm.rotation.x + fore.rotation.x);
-        person.umbrella.scale.set(k, 1, k);
-      }
-      person.umbrella.visible = o > 0.02;
+      const k = 0.15 + 0.85 * THREE.MathUtils.smoothstep(person.open, 0.3, 1);
+      person.umbrella.scale.set(k, 1, k);
+      person.umbrella.position.y = person.who.sheet.height - 0.82 + mesh.position.y;
+      person.umbrella.visible = person.open > 0.02;
     }
-    // без зонта под дождём — плечи вперёд, шаг быстрее (см. update)
-    const hunch = person.umbrella ? 0 : Math.min(1, rain * 1.5) * 0.12;
-    b[B.hips].position.y = person.rest + (Math.abs(c) - 0.6) * 0.035 * a;
-    b[B.hips].rotation.y = 0.09 * s * a;
-    const idle = Math.sin(performance.now() / 900 + person.speed * 10) * (1 - a);
-    b[B.hips].rotation.z = 0.02 * idle;
-    b[B.spine].rotation.set(0.05 * a + hunch, -0.16 * s * a, -0.02 * idle);
-    b[B.head].rotation.y += (person.look - b[B.head].rotation.y) * (1 - Math.exp(-dt * 5));
-    b[B.head].rotation.x = 0.04 * a - 0.03 * (1 - a);
   }
 
   function say(person, key) {
@@ -395,9 +304,11 @@ export function createPeople(scene, world, mapData, { count = 16, inspector, cam
     const now = performance.now();
     for (const person of people) {
       const pos = person.root.position;
+      if (person.owner) { followOwner(person, dt); continue; }
       if (!person.active) { if (rnd() < dt * 2) spawn(person, 35, 75, true); continue; }
       const toX = player.x - pos.x, toZ = player.z - pos.z, dist = Math.hypot(toX, toZ);
-      if (dist > 90) { spawn(person, 35, 75, true); continue; }
+      if (dist > 90 && !person.home) { spawn(person, 35, 75, true); continue; }
+      if (person.model) person.root.visible = dist < far3d;   // 3D-прохожие живут в своём районе и вдали просто не рисуются
       const yaw = person.root.rotation.y, fx = Math.sin(yaw), fz = Math.cos(yaw);
       const facingHero = dist > 0.01 ? (toX * fx + toZ * fz) / dist : 0;
 
@@ -427,43 +338,126 @@ export function createPeople(scene, world, mapData, { count = 16, inspector, cam
         say(person, dist < 1.4 ? 'pardon' : key);
       }
 
-      let moving = false;
+      let moving = false, walked = 0;
       if (person.pause > 0) person.pause -= dt;
       else {
         const dx = person.target[0] - pos.x, dz = person.target[1] - pos.z, d = Math.hypot(dx, dz);
-        if (d < 0.35) nextTarget(person);
+        // точку внутри препятствия (столик, фонарь) засчитываем издалека — обходить её незачем
+        if (d < 0.35 || (d < 1 && person.detour > 0.3)) nextTarget(person);
         else {
-          const want = Math.atan2(dx, dz), delta = Math.atan2(Math.sin(want - yaw), Math.cos(want - yaw));
-          person.root.rotation.y += delta * (1 - Math.exp(-dt * 5));
-          // героиня прямо на пути — ждём, пока пройдёт
-          const blockedByHero = dist < 1.15 && facingHero > 0.5;
-          person.wait = blockedByHero ? person.wait + dt : 0;
-          if (person.wait > 2.5) { person.wait = 0; person.dir = -person.dir; nextTarget(person, true); }
-          else if (!blockedByHero) {
-            const hurry = person.umbrella ? 1 : 1 + Math.min(1, rain * 1.5) * 0.3;
-            const step = person.speed * hurry * dt * Math.max(0, Math.cos(delta));
-            const nx = pos.x + Math.sin(person.root.rotation.y) * step, nz = pos.z + Math.cos(person.root.rotation.y) * step;
-            if (free(nx, nz)) {
+          // идти прямо к цели, а если там фонарь, столбик, дерево, столик или другой человек —
+          // взять в сторону (сначала вправо: правостороннее движение), в крайнем случае ждать
+          const want = Math.atan2(dx, dz);
+          const hurry = person.umbrella ? 1 : 1 + Math.min(1, rain * 1.5) * 0.3;
+          let go = null;
+          for (const off of DETOURS) {
+            const h = want - off * person.side;
+            const sx = Math.sin(h), sz = Math.cos(h);
+            if (clear(person, pos.x + sx * 0.32, pos.z + sz * 0.32) && clear(person, pos.x + sx * 0.75, pos.z + sz * 0.75)) { go = h; break; }
+          }
+          if (go === null) {
+            person.wait += dt;
+            if (person.wait > 1.6) { person.wait = 0; person.dir = -person.dir; nextTarget(person, true); }
+            if (++person.stuck > 400) spawn(person, 35, 75, true);
+          } else {
+            person.wait = 0;
+            person.detour = go === want ? Math.max(0, person.detour - dt) : person.detour + dt;
+            const delta = Math.atan2(Math.sin(go - yaw), Math.cos(go - yaw));
+            person.root.rotation.y += delta * (1 - Math.exp(-dt * 6));
+            const turn = Math.atan2(Math.sin(go - person.root.rotation.y), Math.cos(go - person.root.rotation.y));
+            const step = person.speed * hurry * dt * Math.max(0.15, Math.cos(turn));
+            const nx = pos.x + Math.sin(go) * step, nz = pos.z + Math.cos(go) * step;
+            if (clear(person, nx, nz)) {
               pos.x = nx; pos.z = nz; pos.y = world.heightAt(nx, nz);
               person.phase += step / person.stride * Math.PI * 2;
-              moving = step > 0.0001;
-              person.stuck = 0;
-            } else if (++person.stuck > 30) spawn(person, 35, 75, true);
-            else {
-              // скамейка, столик, урна: разворачиваемся
-              person.dir = -person.dir;
-              nextTarget(person, true);
+              moving = step > 0.0001; walked = step;
             }
+          }
+          // не продвигается к цели несколько секунд — следующая точка, а если и так никак — появиться заново
+          person.check -= dt;
+          if (person.check <= 0) {
+            if (d > person.lastD - 0.6) { person.stuck += 100; nextTarget(person, true); }
+            else person.stuck = 0;
+            person.check = 4; person.lastD = d;
+            if (person.stuck >= 300) spawn(person, 35, 75, !inView(pos.x, pos.y, pos.z));
           }
         }
       }
-      if (dist < 70) pose(person, dt, moving);
+      if (dist < 70) pose(person, dt, moving, walked);
     }
     bubble.update(camera);
   }
 
+  // ── 3D-прохожие (people-3d.js) ──
+  // Клип крутится ровно на пройденный путь: время = путь / «скорость стопы» клипа — ноги не скользят.
+  function animateModel(person, step) {
+    if (!person.root.visible || !inView(person.root.position.x, person.root.position.y, person.root.position.z)) { person.lag += step; return; }
+    person.model.mixer.update((step + person.lag) / person.gait);
+    person.lag = 0;
+  }
+  // собака идёт слева от хозяйки, чуть позади, на своём скелете и своём клипе
+  function placeDog(dog, owner, snap) {
+    const o = owner.root.position, yaw = owner.root.rotation.y;
+    const fx = Math.sin(yaw), fz = Math.cos(yaw);
+    for (const [side, back] of [[0.62, 0.15], [-0.62, 0.15], [0, 0.9]]) {
+      const x = o.x + fz * side - fx * back, z = o.z - fx * side - fz * back;   // слева: (fz, -fx)
+      if (!world.blocked(x, z)) { dog.want = [x, z]; break; }
+    }
+    if (snap && dog.want) {
+      dog.root.position.set(dog.want[0], world.heightAt(dog.want[0], dog.want[1]), dog.want[1]);
+      dog.root.rotation.y = yaw;
+    }
+    dog.active = owner.active; dog.root.visible = owner.root.visible;
+  }
+  function followOwner(dog, dt) {
+    const owner = dog.owner;
+    placeDog(dog, owner, !dog.active && owner.active);
+    if (!dog.active || !dog.want) return;
+    const pos = dog.root.position, dx = dog.want[0] - pos.x, dz = dog.want[1] - pos.z, d = Math.hypot(dx, dz);
+    if (d > 4) { placeDog(dog, owner, true); return; }        // отстала (хозяйка развернулась в узком месте) — рядом снова
+    // догоняет быстрее, если отстала; стоит, если уже на месте
+    const speed = Math.min(owner.speed * 1.6, owner.speed * (0.4 + d * 1.6));
+    const step = d < 0.05 ? 0 : Math.min(d, speed * dt);
+    if (step > 0) {
+      const nx = pos.x + dx / d * step, nz = pos.z + dz / d * step;
+      if (!world.blocked(nx, nz)) { pos.x = nx; pos.z = nz; pos.y = world.heightAt(nx, nz); }
+    }
+    // смотрит туда, куда идёт, а стоя — туда же, куда хозяйка
+    const want = step > 0.002 ? Math.atan2(dx, dz) : owner.root.rotation.y;
+    const delta = Math.atan2(Math.sin(want - dog.root.rotation.y), Math.cos(want - dog.root.rotation.y));
+    dog.root.rotation.y += delta * (1 - Math.exp(-dt * 8));
+    if (Math.hypot(player.x - pos.x, player.z - pos.z) < 70) animateModel(dog, step);
+  }
+  function addModel(asset, { woman, home, range, scale = 1, owner = null, word } = {}) {
+    const root = new THREE.Group();
+    root.name = woman ? 'Passante' : 'Passant';
+    root.add(asset.model);
+    root.scale.setScalar(scale);
+    scene.add(root);
+    world.paint(asset.model);
+    const person = {
+      root, mesh: null, model: asset, woman, home, range, owner,
+      gait: asset.speed * scale, speed: asset.speed * scale, lag: 0, stride: 1, phase: 0, amp: 0,
+      side: 1, way: 0, index: 0, dir: 1, target: [0, 0],
+      pause: 0, wait: 0, stuck: 0, detour: 0, check: 4, lastD: 1e9, active: false, greeted: -1e9, saying: null, sayUntil: 0, look: 0,
+    };
+    // идёт со «своей» скоростью клипа, но не медленнее 0,95 и не быстрее 1,5 м/с; клип подстраивается под шаг
+    person.speed = THREE.MathUtils.clamp(person.speed, 0.75, 1.5);
+    const wordOf = () => (person.saying && performance.now() < person.sayUntil + 6000 ? person.saying : word ?? (woman ? 'passerby' : 'passant'));
+    asset.model.traverse((o) => {
+      if (!o.isMesh) return;
+      o.userData.word = wordOf;
+      if (onTalk && !owner) o.userData.onInspect = (x, y) => { if (!onTalk(person, rain > 0.25)) inspector?.show(wordOf(), x, y, o); };
+      inspector?.addTarget(o);
+    });
+    people.push(person);
+    if (owner) { owner.dog = person; placeDog(person, owner, true); }
+    else spawn(person, 0, 1e9, false);
+    return person;
+  }
+
   return {
-    people, update, count, say,
+    people, update, count, say, addModel,
     // для столкновений героини: прохожий как столбик радиусом RADIUS
     blocksStep(x, z) {
       for (const p of people) {
