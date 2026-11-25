@@ -215,6 +215,7 @@ const FRAG = /* glsl */ `
 
     if (is(3.0) || is(8.0)) {                            // живые окна и витрины
       vec2 u = vUv;
+      float shopStyle = floor(3.0 * vRand);
       // число окна округляем: между вершинами оно чуть «плывёт», а hash превращает это в рябь
       float wr = floor(vRand * 2048.0 + 0.5) / 2048.0;
       float r2 = hash(vec2(wr * 311.0, 1.7)), r3 = hash(vec2(wr * 173.0, 5.1)), r4 = hash(vec2(wr * 97.0, 9.3));
@@ -258,7 +259,7 @@ const FRAG = /* glsl */ `
           glow += vec3(0.3, 0.26, 0.16) * step(abs(q.x - 0.05), 0.045) * step(abs(q.y + 0.04), 0.012);
         }
         glow *= 1.0 - shade * 0.62;
-      } else if (vRand > 0.95) {
+      } else if (shopStyle == 2.0) {
         // булочная: светлая стена в глубине, полки с хлебом, лампа-колпак над прилавком, тёмный прилавок внизу
         glow = mix(vec3(0.98, 0.6, 0.28), vec3(1.0, 0.86, 0.6), smoothstep(0.15, 0.9, u.y + (strokes - 0.5) * 0.3));
         vec2 b = vec2(fract(u.x * 2.0), u.y);
@@ -270,22 +271,33 @@ const FRAG = /* glsl */ `
         glow = mix(glow, vec3(0.3, 0.18, 0.14), step(u.y, 0.2));                                   // прилавок
         glow += vec3(0.35, 0.26, 0.12) * smoothstep(0.3, 0.0, length((u - vec2(0.5, 0.86)) * vec2(0.5, 1.0)));   // лампа
         glow = mix(glow, vec3(0.2, 0.34, 0.32), step(abs(fract(u.x * 2.0) - 0.5), 0.02) * step(0.03, abs(u.x - 0.5)) + step(abs(u.x - 0.5), 0.025));   // бирюзовый переплёт
-      } else if (hash(floor(vWorld.xz / 7.0) + 3.0) < 0.5) {
+      } else if (shopStyle == 1.0) {
         // кафе: тёплый зал, подвесные лампы, гости за столиками и официант, который ходит по залу
-        vec2 c = vec2(u.x * 1.5, u.y);
-        glow = mix(vec3(0.96, 0.5, 0.24), vec3(1.0, 0.8, 0.5), smoothstep(0.1, 0.9, u.y + (strokes - 0.5) * 0.4));
-        float seat = floor(c.x * 2.6), sx = fract(c.x * 2.6) - 0.5, sr = hash(vec2(seat, floor(vWorld.x / 7.0)));
+        // A shallow view into the room. Only the interior moves behind the fixed window frame.
+        vec3 eye = normalize(cameraPosition - vWorld);
+        vec2 tangent = vec2(n.z, -n.x);
+        float slide = clamp(dot(eye.xz, tangent) / max(0.3, dot(eye, n)), -1.0, 1.0);
+        vec2 c = vec2(u.x * 1.5 - 0.06 * slide, u.y);
+        float lampX = fract(c.x * 1.3 + 0.22 * r3) - 0.5;
+        float pool = 1.0 - smoothstep(0.08, 0.58, length(vec2(lampX * 1.25, u.y - 0.56)));
+        glow = mix(vec3(0.29, 0.22, 0.25), vec3(0.87, 0.57, 0.32), pool);
+        glow *= 0.92 + 0.10 * strokes;
+        float panel = 1.0 - smoothstep(0.32, 0.34, u.y);
+        glow = mix(glow, vec3(0.21, 0.17, 0.20), panel * 0.83);
+        float seat = floor(c.x * 2.6), sx = fract(c.x * 2.6) - 0.5, sr = hash(vec2(seat, wr));
         float guest = figure(vec2(sx / 2.6 + 0.01 * sin(uLookTime * 0.6 + sr * 30.0), u.y - 0.47), 0.78, fract(sr * 7.1), 0.0) * step(0.38, sr);
         float table = step(abs(u.y - 0.27), 0.012) * step(abs(sx), 0.34) + step(abs(sx), 0.02) * step(u.y, 0.27);
-        float wx = fract(uLookTime * 0.02 + hash(floor(vWorld.xz / 7.0))) * 2.1 - 0.3;
+        float wx = fract(uLookTime * 0.02 + r4) * 2.1 - 0.3;
         float waiter = figure(vec2(c.x - wx, u.y - 0.6), 1.15, 0.4 + 0.59 * wr, sin(uLookTime * 2.4));
-        float lampX = fract(c.x * 1.3) - 0.5;
-        float bulb = smoothstep(0.06, 0.02, length(vec2(lampX / 1.3, u.y - 0.82)));
-        float cone = smoothstep(0.55, 0.1, abs(lampX) / max(0.82 - u.y, 0.02) * 0.6) * step(u.y, 0.82) * 0.16;
-        glow += vec3(0.3, 0.24, 0.12) * cone;
         glow = mix(glow, vec3(0.3, 0.15, 0.13), max(max(guest, waiter), min(table, 1.0)) * 0.72);
-        glow = mix(glow, vec3(1.0, 0.95, 0.8), bulb);
-        glow = mix(glow, vec3(0.3, 0.17, 0.14), step(abs(lampX), 0.006) * step(0.84, u.y) * 0.7);
+        float shadeY = clamp((u.y - 0.74) / 0.11, 0.0, 1.0);
+        float shadeWidth = mix(0.13, 0.035, shadeY);
+        float aa = max(fwidth(c.x * 1.3), 0.002);
+        float shade = (1.0 - smoothstep(shadeWidth - aa, shadeWidth + aa, abs(lampX))) * step(0.74, u.y) * step(u.y, 0.85);
+        float rim = (1.0 - smoothstep(0.005, 0.017, abs(u.y - 0.74))) * (1.0 - smoothstep(0.11, 0.13, abs(lampX)));
+        glow = mix(glow, vec3(0.27, 0.24, 0.20), shade);
+        glow = mix(glow, vec3(1.0, 0.84, 0.57), rim);
+        glow *= 1.0 - (1.0 - smoothstep(0.003, 0.003 + aa, abs(lampX))) * step(0.85, u.y) * 0.55;
       } else {
         // лавка тремя большими пятнами: светлая стена в глубине, освещённый прилавок, тёмная рама и косяк двери сбоку
         glow = mix(vec3(0.9, 0.62, 0.36), vec3(1.0, 0.88, 0.68), smoothstep(0.4, 0.95, u.y + (strokes - 0.5) * 0.3));
@@ -300,7 +312,7 @@ const FRAG = /* glsl */ `
         glow = mix(glow, vec3(0.3, 0.18, 0.15), step(abs(u.y - 0.8), 0.014) * 0.8);
       }
       // витрины разной силы: большинство спокойные, изредка одна яркая — к ней хочется подойти
-      if (is(8.0)) glow *= vRand > 0.95 ? 1.12 : r2 > 0.8 ? 1.15 : mix(0.62, 0.85, r3);
+      if (is(8.0)) glow *= shopStyle == 2.0 ? mix(0.94, 1.08, r2) : mix(0.77, 1.04, r3);
       vec3 dark = mix(vec3(0.08, 0.09, 0.24), vec3(0.3, 0.33, 0.6), smoothstep(0.1, 1.0, u.y * 0.7 + u.x * 0.3 + strokes * 0.4));
       dark += smoothstep(0.05, 0.0, abs(u.x - u.y * 0.6 - 0.25)) * 0.12;
       vec3 glass = on ? glow : dark;
