@@ -49,7 +49,8 @@ export function createControls(dom) {
   dom.addEventListener('pointerdown', (e) => {
     dom.setPointerCapture(e.pointerId);
     const leftHalf = e.clientX < innerWidth / 2;
-    if (e.pointerType === 'touch' && leftHalf && joyId === null) {
+    if (e.pointerType === 'touch' && leftHalf) {
+      if (joyId !== null) return;
       joyId = e.pointerId; joyX = e.clientX; joyY = e.clientY; jx = jy = 0;
       base.style.display = 'block';
       base.style.left = joyX + 'px'; base.style.top = joyY + 'px';

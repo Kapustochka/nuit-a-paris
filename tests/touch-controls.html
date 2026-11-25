@@ -81,6 +81,20 @@ try {
   assert(state.camYaw !== finalYaw, 'A fresh touch should rotate after blur');
   results.push('Switching away releases the joystick and pinch');
 
+  touch('pointerup', 7, right + 20);
+  touch('pointerdown', 8, 40);
+  touch('pointermove', 8, 40, 45);
+  touch('pointerdown', 9, 60);
+  touch('pointerdown', 10, right);
+  const initialZoom = state.camDist, initialYaw = state.camYaw;
+  touch('pointermove', 10, right + 25);
+  assert(state.camDist === initialZoom && state.camYaw !== initialYaw, 'A spare left-side touch must not turn a camera drag into a pinch');
+  assert(controls.update().move.y > 0, 'The original joystick touch should keep controlling movement');
+  touch('pointerup', 8, 40);
+  touch('pointerup', 9, 60);
+  touch('pointerup', 10, right + 25);
+  results.push('An extra finger on the joystick side stays out of camera gestures');
+
   window.__testResults = { passed: results.length, results };
 } catch (error) {
   window.__testResults = { error: error.message, results };
