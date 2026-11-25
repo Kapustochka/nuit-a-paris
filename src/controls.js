@@ -11,6 +11,7 @@ export function createControls(dom) {
     camDist: 4.2,          // расстояние
     jump: false,           // нажали прыжок (сбрасывается после чтения)
     punch: false,          // нажали удар
+    dance: null,           // which dance to start: 'dance' or 'rumba'
   };
 
   addEventListener('keydown', (e) => {
@@ -19,11 +20,19 @@ export function createControls(dom) {
     if (e.repeat) return;
     if (e.code === 'Space') { state.jump = true; e.preventDefault(); }
     if (e.code === 'KeyF' || e.code === 'KeyJ') state.punch = true;
+    if (e.code === 'Digit1') state.dance = 'dance';
+    if (e.code === 'Digit2') state.dance = 'rumba';
   });
   for (const [id, key] of [['btn-jump', 'jump'], ['btn-punch', 'punch']]) {
     const el = document.getElementById(id);
     if (el) el.addEventListener('pointerdown', (e) => { state[key] = true; e.preventDefault(); e.stopPropagation(); });
   }
+  // One button cycles the dances on a phone
+  let nextDance = 0;
+  const danceBtn = document.getElementById('btn-dance');
+  if (danceBtn) danceBtn.addEventListener('pointerdown', (e) => {
+    state.dance = ['dance', 'rumba'][nextDance++ % 2]; e.preventDefault(); e.stopPropagation();
+  });
   addEventListener('keyup', (e) => {
     keys.delete(e.code);
     // Пока зажат Cmd/Win, браузер не присылает отпускание других клавиш — сбрасываем всё
