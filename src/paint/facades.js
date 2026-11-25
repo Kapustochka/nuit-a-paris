@@ -14,6 +14,7 @@ import { Builder, K, mulberry, X, Y, IRON_COL, shadeOf } from './builder.js';
 import { paintMaterial } from './paint.js';
 import { leafTexture, railTexture, signTexture, foliage } from './props.js';
 import { streamGeometry } from './stream-geometry.js';
+import { CITY } from '../city.js';
 
 const GF = 3.7;            // первый этаж
 const CHUNK = 64;          // квартал для отсечения и подгрузки
@@ -30,6 +31,12 @@ const SHOPS = [['#4a3a26', [0.36, 0.28, 0.18], [0.85, 0.66, 0.32]], ['#2d4a52', 
   ['#6a3a52', [0.5, 0.28, 0.4], [0.86, 0.6, 0.66]], ['#22303f', [0.18, 0.24, 0.32], [0.3, 0.36, 0.5]]];
 const TRIM = [0.94, 0.9, 0.82], STONE = [0.78, 0.74, 0.7], CHIMNEY = [0.74, 0.5, 0.42];
 const BAKERY_TEAL = [0.22, 0.4, 0.38];   // крашеное дерево булочной
+// Лондон: жёлтый и красный кирпич, портлендский камень и кремовая штукатурка, плоские крыши за парапетом,
+// без ставней. Парламент, аббатство и их соседи — готика из золотистого известняка с пинаклями.
+const LONDON = CITY.id === 'london';
+const LONDON_WALLS = [[0.8, 0.64, 0.46], [0.74, 0.58, 0.42], [0.72, 0.4, 0.32], [0.64, 0.36, 0.3], [0.9, 0.87, 0.78], [0.93, 0.89, 0.8], [0.78, 0.62, 0.48]];
+const GOTHIC_WALL = [0.9, 0.78, 0.56], SLATE = [0.34, 0.36, 0.5];
+const GOTHIC = /Palace of Westminster|Westminster Hall|Westminster Abbey|St\.? Margaret|St\.? Stephen|Elizabeth Tower|Jewel Tower|Chapter House|Sacristy|Cloister|Parliamentary Estate/i;
 const WORDS = { [K.WALL]: 'wall', [K.ROOF]: 'roof', [K.TRIM]: 'wall', [K.GLASS]: 'window', [K.SHUTTER]: 'window', [K.SHOP]: 'shopWindow',
   [K.AWNING]: 'awning', [K.IRON]: 'balcony', [K.DOOR]: 'door', [K.PAINT]: 'shopWindow' };
 const pick = (r, a) => a[Math.floor(r() * a.length)];
@@ -40,8 +47,9 @@ const STREET_DETAILS = !new URLSearchParams(location.search).has('no-street-deta
 // pending: [{ p (по часовой), n, H, tint }], open(x, z) — смотрит ли точка на улицу
 export function planFacades(pending, heightAt, inside, flat) {
   const houses = [], wallSpots = [];
-  pending.forEach(({ p, n, H, tint }, bi) => {
+  pending.forEach(({ p, n, H, tint, name = '' }, bi) => {
     const r = mulberry(1000 + bi * 7);
+    const gothic = LONDON && GOTHIC.test(name);
     let top0 = -Infinity, low0 = Infinity, cx = 0, cz = 0;
     for (let i = 0; i < n; i++) { const h = heightAt(p[i * 2], p[i * 2 + 1]); top0 = Math.max(top0, h); low0 = Math.min(low0, h); cx += p[i * 2]; cz += p[i * 2 + 1]; }
     cx /= n; cz /= n;
@@ -61,7 +69,8 @@ export function planFacades(pending, heightAt, inside, flat) {
           const x0 = L * k / m, x1 = L * (k + 1) / m;
           const h0 = flat ? 0 : heightAt(...at(x0)), h1 = flat ? 0 : heightAt(...at(x1));
           const b = flat ? 0 : Math.min(Math.max(h0, h1) - 0.25, E - GF - 2.8);
-          e.segs.push({ x0, x1, b, low: Math.min(h0, h1) - 0.6, seed: (bi * 131 + i * 17 + k * 5) | 0, wall: WALLS[Math.floor(r() * WALLS.length)].map((v, c) => v * tint[c]) });
+          const wr = r(), wallBase = !LONDON ? WALLS[Math.floor(wr * WALLS.length)] : gothic ? GOTHIC_WALL : LONDON_WALLS[Math.floor(wr * LONDON_WALLS.length)];
+          e.segs.push({ x0, x1, b, low: Math.min(h0, h1) - 0.6, seed: (bi * 131 + i * 17 + k * 5) | 0, gothic, wall: wallBase.map((v, c) => v * tint[c]) });
         }
         if (L > 5) wallSpots.push([mx, mz, nx, nz, L, H * 0.5]);
       } else {
@@ -79,9 +88,10 @@ export function planFacades(pending, heightAt, inside, flat) {
       width = Math.min(width, far);
     }
     const ref = edges.reduce((a, e) => (e.L > a.L ? e : a), edges[0]);
-    const roofType = H < 9 && r() < 0.5 ? 'flat' : r() < 0.12 ? 'hip' : 'mansard';
+    let roofType = H < 9 && r() < 0.5 ? 'flat' : r() < 0.12 ? 'hip' : 'mansard';
+    if (LONDON) roofType = gothic || mulberry(bi * 13 + 77)() < 0.65 ? 'flat' : 'hip';   // парапеты, реже сланцевая вальмовая крыша
     houses.push({
-      p, n, cx, cz, base, E, H, edges, width, roofType, roof: roofType === 'hip' ? ROOFS[ROOFS.length - 1] : pick(r, ROOFS.slice(0, -1)),
+      p, n, cx, cz, base, E, H, edges, width, roofType, gothic, roof: LONDON ? SLATE : roofType === 'hip' ? ROOFS[ROOFS.length - 1] : pick(r, ROOFS.slice(0, -1)),
       rise: Math.min(4.2, Math.max(2.2, H * 0.24)), low: 0.9 + r() * 0.3, pitch: 0.5 + r() * 0.35,
       wall: edges.find((e) => e.segs.length)?.segs[0].wall || WALLS[0],
       lean: [(r() - 0.5) * 0.012, (r() - 0.5) * 0.012], sag: 0.08 + r() * 0.12, ph: r() * 10, ref,
@@ -97,10 +107,10 @@ function layout(seg, E, shop) {
   const Ls = seg.x1 - seg.x0, b = seg.b;
   const nUp = Math.max(1, Math.round((E - b - GF) / 3.05)), fh = (E - b - GF) / nUp;
   const ys = [b, b + GF]; for (let f = 1; f <= nUp; f++) ys.push(b + GF + fh * f);
-  const cols = Math.max(1, Math.round((Ls - 0.7) / 2.25));
+  const cols = Math.max(1, Math.round((Ls - 0.7) / (seg.gothic ? 1.7 : 2.25)));   // готика: частые узкие окна
   const margin = Math.min(0.5 + r() * 0.25, Ls * 0.18), stepX = (Ls - 2 * margin) / cols;
   const centers = Array.from({ length: cols }, (_, i) => seg.x0 + margin + stepX * (i + 0.5) + (r() - 0.5) * 0.1);
-  const shutter = pick(r, SHUTTERS), shutters = r() < 0.78, balconyFloor = nUp >= 3 && r() < 0.4 ? 2 : nUp >= 2 && r() < 0.2 ? 1 : -1;
+  const shutter = pick(r, SHUTTERS), shutters = r() < 0.78 && !LONDON, balconyFloor = seg.gothic ? -1 : nUp >= 3 && r() < 0.4 ? 2 : nUp >= 2 && r() < 0.2 ? 1 : -1;
   const door = cols >= 2 && r() < 0.75 ? Math.floor(r() * cols) : -1;
   const style = pick(r, SHOPS);
   // разнообразие «домика» — свой генератор, чтобы раскладка окон осталась прежней
@@ -108,8 +118,8 @@ function layout(seg, E, shop) {
   const look = {
     lintel: Math.floor(v() * 4),                       // 0 — замковый камень, 1 — фронтончик, 2 — карниз-козырёк, 3 — гладкая перемычка
     rustic: v() < 0.35, quoins: v() < 0.3,             // руст первого этажа, лопатки по краям
-    winAwning: v() < 0.13 ? pick(v, SHOPS)[2] : null,  // полосатые маркизы над окнами
-    topBalcony: nUp >= 4 && v() < 0.4 ? nUp : -1,      // длинный балкон под крышей, как у османовских домов
+    winAwning: v() < 0.13 && !LONDON ? pick(v, SHOPS)[2] : null,  // полосатые маркизы над окнами
+    topBalcony: nUp >= 4 && v() < 0.4 && !LONDON ? nUp : -1,      // длинный балкон под крышей, как у османовских домов
     awning: Math.floor(v() * 4),                       // лавка: 0 — круглая маркиза, 1 — прямая, 2 — лампы над вывеской, 3 — козырёк с лампочками
     blade: v() < 0.45,                                 // вывеска-флажок на кронштейне
   };
@@ -124,8 +134,9 @@ function layout(seg, E, shop) {
       cells = [[seg.x0, sa, 'pier'], [sa, sb, 'shop'], [sb, seg.x1, 'pier']];
     } else {
       const top = f === nUp, ground = f === 0;
-      const ww = ground ? 1.1 : top ? 0.92 : 1.05;
-      const sill = ground ? y0 + 0.95 : y0 + (top ? 0.7 : 0.85), wtop = ground ? y0 + 3.0 : Math.min(y1 - 0.35, sill + (top ? 1.45 : 1.85));
+      const ww = seg.gothic ? 0.62 : ground ? 1.1 : top ? 0.92 : 1.05;
+      let sill = ground ? y0 + 0.95 : y0 + (top ? 0.7 : 0.85), wtop = ground ? y0 + 3.0 : Math.min(y1 - 0.35, sill + (top ? 1.45 : 1.85));
+      if (seg.gothic) { sill = y0 + 0.5; wtop = y1 - 0.7; }                        // высокие стрельчатые окна
       rows = [y0, sill, wtop, y1];
       let x = seg.x0;
       centers.forEach((c, i) => {
@@ -137,6 +148,30 @@ function layout(seg, E, shop) {
     floors.push({ f, y0, y1, rows, cells, top: f === nUp });
   }
   return { ys, nUp, centers, shutter, shutters, balconyFloor, style, floors, look, lit: (f, i) => mulberry(seg.seed * 31 + f * 7 + i)() };
+}
+
+// Готика: вертикальные рёбра-контрфорсы между окнами, во всю высоту фасада
+function gothicRibs(B, seg, Lo, E) {
+  const col = shadeOf(seg.wall, 1.08), xs = [seg.x0 + 0.12, seg.x1 - 0.12];
+  for (let i = 0; i + 1 < Lo.centers.length; i++) xs.push((Lo.centers[i] + Lo.centers[i + 1]) / 2);
+  for (const x of xs) B.box(x - 0.11, seg.b, 0, x + 0.11, E + 0.5, 0.16, col, K.TRIM);
+}
+
+// Готика: стрельчатый верх окна — тёмное стекло-«острие» и каменная бровка над ним
+function pointedHood(B, xa, xb, yb, z) {
+  const m = (xa + xb) / 2, h = (xb - xa) * 0.75;
+  B.tri([xa, yb, z], [xb, yb, z], [m, yb + h, z], [0.2, 0.22, 0.34], K.GLASS, [0, 0, 1, 0, 0.5, 1]);
+  const t = 0.09;
+  B.quad([xa - t, yb, z + 0.03], [xa, yb, z + 0.03], [m, yb + h, z + 0.03], [m, yb + h + t * 1.4, z + 0.03], TRIM, K.TRIM);
+  B.quad([xb, yb, z + 0.03], [xb + t, yb, z + 0.03], [m, yb + h + t * 1.4, z + 0.03], [m, yb + h, z + 0.03], TRIM, K.TRIM);
+}
+
+// Готический пинакль: тонкая башенка с пирамидкой
+function pinnacle(S, x, y, z, col, s = 1) {
+  const w = 0.28 * s, h = 1.7 * s, t = 1.5 * s;
+  S.box(x - w, y, z - w, x + w, y + h, z + w, col, K.TRIM);
+  const a = [x - w, y + h, z - w], b = [x + w, y + h, z - w], c = [x + w, y + h, z + w], d = [x - w, y + h, z + w], top = [x, y + h + t, z];
+  S.tri(a, top, b, col, K.TRIM); S.tri(b, top, c, col, K.TRIM); S.tri(c, top, d, col, K.TRIM); S.tri(d, top, a, col, K.TRIM);
 }
 
 // ── Строители ─────────────────────────────────────────────────────────────
@@ -232,8 +267,17 @@ function buildShell(h, S, deform) {
       S.quad(P(x0, y1, 0.06), P(x1, y1, 0.06), P(x1, y1, -0.05), P(x0, y1, -0.05), shadeOf(STONE, 1.05), K.TRIM);
     }
   });
+  // готика: пинакли по углам и вдоль парапета
+  if (h.gothic) {
+    const col = shadeOf(h.wall, 1.05), y = R.capY;
+    h.edges.forEach((e, i) => {
+      const [x0, , z0] = ring(R.capD - 0.25, y)[i];
+      pinnacle(S, x0, y, z0, col, e.L > 3 ? 1.25 : 1);
+      for (let d = 6; d < e.L - 3; d += 6) pinnacle(S, x0 + e.tx * d, y, z0 + e.tz * d, col, 0.8);
+    });
+  }
   // трубы
-  if (h.roofType !== 'flat') {
+  if (h.roofType !== 'flat' || (LONDON && !h.gothic)) {
     const r = mulberry(h.seed * 3 + 2), count = 1 + (r() < 0.5 ? 1 : 0);
     for (let c = 0; c < count; c++) {
       const i = Math.floor(r() * n), [x, , z] = ring(R.capD + 0.4, 0)[i], y = R.capY, hgt = 1.0 + r() * 0.8;
@@ -279,6 +323,7 @@ function buildFar(h, F, deform, shops) {
         if (type === 'win') {
           const [, ya, yb] = fl.rows;
           B.quad([xa, ya, 0.03], [xb, ya, 0.03], [xb, yb, 0.03], [xa, yb, 0.03], [0.93, 0.9, 0.84], K.GLASS, [0, 0, 1, 1], Lo.lit(fl.f, wi++));
+          if (seg.gothic) pointedHood(B, xa, xb, yb, 0.035);
           if (Lo.shutters && fl.f > 0 && !fl.top) {
             const sw = (xb - xa) / 2 + 0.04;
             B.quad([xa - sw, ya, 0.02], [xa - 0.02, ya, 0.02], [xa - 0.02, yb, 0.02], [xa - sw, yb, 0.02], Lo.shutter, K.SHUTTER, [0, 0, 1, yb - ya]);
@@ -300,6 +345,7 @@ function buildFar(h, F, deform, shops) {
       }
     }
     B.quad([seg.x0, h.E - 0.4, 0.06], [seg.x1, h.E - 0.4, 0.06], [seg.x1, h.E - 0.18, 0.06], [seg.x0, h.E - 0.18, 0.06], TRIM, K.TRIM);
+    if (seg.gothic) gothicRibs(B, seg, Lo, h.E);
     F.append(B, to);
   }
 }
@@ -342,6 +388,7 @@ function* buildNear(h, N, Rl, planters, deform, shops) {
         B.quad([xb, ya, zb], [xb, ya, 0], [xb, yb, 0], [xb, yb, zb], rv, K.TRIM);
         B.quad([xa, yb, zb], [xb, yb, zb], [xb, yb, 0], [xa, yb, 0], shadeOf(rv, 0.7), K.TRIM);
         B.quad([xa, ya, 0], [xb, ya, 0], [xb, ya, zb], [xa, ya, zb], rv, K.TRIM);
+        if (seg.gothic && type === 'win') pointedHood(B, xa, xb, yb, 0.01);
         if (door) {
           B.quad([xa, ya, zb], [xb, ya, zb], [xb, yb, zb], [xa, yb, zb], shutter.map((v) => v * 0.75), K.DOOR, [0, 0, 1, 1], 0.5);
           B.box(xa - 0.16, yb, -0.02, xb + 0.16, yb + 0.28, 0.08, trim, K.TRIM);

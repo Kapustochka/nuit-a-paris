@@ -1,6 +1,7 @@
 // world.js — ночной Монмартр по настоящей карте, в стиле концепт-арта:
 // фиолетовое небо, тёплые фонари, мокрая брусчатка, кремовые дома со ставнями, бордовые маркизы.
 import * as THREE from 'three';
+import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js';
 import { toXZ } from './osm.js';
 import { CITY, isParis } from './city.js';
 import { createNightSky } from './night-sky.js';
@@ -102,7 +103,7 @@ export function buildParis(scene, renderer, data, city, props = {}) {
     const A = Math.abs(area);
     const H = A < 45 ? 7 + rnd() * 2.5 : bd.h ? Math.min(CITY.maxHeight, Math.max(10, bd.h + 3)) : 11 + rnd() * 8;   // +3 м на крышу
     polys.push(makePoly(p));
-    pending.push({ p, n, H, A, tint: TINTS[Math.floor(rnd() * TINTS.length)] });
+    pending.push({ p, n, H, A, name: bd.n, tint: TINTS[Math.floor(rnd() * TINTS.length)] });
   }
   night.buildings(polys);
   // ── Сетка столкновений ────────────────────────────────────
@@ -167,6 +168,33 @@ export function buildParis(scene, renderer, data, city, props = {}) {
         acc += 24; side = -side;
       }
       acc -= len;
+    }
+  }
+  // Набережная: парапет из гранита вдоль воды и фонари через ~18 м (на мостах — свои перила)
+  if (waters.length) {
+    const wallMat = new THREE.MeshLambertMaterial({ color: new THREE.Color().setRGB(0.5, 0.46, 0.4, THREE.LinearSRGBColorSpace) });
+    const wallGeo = [];
+    const onEdge = (x, z) => Math.abs(x - b.minX) < 1 || Math.abs(x - b.maxX) < 1 || Math.abs(z - b.minZ) < 1 || Math.abs(z - b.maxZ) < 1;
+    for (const { p } of waters) for (let i = 0; i < p.length; i += 2) {
+      const j = (i + 2) % p.length, ax = p[i], az = p[i + 1], dx = p[j] - ax, dz = p[j + 1] - az, L = Math.hypot(dx, dz);
+      if (L < 1 || (onEdge(ax, az) && onEdge(p[j], p[j + 1]))) continue;
+      for (let d = 0; d < L; d += 2) {
+        const t0 = d / L, t1 = Math.min(1, (d + 2) / L), mx = ax + dx * (t0 + t1) / 2, mz = az + dz * (t0 + t1) / 2;
+        if (onBridge(mx, mz)) continue;
+        const g = new THREE.BoxGeometry(L * (t1 - t0) + 0.05, 1.05, 0.55);
+        g.rotateY(Math.atan2(-dz, dx)); g.translate(mx, 0.52, mz);
+        wallGeo.push(g);
+      }
+      for (let d = 9; d < L - 4; d += 18) {
+        const nx = -dz / L, nz = dx / L, x = ax + dx * d / L, z = az + dz * d / L;
+        const s = inWater(x + nx * 2, z + nz * 2) ? -1 : 1;              // сторона суши
+        if (!onBridge(x, z)) lamps.push([x + nx * 1.4 * s, z + nz * 1.4 * s, dx / L, dz / L]);
+      }
+    }
+    if (wallGeo.length) {
+      const wall = new THREE.Mesh(BufferGeometryUtils.mergeGeometries(wallGeo), wallMat);
+      wall.userData.word = 'wall';
+      scene.add(wall);
     }
   }
   const propRandom = mulberry(27);
