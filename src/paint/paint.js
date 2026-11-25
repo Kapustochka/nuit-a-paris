@@ -25,10 +25,10 @@ export function createLook(night, moonDirection) {
   return {
     ...night.uniforms,
     uKeyDir: { value: moonDirection.clone().setY(Math.max(moonDirection.y, 0.55)).normalize() },
-    uKeyCol: { value: new THREE.Color().setRGB(0.44, 0.52, 0.86, THREE.LinearSRGBColorSpace) },
-    uShadeCol: { value: new THREE.Color().setRGB(0.13, 0.17, 0.42, THREE.LinearSRGBColorSpace) },
-    uSkyCol: { value: new THREE.Color().setRGB(0.3, 0.38, 0.74, THREE.LinearSRGBColorSpace) },
-    uFogCol: { value: new THREE.Color().setRGB(0.15, 0.18, 0.4, THREE.LinearSRGBColorSpace) },
+    uKeyCol: { value: new THREE.Color().setRGB(0.5, 0.5, 0.78, THREE.LinearSRGBColorSpace) },
+    uShadeCol: { value: new THREE.Color().setRGB(0.17, 0.17, 0.38, THREE.LinearSRGBColorSpace) },
+    uSkyCol: { value: new THREE.Color().setRGB(0.34, 0.36, 0.66, THREE.LinearSRGBColorSpace) },
+    uFogCol: { value: new THREE.Color().setRGB(0.2, 0.19, 0.36, THREE.LinearSRGBColorSpace) },
     uFogDensity: { value: 0.0075 },
     uWindowsOn: { value: 0.6 },
     uCaster: { value: Array.from({ length: MAX_CASTERS }, () => new THREE.Vector4(0, -100, 0, 0)) },      // ступни: xyz, w — сила тени
@@ -67,9 +67,10 @@ const LOOK_GLSL = /* glsl */ `
     col = mix(col * uShadeCol * 1.25, col, ao);
     col += uSkyCol * base * smoothstep(0.2, 1.0, n.y) * 0.18;
     float g = nightSample(wp.xz).r * exp(-max(h - 1.5, 0.0) * 0.17);       // свет фонаря поднимается по стене золотым пятном
+    g = g * 1.5 / (1.0 + g * 1.1);                              // мягкое плечо: широкий тёплый свет без пересвеченного центра
     float gb = g * 4.0 + 0.3 + (strokes - 0.5) * 0.18;          // ступени света, но с мягким краем
     g = (floor(gb) + smoothstep(0.3, 0.7, fract(gb))) / 4.0;
-    col += base * uLampColor * g * 1.6 + uLampColor * g * 0.05;
+    col += base * uLampColor * g * 1.5 + uLampColor * g * 0.04;
     // тени людей: пятно под ногами и длинная тень прочь от ближайшего фонаря
     if (n.y > 0.5) {
       float sh = 0.0;

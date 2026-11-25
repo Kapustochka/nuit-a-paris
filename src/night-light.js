@@ -9,7 +9,7 @@ import * as THREE from 'three';
 const PX_PER_M = 3.6;        // ~28 см на пиксель
 const MAX_SIZE = 2048;
 const SIDEWALK = 1.7;        // ширина тротуара, м
-const LAMP_R = 10;          // радиус пятна под фонарём, м
+const LAMP_R = 11;          // радиус пятна под фонарём, м
 
 export function createNightLight(bounds, terrain = null) {
   const w = bounds.maxX - bounds.minX, h = bounds.maxZ - bounds.minZ;
@@ -49,7 +49,7 @@ export function createNightLight(bounds, terrain = null) {
     g.globalCompositeOperation = 'lighter';
     const gr = g.createRadialGradient(X(x), Z(z), 0, X(x), Z(z), r * k);
     const s = (v) => `rgba(255,0,0,${(v * strength).toFixed(3)})`;
-    gr.addColorStop(0, s(0.95)); gr.addColorStop(0.18, s(0.7)); gr.addColorStop(0.45, s(0.3)); gr.addColorStop(1, s(0));
+    gr.addColorStop(0, s(0.8)); gr.addColorStop(0.25, s(0.6)); gr.addColorStop(0.55, s(0.28)); gr.addColorStop(1, s(0));
     g.fillStyle = gr; g.fillRect(X(x) - r * k, Z(z) - r * k, 2 * r * k, 2 * r * k);
   }
   // Полоса света из витрины на мостовую

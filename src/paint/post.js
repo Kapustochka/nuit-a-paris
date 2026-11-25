@@ -249,7 +249,7 @@ export function createPainter(renderer, { radius = 3, scale = 1, heroStyle = 1, 
 
         // сказочный тон: тени уходят в глубокий синий, свет — в мёд, чуть больше цвета
         float Y = dot(col, vec3(0.3, 0.59, 0.11));
-        vec3 tone = mix(vec3(0.86, 0.94, 1.12), vec3(1.1, 1.0, 0.84), smoothstep(0.12, 0.6, Y));
+        vec3 tone = mix(vec3(0.96, 0.95, 1.04), vec3(1.12, 1.0, 0.82), smoothstep(0.08, 0.55, Y));
         col = mix(col, max(mix(vec3(Y), col, 1.18) * tone, 0.0), 1.0 - 0.6 * real * uHeroStyle);
 
         // бумага: лист один на весь экран и не зависит от плотности пикселей
@@ -263,7 +263,7 @@ export function createPainter(renderer, { radius = 3, scale = 1, heroStyle = 1, 
         col += vec3(0.05, 0.04, 0.03) * max(tooth - 0.62, 0.0) * uPaper * (1.0 - keep);   // светлые ворсинки листа
         // виньетка уводит углы в фиолетовую тень, а не в чёрный
         vec2 q = vUv - 0.5; float vg = smoothstep(0.18, 0.85, dot(q, q) * 1.9) * uVignette;
-        col = mix(col, col * vec3(0.42, 0.46, 0.68), vg * 0.75);
+        col = mix(col, col * vec3(0.52, 0.44, 0.56), vg * 0.75);
         gl_FragColor = vec4(col, 1.0);
       }`,
     depthTest: false, depthWrite: false,
