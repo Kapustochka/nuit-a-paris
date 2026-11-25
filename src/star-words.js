@@ -3,6 +3,7 @@
 // [слово с артиклем, IPA, примерное чтение, перевод, французская фраза, перевод фразы].
 import { isParis } from './city.js';
 import * as london from './content/london.js';
+import * as londonExtra from './content/london-extra.js';
 const parisStarWords = {
   // Животные
   chat: ['le chat', 'lə ʃa', 'лё ша', 'кот', 'Le chat dort sur le canapé.', 'Кот спит на диване.'],
@@ -430,6 +431,6 @@ const parisStarStories = [
   ] },
 ];
 
-export const starWords = isParis ? parisStarWords : london.starWords;
-export const starPhrases = isParis ? parisStarPhrases : london.starPhrases;
-export const starStories = isParis ? parisStarStories : london.starStories;
+export const starWords = isParis ? parisStarWords : { ...londonExtra.starWords, ...london.starWords };
+export const starPhrases = isParis ? parisStarPhrases : [...london.starPhrases, ...londonExtra.starPhrases];
+export const starStories = isParis ? parisStarStories : [...london.starStories, ...londonExtra.starStories];
