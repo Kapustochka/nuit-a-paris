@@ -9,7 +9,7 @@ import * as THREE from 'three';
 const PX_PER_M = 3.6;        // ~28 см на пиксель
 const MAX_SIZE = 2048;
 const SIDEWALK = 1.7;        // ширина тротуара, м
-const LAMP_R = 8.5;          // радиус пятна под фонарём, м
+const LAMP_R = 10;          // радиус пятна под фонарём, м
 
 export function createNightLight(bounds, terrain = null) {
   const w = bounds.maxX - bounds.minX, h = bounds.maxZ - bounds.minZ;
