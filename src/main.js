@@ -28,7 +28,7 @@ const fail = (e) => { loading.textContent = String(e.message || e); throw e; };
 
 const phone = matchMedia('(pointer: coarse)').matches || innerWidth < 700;
 const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
-renderer.setPixelRatio(Math.min(devicePixelRatio, phone ? 1.25 : 1.5));
+renderer.setPixelRatio(Math.min(devicePixelRatio, phone ? 1.25 : 1.5));   // дальше его ведёт quality()
 renderer.setSize(innerWidth, innerHeight);
 document.getElementById('app').appendChild(renderer.domElement);
 
@@ -42,7 +42,47 @@ const plainView = new URLSearchParams(location.search).has('plain');
 const originalHero = new URLSearchParams(location.search).has('original-hero');
 let painter = plainView ? null : createPainter(renderer, { radius: phone ? 2 : 3, heroStyle: originalHero ? 0 : 1, shafts: phone ? 4 : 8, shaftSteps: phone ? 5 : 8, bloom: phone ? 1 : 2, reflect: phone ? 6 : 10 });
 painter?.setSize();
-let slowFrames = 0, frames = 0;
+// Качество под скорость кадра. Главный рычаг — разрешение: пост-проход (кисть, тушь, воздух) считается на каждый
+// пиксель экрана, поэтому подбираем pixel ratio плавно, по 15 % за шаг, и возвращаем его, когда запас появился.
+// Медленно и при минимальном разрешении — упрощаем кисть, лучи, свечение и отражения (это пересборка шейдера).
+const MAX_PR = Math.min(devicePixelRatio, phone ? 1.25 : 1.5), MIN_PR = phone ? 0.6 : 0.7;
+const frameMs = [];
+let pr = MAX_PR, windowT = 0, goodWindows = 0, ceilingPr = Infinity, ceilingUntil = 0, warmup = 6;
+function setPr(next) {
+  next = Math.round(THREE.MathUtils.clamp(next, MIN_PR, MAX_PR) * 100) / 100;
+  if (next === pr) return false;
+  pr = next; renderer.setPixelRatio(pr); painter?.setSize(); return true;
+}
+let lastT = 0;
+function quality() {
+  const t = performance.now(), dt = lastT ? (t - lastT) / 1000 : 0; lastT = t;     // настоящее время кадра, без ограничения 50 мс
+  if (!painter || dt > 1) return;                                    // вкладка была скрыта
+
+  if (warmup > 0) { warmup -= dt; return; }                        // первые секунды — загрузка и сборка шейдеров
+  frameMs.push(dt * 1000); windowT += dt;
+  if (windowT < 1.5 || frameMs.length < 5) return;                   // окно ~1,5 с
+  frameMs.sort((a, b) => a - b);
+  const keep = Math.max(4, Math.floor(frameMs.length * 0.9));        // без 10 % самых долгих: разовые рывки не в счёт
+  const ms = frameMs.slice(0, keep).reduce((a, b) => a + b, 0) / keep;
+  frameMs.length = 0; windowT = 0;
+  const now = performance.now();
+  if (ms > 21) {                                                     // медленнее ~48 кадров/с
+    goodWindows = 0;
+    if (pr > MIN_PR) { ceilingPr = pr; ceilingUntil = now + 60000; setPr(pr * 0.85); }
+    else if (ms > 30) {
+      if (painter.radius > 1) painter.setRadius(painter.radius - 1);
+      else if (painter.shafts > 2) painter.setShafts(2, 4);          // лучи только у двух ближайших фонарей
+      else if (painter.bloom > 1) painter.setBloom(1);               // свечение только узкое
+      else if (painter.reflect > 0) painter.setReflect(0);           // без отражений в мокрой мостовой
+    }
+  } else if (ms < 17.5 && pr < MAX_PR) {                             // идёт с частотой экрана — пробуем вернуть чёткость
+    if (++goodWindows >= 4) {
+      goodWindows = 0;
+      const limit = now < ceilingUntil ? ceilingPr * 0.99 : MAX_PR;   // на разрешение, где уже тормозило, минуту не лезем
+      if (pr * 1.1 <= limit + 1e-3) setPr(pr * 1.1);
+    }
+  } else goodWindows = 0;
+}
 // ?fps — счётчик в углу: кадры в секунду, время кадра, треугольники и текущее качество (для замеров на телефоне)
 let fpsMeter = null;
 if (new URLSearchParams(location.search).has('fps')) {
@@ -224,22 +264,7 @@ renderer.setAnimationLoop(() => {
   minimap.update(p.x, p.z, facing, yaw);
   if (minimap.bigOpen) minimap.drawBig(p.x, p.z, facing);
 
-  // Если кадры идут медленно — мазки мельче, потом кадр в меньшем разрешении
-  if (painter && ++frames > 60) {
-    if (dt > 1 / 26) slowFrames++;
-    if (frames > 240) {
-      if (slowFrames > 110) {
-        if (painter.radius > 1) painter.setRadius(painter.radius - 1);
-        else if (painter.shafts > 2) painter.setShafts(2, 4);      // лучи только у двух ближайших фонарей
-        else if (painter.bloom > 1) painter.setBloom(1);           // свечение только узкое
-        else if (painter.reflect > 0) painter.setReflect(0);       // без отражений в мокрой мостовой
-        else if (renderer.getPixelRatio() > 1) { renderer.setPixelRatio(1); painter.setSize(); }
-        else painter.setScale(0.75);
-      }
-      frames = 60;
-      slowFrames = 0;
-    }
-  }
+  quality();
   if (painter) { painter.uniforms.uWet.value = world.look.uWet.value; painter.render(scene, camera); } else renderer.render(scene, camera);
   fpsMeter?.(dt);
   rain.render(camera);                // штрихи дождя поверх картины
