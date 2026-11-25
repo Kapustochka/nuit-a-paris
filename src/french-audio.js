@@ -79,7 +79,8 @@ export function createFrenchAudio({ onActivity = () => {} } = {}) {
     }
     player.onended = done;
     // Слова с улицы лежат в WAV, находки из звёзд и разговоры — в сжатом MP3.
-    if (isParis) player.src = `assets/voice/${clip}.${/^(star|talk|people|place|evening)\//.test(clip) ? 'mp3' : 'wav'}`;
+    player.src = isParis ? `assets/voice/${clip}.${/^(star|talk|people|place|evening)\//.test(clip) ? 'mp3' : 'wav'}`
+      : `assets/london/voice/${clip}.mp3`;   // all London clips are MP3 (scripts/build-london-voice.py)
     let fallingBack = false;
     const fallback = () => {
       if (attempt !== revision) return;
@@ -103,7 +104,6 @@ export function createFrenchAudio({ onActivity = () => {} } = {}) {
       try { synth.speak(utterance); } catch { report('Озвучка недоступна.'); done(); }
     };
     player.onerror = fallback;
-    if (!isParis) { fallback(); return; }          // своих клипов у Лондона пока нет
     player.play().catch(fallback);
   }
   document.addEventListener('visibilitychange', () => { if (document.hidden) stop(); });

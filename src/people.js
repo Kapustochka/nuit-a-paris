@@ -291,8 +291,7 @@ export function createPeople(scene, world, mapData, { count = 16, inspector, cam
     bubble.show(person, key);
     const card = document.querySelector('#word-card');
     if (card && !card.hidden) return;                      // карточку не перебиваем — только облачко
-    if (!isParis) { speakEnglish(words[key][0], person.woman); return; }     // у Лондона пока голос браузера en-GB
-    voice.src = `assets/voice/people/${key}-${person.woman ? 'f' : 'm'}.mp3`;
+    voice.src = `${isParis ? 'assets/voice' : 'assets/london/voice'}/people/${key}-${person.woman ? 'f' : 'm'}.mp3`;
     voice.volume = 0.85;
     voice.play().catch(() => {});
   }
@@ -503,15 +502,4 @@ function createBubble(inspector) {
       el.style.top = `${(1 - head.y) / 2 * innerHeight}px`;
     },
   };
-}
-
-// Night in London: прохожие здороваются британским голосом браузера (свои клипы — позже)
-function speakEnglish(text, woman) {
-  const synth = window.speechSynthesis;
-  if (!synth || !window.SpeechSynthesisUtterance || synth.speaking) return;
-  const voices = synth.getVoices().filter(({ lang }) => /^en[-_]GB$/i.test(lang));
-  const u = new SpeechSynthesisUtterance(text);
-  u.voice = voices.find(({ name }) => (woman ? /sonia|libby|serena|kate|martha|female/i : /ryan|daniel|arthur|male/i).test(name)) || voices[0] || null;
-  u.lang = 'en-GB'; u.volume = 0.85; u.rate = 0.95;
-  try { synth.speak(u); } catch { /* без голоса */ }
 }

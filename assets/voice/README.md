@@ -9,3 +9,9 @@ To rebuild the recordings after adding words, install `piper-tts` in a Python en
 The falling-star dictionary (`src/star-words.js`) is voiced with the same model, but its clips are compressed to MP3 in `assets/voice/star/` to keep the download small; this step needs `ffmpeg`. After editing only that dictionary, add `--only star` to rebuild just those clips. Phrase and story clips are numbered by their position in the lists, so rebuild after reordering them.
 
 What the passers-by say (`assets/voice/people/`, `src/people.js`) is built by `python scripts/build-people-voice.py fr_FR-siwis-medium.onnx fr_FR-upmc-medium.onnx`: women speak with the siwis voice, men with the speaker “pierre” of [fr_FR-upmc-medium](https://huggingface.co/rhasspy/piper-voices/blob/main/fr/fr_FR/upmc/medium/MODEL_CARD) (data: [UPMC Pierre](https://github.com/marytts/upmc-pierre-data), CC BY-SA 4.0). Add `--missing` to `build-french-audio.py` to voice only new word cards without rebuilding the others.
+
+## Night in London
+
+`assets/london/voice/` holds the English clips, built by `scripts/build-london-voice.py` with two Piper voices:
+`en_GB-cori-high` (female, trained on LibriVox recordings, public domain) and
+`en_GB-northern_english_male-medium` (male, OpenSLR 83 dataset, CC BY-SA 4.0).
