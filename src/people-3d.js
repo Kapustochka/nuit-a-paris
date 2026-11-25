@@ -7,6 +7,12 @@ import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { walkerSpeeds } from './walker-speeds.js';
 
 // home — место, вокруг которого гуляет персонаж (метры сцены, как у POI в montmartre.json), range — радиус прогулки
+// Night in London: the same cast walks around Westminster (scene metres of assets/london/map.json)
+export const LONDON_HOMES = {
+  painter: [-40, 30], gentleman: [-57, -55], 'dog-walker': [-20, 10], baker: [14, 98], accordionist: [-30, 45],
+  student: [100, -112], 'elegant-woman': [60, -15], waiter: [-50, -30], florist: [30, 80], 'bike-courier': [0, 0],
+  'street-cleaner': [120, -60], photographer: [200, -9], nurse: [-60, 60],
+};
 export const CAST_3D = [
   { file: 'painter', woman: true, home: [4, -6], range: 26 },            // художница — площадь Тертр
   { file: 'gentleman', woman: false, home: [-61, -55], range: 40 },      // джентльмен — у Le Consulat
