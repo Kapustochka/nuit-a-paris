@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { loadHeroine, TUNING } from './heroine.js';
 import { loadMapData, clearMapCache, toXZ } from './osm.js';
 import { CITY, isParis } from './city.js';
+import { installLanguage } from './i18n.js';
 import { buildParis } from './world.js';
 import { loadTerrain } from './terrain.js';
 import { createControls } from './controls.js';
@@ -24,6 +25,7 @@ import { createAmbient } from './ambient.js';
 import { createEvening } from './evening.js';
 
 const loading = document.getElementById('loading');
+installLanguage();                   // интерфейс на языке города (i18n.js)
 if (!isParis) {                      // та же игра, другой город (city.js)
   document.title = CITY.title;
   document.documentElement.lang = 'en';

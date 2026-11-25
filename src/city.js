@@ -14,6 +14,7 @@ export const CITIES = {
     landmark: { lat: 48.88672, lon: 2.34306 },            // Сакре-Кёр
     maxHeight: 22,
     heroine: null,                                        // героиня Mixamo из assets/mixamo/
+    ui: 'ru', learn: 'fr',
     title: 'Nuit à Paris', mapName: 'Montmartre',
     loading: 'Chargement de la carte de Montmartre…',
   },
@@ -27,6 +28,7 @@ export const CITIES = {
     landmark: { lat: 51.50073, lon: -0.12463 },           // Elizabeth Tower (Big Ben)
     maxHeight: 100,
     heroine: 'assets/london/heroine.glb',
+    ui: 'uk', learn: 'en',                                // интерфейс по-украински, учим английский
     palette: {                                            // ночь у Темзы: сине-бирюзовая, туманнее Парижа
       uKeyCol: [0.46, 0.56, 0.74], uShadeCol: [0.12, 0.18, 0.32], uSkyCol: [0.28, 0.4, 0.6], uFogCol: [0.16, 0.22, 0.32],
       fogDensity: 0.0095,
