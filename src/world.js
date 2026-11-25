@@ -242,8 +242,13 @@ export function buildParis(scene, renderer, data, city, props = {}) {
       const h = hero.position, [, moon, fill, lamp] = heroLights;
       moon.target.position.copy(h); moon.position.copy(h).addScaledVector(sky.moonDirection, 30); moon.target.updateMatrixWorld();
       fill.position.set(h.x + (camera.position.x - h.x) * 0.35, h.y + 2.3, h.z + (camera.position.z - h.z) * 0.35);
+      // тёплый свет на волосах и рукаве: от ближайшей витрины, если она ближе фонаря, иначе от фонаря
       const near = lampOrder[0];
-      if (near) { lamp.position.copy(near.p); lamp.intensity = 14; }
+      let shop = null, sd = 6 * 6;
+      for (const s of shopFronts) { const d = (s.x - h.x) ** 2 + (s.z - h.z) ** 2; if (d < sd) { sd = d; shop = s; } }
+      const ld = near ? (near.p.x - h.x) ** 2 + (near.p.z - h.z) ** 2 : Infinity;
+      if (shop && sd < ld) { lamp.position.set(shop.x + shop.nx * 0.6, h.y + 1.7, shop.z + shop.nz * 0.6); lamp.intensity = 9 * (1 - Math.sqrt(sd) / 6) + 2; }
+      else if (near) { lamp.position.copy(near.p); lamp.intensity = 14; }
     }
     tick -= dt;
     if (tick <= 0) {
@@ -305,7 +310,7 @@ export function buildParis(scene, renderer, data, city, props = {}) {
 
   return {
     blocked, post, inside, streetAt, freeSpot, update, castShadows, sky, night, look, air, houses: plan.houses, paint, facades, lightHeroine, heightAt: (x, z) => standAt(x, z),
-    soundSpots: shopFronts.filter((s) => ['cafe', 'restaurant', 'bar', 'pub'].includes(s.kind)),
+    shopFronts, soundSpots: shopFronts.filter((s) => ['cafe', 'restaurant', 'bar', 'pub'].includes(s.kind)),
     stats: { stairs: stairs.count, buildings: polys.length, lamps: lamps.length, detailedLamps, benches: benches.length, pigeons, ...streetLife },
   };
 }

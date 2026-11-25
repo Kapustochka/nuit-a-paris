@@ -245,8 +245,30 @@ const FRAG = /* glsl */ `
           float ears = max(0.0, 0.035 - abs(abs(c.x - 0.045) - 0.022) * 1.6 - abs(c.y - 0.115) * 0.9);
           float tail = smoothstep(0.012, 0.006, abs(length(c - vec2(-0.075, 0.03 + 0.012 * sin(uLookTime * 1.3 + r4 * 20.0))) - 0.045)) * step(c.x, -0.06);
           shade = max(max(smoothstep(0.075, 0.065, length(c * vec2(1.0, 1.25))), smoothstep(0.04, 0.032, length(c - vec2(0.045, 0.085)))), max(step(0.001, ears), tail));
+        } else if (who < 0.5) {                            // наливает из кувшина
+          vec2 q = (u - vec2(0.34 + 0.2 * r3, 0.46)) * vec2(0.55, 1.0);
+          shade = figure(q, 1.0, 0.75, 0.0);
+          vec2 j = q - vec2(0.12, -0.05);
+          shade = max(shade, smoothstep(0.035, 0.028, length(j * vec2(1.0, 0.8))));
+          shade = max(shade, step(abs(j.x - 0.03 - j.y * 0.2), 0.004) * step(-0.12, j.y) * step(j.y, -0.02) * 0.8);
+        } else if (who < 0.55) {                           // ребёнок над книгой, лампа подсвечивает страницы
+          vec2 q = (u - vec2(0.36 + 0.28 * r3, 0.36)) * vec2(0.55, 1.0);
+          shade = figure(q, 0.9, 0.1, 0.0);
+          glow += vec3(0.3, 0.26, 0.16) * step(abs(q.x - 0.05), 0.045) * step(abs(q.y + 0.04), 0.012);
         }
         glow *= 1.0 - shade * 0.62;
+      } else if (vRand > 0.95) {
+        // булочная: светлая стена в глубине, полки с хлебом, лампа-колпак над прилавком, тёмный прилавок внизу
+        glow = mix(vec3(0.98, 0.6, 0.28), vec3(1.0, 0.86, 0.6), smoothstep(0.15, 0.9, u.y + (strokes - 0.5) * 0.3));
+        vec2 b = vec2(fract(u.x * 2.0), u.y);
+        float shelf = step(abs(b.y - 0.36), 0.012) + step(abs(b.y - 0.56), 0.012);
+        vec2 lq = vec2(fract(b.x * 4.0) - 0.5, (b.y - (b.y < 0.46 ? 0.375 : 0.575)) * 8.0);
+        float loaf = smoothstep(0.42, 0.36, length(lq * vec2(1.0, 1.6))) * step(0.36, b.y) * step(b.y, 0.66) * step(0.2, hash(vec2(floor(b.x * 4.0 + floor(u.x * 2.0) * 4.0), floor(b.y * 5.0))));
+        glow = mix(glow, vec3(0.78, 0.42, 0.16), loaf);
+        glow = mix(glow, vec3(0.36, 0.22, 0.14), min(shelf, 1.0) * 0.8 * step(0.1, b.x) * step(b.x, 0.9));
+        glow = mix(glow, vec3(0.3, 0.18, 0.14), step(u.y, 0.2));                                   // прилавок
+        glow += vec3(0.35, 0.26, 0.12) * smoothstep(0.3, 0.0, length((u - vec2(0.5, 0.86)) * vec2(0.5, 1.0)));   // лампа
+        glow = mix(glow, vec3(0.2, 0.34, 0.32), step(abs(fract(u.x * 2.0) - 0.5), 0.02) * step(0.03, abs(u.x - 0.5)) + step(abs(u.x - 0.5), 0.025));   // бирюзовый переплёт
       } else if (hash(floor(vWorld.xz / 7.0) + 3.0) < 0.5) {
         // кафе: тёплый зал, подвесные лампы, гости за столиками и официант, который ходит по залу
         vec2 c = vec2(u.x * 1.5, u.y);
@@ -264,13 +286,20 @@ const FRAG = /* glsl */ `
         glow = mix(glow, vec3(1.0, 0.95, 0.8), bulb);
         glow = mix(glow, vec3(0.3, 0.17, 0.14), step(abs(lampX), 0.006) * step(0.84, u.y) * 0.7);
       } else {
-        float mull = step(abs(fract(u.x * 3.0) - 0.5), 0.02) + step(abs(u.y - 0.78), 0.012);
-        float shelf = step(abs(fract(u.y * 2.6 + 0.2) - 0.5), 0.03) * step(u.y, 0.74);
-        float goods = smoothstep(0.45, 0.5, vnoise(vec2(u.x * 30.0, floor(u.y * 2.6 + 0.2)))) * step(fract(u.y * 2.6 + 0.2), 0.42) * step(u.y, 0.74);
-        glow = mix(glow, glow * vec3(0.95, 0.72, 0.55), goods);
-        glow *= 1.0 - shelf * 0.35;
-        glow = mix(glow, vec3(0.35, 0.2, 0.16), min(mull, 1.0) * 0.8);
+        // лавка тремя большими пятнами: светлая стена в глубине, освещённый прилавок, тёмная рама и косяк двери сбоку
+        glow = mix(vec3(0.9, 0.62, 0.36), vec3(1.0, 0.88, 0.68), smoothstep(0.4, 0.95, u.y + (strokes - 0.5) * 0.3));
+        float counter = step(0.16, u.y) * step(u.y, 0.34);
+        glow = mix(glow, vec3(1.0, 0.72, 0.36) * 1.1, counter);
+        glow = mix(glow, vec3(0.32, 0.2, 0.16), step(u.y, 0.16));
+        glow += vec3(0.3, 0.22, 0.1) * smoothstep(0.32, 0.0, length((u - vec2(0.3 + 0.4 * r3, 0.36)) * vec2(0.45, 1.0)));   // пятно лампы на прилавке
+        float goods = smoothstep(0.5, 0.55, vnoise(vec2(u.x * 26.0, floor(u.y * 3.0)))) * step(0.42, u.y) * step(u.y, 0.74) * step(fract(u.y * 3.0), 0.4);
+        glow = mix(glow, glow * vec3(0.8, 0.6, 0.5), goods * 0.7);
+        float jamb = r2 < 0.5 ? step(u.x, 0.14) : step(0.86, u.x);
+        glow = mix(glow, vec3(0.22, 0.14, 0.13), jamb * 0.85);
+        glow = mix(glow, vec3(0.3, 0.18, 0.15), step(abs(u.y - 0.8), 0.014) * 0.8);
       }
+      // витрины разной силы: большинство спокойные, изредка одна яркая — к ней хочется подойти
+      if (is(8.0)) glow *= vRand > 0.95 ? 1.12 : r2 > 0.8 ? 1.15 : mix(0.62, 0.85, r3);
       vec3 dark = mix(vec3(0.08, 0.09, 0.24), vec3(0.3, 0.33, 0.6), smoothstep(0.1, 1.0, u.y * 0.7 + u.x * 0.3 + strokes * 0.4));
       dark += smoothstep(0.05, 0.0, abs(u.x - u.y * 0.6 - 0.25)) * 0.12;
       vec3 glass = on ? glow : dark;
@@ -284,7 +313,10 @@ const FRAG = /* glsl */ `
     float fogK = 1.0;
     if (is(16.0)) {                                      // памятники: ночью подсвечены, в дымке тонут меньше
       float flood = smoothstep(0.4, 0.6, uWindowsOn) * (0.95 - 0.3 * smoothstep(12.0, 50.0, h));
-      col = mix(col, base * mix(vec3(1.0, 0.9, 0.76), vec3(0.92, 0.9, 1.0), smoothstep(15.0, 45.0, h)) * (0.92 + (strokes - 0.5) * 0.12), flood);
+      // прожекторы светят снизу-спереди (со стороны смотровой): у куполов и стен остаётся холодная теневая сторона — объём
+      float side = smoothstep(-0.35, 0.6, dot(n, normalize(vec3(0.45, 0.3, 0.84))) + (strokes - 0.5) * 0.25);
+      vec3 lit = base * mix(vec3(1.0, 0.9, 0.76), vec3(0.92, 0.9, 1.0), smoothstep(15.0, 45.0, h));
+      col = mix(col, mix(lit * vec3(0.52, 0.54, 0.78), lit, side) * (0.92 + (strokes - 0.5) * 0.12), flood);
       fogK = 0.35;
     }
     gl_FragColor = vec4(toLinear(paintFog(col, vWorld, fogK)), 1.0);
@@ -322,8 +354,10 @@ const GROUND_FRAG = /* glsl */ `
     vec2 cp = vWorld.xz * vec2(3.4, 4.2);
     float far = smoothstep(0.35, 0.9, max(length(fwidth(cp)), 0.0));   // вдали камни сливаются в ровный тон — без ряби
     vec3 c = mix(cells(cp), vec3(0.42, 0.5, 0.5), far);
-    vec3 base = vec3(0.62, 0.6, 0.66) * (0.82 + c.z * 0.3) * (1.06 - c.x * 0.25);
-    base = mix(base, base * vec3(0.55, 0.52, 0.66), 1.0 - smoothstep(0.03, 0.13, c.y));
+    // в тени камни сливаются в спокойные холодные плиты, чёткие стыки и разброс тона — только под фонарём
+    float lampK = smoothstep(0.05, 0.45, cell.r);
+    vec3 base = vec3(0.6, 0.6, 0.68) * (0.88 + c.z * mix(0.14, 0.3, lampK)) * (1.05 - c.x * mix(0.14, 0.25, lampK));
+    base = mix(base, base * vec3(0.55, 0.52, 0.66), (1.0 - smoothstep(0.03, 0.13, c.y)) * mix(0.4, 1.0, lampK));
     vec2 g = mix(fract(vWorld.xz * vec2(0.9, 1.3)), vec2(0.5), smoothstep(0.2, 0.6, length(fwidth(vWorld.xz * vec2(0.9, 1.3)))));
     vec3 slab = vec3(0.78, 0.74, 0.72) * (0.9 + hash(floor(vWorld.xz * vec2(0.9, 1.3))) * 0.14) * (1.0 - (1.0 - smoothstep(0.0, 0.04, min(g.x, g.y))) * 0.3);
     base = mix(base, slab, walk);
@@ -337,6 +371,11 @@ const GROUND_FRAG = /* glsl */ `
       float along = dot(dl, vd), across = dot(dl, vec2(-vd.y, vd.x));
       float s = exp(-across * across / max(0.18 + along * 0.05, 0.12)) * smoothstep(-0.6, 1.0, along) * exp(-max(along, 0.0) / 7.0);
       col += uLightCol[i] * s * (0.2 + 0.22 * uWet);
+    }
+    if (uWet > 0.01) {                                      // после дождя у витрин и фонарей — рваные золотые полосы к камере
+      vec2 vd = normalize(cameraPosition.xz - vWorld.xz + 0.001);
+      float st = smoothstep(0.55, 0.85, vnoise(vec2(dot(vWorld.xz, vec2(-vd.y, vd.x)) * 5.0, dot(vWorld.xz, vd) * 0.7)));
+      col += vec3(1.0, 0.7, 0.32) * st * smoothstep(0.3, 0.75, cell.r) * uWet * 0.35;
     }
     float puddle = smoothstep(0.58 - 0.14 * uWet, 0.7 - 0.1 * uWet, fbm(vWorld.xz * 0.18 + 2.0)) * (1.0 - walk * (1.0 - 0.5 * uWet));
     col = mix(col, uSkyCol * 0.75 + col * 0.35, puddle * (0.2 + 0.22 * uWet));

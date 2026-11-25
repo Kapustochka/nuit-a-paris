@@ -98,7 +98,7 @@ function treads(g, f) {
     while (end < N - 1 && y[end] === y[run]) end++;
     // проступь кусками: новый кусок там, где лестница поворачивает
     const top = y[run], shade = 0.9 + rnd() * 0.2;
-    const tread = [0.66 * shade, 0.63 * shade, 0.6 * shade], nose = tread.map((v) => Math.min(1, v * 1.18)), cheek = [0.42, 0.4, 0.4];
+    const tread = [0.66 * shade, 0.63 * shade, 0.6 * shade], nose = [Math.min(1, tread[0] * 1.5), Math.min(1, tread[1] * 1.4), Math.min(1, tread[2] * 1.25)], cheek = [0.42, 0.4, 0.4];
     let a = run;
     while (a < end) {
       let b = a + 1;
@@ -116,7 +116,7 @@ function treads(g, f) {
       const lo = Math.min(top, y[end]), hi = Math.max(top, y[end]), dir = y[end] > top ? -1 : 1;
       const [lx, lz] = edge(end, -1), [rx, rz] = edge(end, 1);
       const riser = [0.5 * shade, 0.48 * shade, 0.47 * shade];
-      quad(g, [lx, lo - 0.02, lz], [rx, lo - 0.02, rz], [rx, hi, rz], [lx, hi, lz], [tx[end] * dir, 0, tz[end] * dir], [0, 0, w, hi - lo], riser.map((v) => v * 0.8), riser);
+      quad(g, [lx, lo - 0.02, lz], [rx, lo - 0.02, rz], [rx, hi, rz], [lx, hi, lz], [tx[end] * dir, 0, tz[end] * dir], [0, 0, w, hi - lo], riser.map((v) => v * 0.55), riser.map((v) => v * 0.8));   // тёмный подступёнок — светлая кромка над ним читается
     }
     run = end;
   }
