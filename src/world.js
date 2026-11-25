@@ -18,6 +18,7 @@ import { planFacades, buildFacades } from './paint/facades.js';
 import { Builder, K } from './paint/builder.js';
 import { foliage, leafTexture, basilicaMesh } from './paint/props.js';
 import { buildLondonLandmarks } from './london.js';
+import { placeLondonProps } from './london-props.js';
 
 const CELL = 24;              // ячейка сетки для столкновений
 
@@ -241,6 +242,8 @@ export function buildParis(scene, renderer, data, city, props = {}) {
 
   // ── Мелочи улицы из моделей Meshy ──────────────────────────
   const streetLife = placeStreetLife(scene, props, { benches, lamps, wallSpots, shopFronts, blocked, addSolid: propCollisions.add, random: propRandom });
+  const londonProps = CITY.id === 'london'
+    ? placeLondonProps(scene, look, { roads: data.roads, wallSpots, shopFronts, blocked, addSolid: propCollisions.add, random: propRandom }) : null;
 
   // ── Площадь Тертр: мольберты художников ───────────────────
   if (isParis) for (const [x, z] of buildEasels(scene, inside, rnd)) addPost(x, z, 0.45);
