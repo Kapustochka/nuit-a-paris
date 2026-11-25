@@ -226,7 +226,17 @@ export function createPainter(renderer, { radius = 3, scale = 1, heroStyle = 1, 
         #if REFLECT > 0
           if (real < 0.5 && dRaw < 1.0) col = wetReflect(col, vUv, dRaw, center.rgb, sp);
         #endif
-        col = air(col, vUv, dRaw, sp);
+        // Глубина у кадра одна на пиксель, а цвет сглажен (MSAA): на краю силуэта на фоне неба дымка и ореол базилики
+        // ложились «лесенкой» с тёмной каймой. На скачке глубины смешиваем воздух ближнего и дальнего слоя по соседям.
+        float dA = texture2D(tDepth, vUv + vec2(px.x, 0.0)).r, dB = texture2D(tDepth, vUv - vec2(px.x, 0.0)).r;
+        float dC = texture2D(tDepth, vUv + vec2(0.0, px.y)).r, dD = texture2D(tDepth, vUv - vec2(0.0, px.y)).r;
+        float dNear = min(min(min(dA, dB), min(dC, dD)), dRaw), dFar = max(max(max(dA, dB), max(dC, dD)), dRaw);
+        float zNear = lin(dNear), zFar = lin(dFar);
+        if (zFar > zNear * 1.3 + 2.0) {
+          float mid = (zNear + zFar) * 0.5;
+          float cover = 0.4 * step(lin(dRaw), mid) + 0.15 * (step(lin(dA), mid) + step(lin(dB), mid) + step(lin(dC), mid) + step(lin(dD), mid));
+          col = mix(air(col, vUv, dFar, sp), air(col, vUv, dNear, sp), cover);
+        } else col = air(col, vUv, dRaw, sp);
         col = max(col, farLights * 0.85);
 
         #if BLOOM > 0

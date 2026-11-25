@@ -6,6 +6,8 @@
   <meta name="theme-color" content="#14103a">
   <title>Nuit à Paris</title>
   <style>
+    /* hidden всегда прячет: иначе display: grid у бумажек (#evening-toast, #speech) держит на экране пустой листок */
+    [hidden] { display: none !important; }
     html, body { margin: 0; height: 100%; overflow: hidden; background: #14103a; color: #f4e9d8;
       font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
       -webkit-user-select: none; user-select: none; }
