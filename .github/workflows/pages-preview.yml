@@ -20,9 +20,7 @@ on:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
-  pull-requests: write
+  pull-requests: read
 
 concurrency:
   group: pages
@@ -32,11 +30,11 @@ env:
   MAX_PREVIEWS: 8   # each copy of the game is ~80 MB; Pages allows 1 GB per site
 
 jobs:
-  publish:
+  build:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+    outputs:
+      artifact_id: ${{ steps.upload.outputs.artifact_id }}
+      artifact_name: ${{ steps.artifact.outputs.name }}
     steps:
       - name: Check out production game
         uses: actions/checkout@v4
@@ -60,8 +58,7 @@ jobs:
 
           # Open PRs from this repository (not forks), most recently updated first
           gh api "repos/$REPO/pulls?state=open&sort=updated&direction=desc&per_page=100" \
-            --jq ".[] | select(.head.repo.full_name == \"$REPO\") | [.number, .title] | @tsv" \
-            | head -n "$MAX_PREVIEWS" > prs.tsv || true
+            --jq "[.[] | select(.head.repo.full_name == \"$REPO\")][:$MAX_PREVIEWS][] | [.number, .title] | @tsv" > prs.tsv
 
           {
             echo '<!doctype html><html lang="ru"><head><meta charset="utf-8">'
@@ -96,17 +93,53 @@ jobs:
           touch _site/.nojekyll
           du -sh _site
 
+      - name: Name this build
+        id: artifact
+        run: echo "name=github-pages-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" >> "$GITHUB_OUTPUT"
+
+      - name: Upload Pages artifact
+        id: upload
+        uses: actions/upload-pages-artifact@v3
+        with:
+          name: ${{ steps.artifact.outputs.name }}
+          path: _site
+
+  publish:
+    runs-on: ubuntu-latest
+    needs: build
+    permissions:
+      actions: read
+      pages: write
+      id-token: write
+      pull-requests: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
       - name: Configure Pages
         uses: actions/configure-pages@v5
 
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: _site
+      - name: Wait for the uploaded artifact to be listed
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT_ID: ${{ needs.build.outputs.artifact_id }}
+          ARTIFACT_NAME: ${{ needs.build.outputs.artifact_name }}
+        run: |
+          set -euo pipefail
+          for delay in 1 2 4 8 15 30; do
+            if id=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts?name=$ARTIFACT_NAME" --jq '.artifacts[] | select(.expired == false) | .id') && [[ -n "$id" && "$id" == "$ARTIFACT_ID" ]]; then
+              exit 0
+            fi
+            sleep "$delay"
+          done
+          echo "::error::Artifact $ARTIFACT_NAME (ID $ARTIFACT_ID) did not become available"
+          exit 1
 
       - name: Deploy
         id: deployment
         uses: actions/deploy-pages@v4
+        with:
+          artifact_name: ${{ needs.build.outputs.artifact_name }}
 
       - name: Comment the preview link on a new PR
         if: github.event_name == 'pull_request_target' && (github.event.action == 'opened' || github.event.action == 'reopened') && github.event.pull_request.head.repo.full_name == github.repository
