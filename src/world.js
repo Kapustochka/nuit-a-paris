@@ -745,12 +745,16 @@ function buildPlaques(scene, roads, polys, inside, groundAt) {
         if (l2 < 6) continue;
         const t = Math.max(0.15, Math.min(0.85, ((rx - ax) * dx + (rz - az) * dz) / l2));
         const x = ax + dx * t, z = az + dz * t, d = (x - rx) ** 2 + (z - rz) ** 2;
-        if (d < bd) { const len = Math.sqrt(l2); bd = d; best = { x, z, nx: -dz / len, nz: dx / len }; }
+        if (d >= bd) continue;
+        const len = Math.sqrt(l2);
+        let nx = -dz / len, nz = dx / len;
+        if ((rx - x) * nx + (rz - z) * nz < 0) { nx = -nx; nz = -nz; }
+        if (inside(x + nx * 0.8, z + nz * 0.8)) continue;
+        bd = d;
+        best = { x, z, nx, nz };
       }
     }
     if (!best) continue;
-    if ((rx - best.x) * best.nx + (rz - best.z) * best.nz < 0) { best.nx = -best.nx; best.nz = -best.nz; }
-    if (inside(best.x + best.nx * 0.8, best.z + best.nz * 0.8)) continue;
     if (!seen.has(rd.n)) seen.set(rd.n, 0);
     const mat = seen.get('tex:' + rd.n) || new THREE.MeshBasicMaterial({ map: plaqueTexture(rd.n), transparent: true, color: 0xd8d0e8 });
     seen.set('tex:' + rd.n, mat);
