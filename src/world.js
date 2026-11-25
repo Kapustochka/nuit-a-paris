@@ -8,6 +8,7 @@ import { placeStreetLife, terraceSet } from './street-life.js';
 import { createNightLight } from './night-light.js';
 import { createTerrain, groundGeometry, liftToGround } from './terrain.js';
 import { buildStairs } from './stairs.js';
+import { createPropCollisions } from './prop-collisions.js';
 import { buildViewpoint, buildCityBelow } from './viewpoint.js';
 import { createLook, groundMaterial, paintMaterial, paintObject, MAX_LIGHTS, MAX_CASTERS } from './paint/paint.js';
 import { MAX_SHAFTS } from './paint/air.js';
@@ -90,8 +91,7 @@ export function buildParis(scene, renderer, data, city, props = {}) {
     return false;
   };
   const R = 0.35;
-  let benches = [];
-  const solids = [];                       // киоск, урны, велосипеды, скутеры, горшки
+  const propCollisions = createPropCollisions(R);
   // тонкие препятствия для прохожих (people.js): фонари, столбики, деревья, мольберты — [x, z, радиус] по клеткам 4 м
   const posts = new Map();
   const addPost = (x, z, r) => { const k = Math.floor(x / 4) + ':' + Math.floor(z / 4); (posts.get(k) || posts.set(k, []).get(k)).push([x, z, r]); };
@@ -103,15 +103,10 @@ export function buildParis(scene, renderer, data, city, props = {}) {
     }
     return false;
   };
-  const hitsBox = (x, z, box) => {
-    const dx = x - box.x, dz = z - box.z;
-    return Math.abs(dx * box.cos - dz * box.sin) < box.halfWidth + R &&
-           Math.abs(dx * box.sin + dz * box.cos) < box.halfDepth + R;
-  };
   const blocked = (x, z) =>
     x < b.minX + 8 || x > b.maxX - 8 || z < b.minZ + 8 || z > b.maxZ - 8 ||
     inside(x, z) || inside(x + R, z) || inside(x - R, z) || inside(x, z + R) || inside(x, z - R) ||
-    benches.some((bench) => hitsBox(x, z, bench)) || solids.some((box) => hitsBox(x, z, box));
+    propCollisions.contains(x, z);
 
   // ── Рисованные дома: план фасадов (сами дома строятся ниже, когда известны витрины) ──
   const plan = planFacades(pending, heightAt, inside, terrain.flat);
@@ -142,7 +137,8 @@ export function buildParis(scene, renderer, data, city, props = {}) {
   for (const [x, z] of lamps) night.light(x, z);
   for (const [x, z] of lamps) addPost(x, z, 0.25);
   for (const [x, z] of buildBollards(scene, lamps, inside)) addPost(x, z, 0.12);
-  benches = placeBenches(props['park-bench'], data.roads, lamps, data.trees, blocked, propRandom);
+  const benches = placeBenches(props['park-bench'], data.roads, lamps, data.trees, blocked, propRandom);
+  benches.forEach(propCollisions.add);
   addPropInstances(scene, props['park-bench'], benches);
   const pigeons = placePigeons(scene, props, benches, blocked, propRandom);
   buildVines(scene, wallSpots, inside, rnd, terrain.flat ? () => 0 : heightAt);
@@ -158,10 +154,10 @@ export function buildParis(scene, renderer, data, city, props = {}) {
   for (const s of shopFronts) night.shopSpill(s.x, s.z, s.nx, s.nz, s.w);
   night.done();
   const facades = buildFacades(scene, look, plan, shopFronts, { progressive: city.progressive !== false });
-  if (props['chair-rattan']) solids.push(...terraces);     // за столики со стульями не заходим
+  if (props['chair-rattan']) terraces.forEach(propCollisions.add);
 
   // ── Мелочи улицы из моделей Meshy ──────────────────────────
-  const streetLife = placeStreetLife(scene, props, { benches, lamps, wallSpots, shopFronts, blocked, solids, random: propRandom });
+  const streetLife = placeStreetLife(scene, props, { benches, lamps, wallSpots, shopFronts, blocked, addSolid: propCollisions.add, random: propRandom });
 
   // ── Площадь Тертр: мольберты художников ───────────────────
   for (const [x, z] of buildEasels(scene, inside, rnd)) addPost(x, z, 0.45);
@@ -175,7 +171,7 @@ export function buildParis(scene, renderer, data, city, props = {}) {
   const stairs = terrain.flat ? { lift: () => 0, count: 0 } : buildStairs(scene, data.roads, heightAt, null);
   standAt = (x, z) => heightAt(x, z) + stairs.lift(x, z);
   if (!terrain.flat) {
-    solids.push(...buildViewpoint(scene, SACRE[0], SACRE[1] + 64, heightAt, null));
+    buildViewpoint(scene, SACRE[0], SACRE[1] + 64, heightAt, null).forEach(propCollisions.add);
     buildCityBelow(scene, drop, heightAt, renderer.getPixelRatio());
   }
 

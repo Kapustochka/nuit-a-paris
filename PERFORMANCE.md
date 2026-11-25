@@ -18,6 +18,12 @@ Facade generation now yields between street segments, attribute conversions, nor
 
 The settled city has the same vertex data, normals, mesh count and quality as before. Six browser regression checks cover exact normals, incremental/eager equivalence, cancellation and disposal. Hashes of all 208 generated geometries also match the previous main after completing the real-map route. This moves work across frames; it does not eliminate its total CPU cost.
 
+## Walking and pedestrian loading
+
+On the bundled map, a Chromium comparison against `19469bc` queried `world.blocked` at one-metre intervals along each road segment, on the centreline and two metres to either side. All 66,408 answers and the scene's placement counts matched. The median time for one sweep of the map (seven sweeps per build) fell from 156 ms to 52 ms with an eight-metre grid for static prop footprints. This measures CPU collision queries in isolation from rendering.
+
+The 13 rigged walkers and the dog now load their measured gait speeds. This skips 73 pose samples per model while retaining the random starting pose. The original calibration took about 28 ms total for the 14 decoded models in headless Chrome. New model names still use live calibration. After replacing a walker's model or clip, run `node scripts/bake-walker-speeds.mjs` with the game's Three.js version installed. Use `--check` to verify the saved values.
+
 ## Remaining opportunities
 
 1. **Lighter animated assets.** The two pedestrians are still large when eventually loaded. Rig-preserving geometry and texture compression should be measured and reviewed separately; automatic simplification may harm faces, skinning or animation.

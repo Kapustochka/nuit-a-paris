@@ -7,7 +7,7 @@ import { addPropInstances } from './street-props.js';
 const ALONG_Z = new Set(['scooter-red', 'rat']);
 const along = (name, tx, tz) => (ALONG_Z.has(name) ? Math.atan2(tx, tz) : Math.atan2(-tz, tx));
 
-export function placeStreetLife(scene, props, { benches, lamps, wallSpots, shopFronts = [], blocked, solids, random }) {
+export function placeStreetLife(scene, props, { benches, lamps, wallSpots, shopFronts = [], blocked, addSolid, random }) {
   const placed = {};
   const put = (asset, item) => { if (asset) (placed[asset.name] ||= []).push(item); };
 
@@ -32,7 +32,7 @@ export function placeStreetLife(scene, props, { benches, lamps, wallSpots, shopF
     const fp = footprint(asset, x, z, yaw, scale);
     if (!free(fp, shopGap)) return null;
     put(asset, { x, z, yaw, scale, y });
-    if (solid) solids.push(fp);
+    if (solid) addSolid(fp);
     return fp;
   }
 

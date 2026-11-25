@@ -4,6 +4,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
+import { walkerSpeeds } from './walker-speeds.js';
 
 // home — место, вокруг которого гуляет персонаж (метры сцены, как у POI в montmartre.json), range — радиус прогулки
 export const CAST_3D = [
@@ -40,32 +41,8 @@ export async function loadWalker(file) {
   });
   const mixer = new THREE.AnimationMixer(scene);
   mixer.clipAction(clip).play();
-  const speed = gaitSpeed(scene, mixer, clip.duration);
+  const speed = Object.hasOwn(walkerSpeeds, file) ? walkerSpeeds[file]
+    : (await import('./walker-gait.js')).gaitSpeed(scene, mixer, clip.duration);
   mixer.setTime(Math.random() * clip.duration);
   return { model: scene, mixer, duration: clip.duration, speed, name: file };
-}
-
-// Клипы «на месте»: бёдра не уезжают вперёд (смещение за цикл < 1 см), значит движение по маршруту
-// не складывается с движением из анимации. Скорость, при которой стопа на земле стоит неподвижно,
-// = скорость, с которой опорная стопа едет назад в клипе. Анимацию потом крутим ровно по пройденному пути.
-function gaitSpeed(model, mixer, duration) {
-  const toes = [];
-  model.traverse((o) => { if (o.isBone && /toe|foot/i.test(o.name) && !/_end/i.test(o.name)) toes.push(o); });
-  const N = 72, dt = duration / N, track = toes.map(() => []);
-  const v = new THREE.Vector3();
-  for (let i = 0; i <= N; i++) {
-    mixer.setTime(i * dt);
-    model.updateMatrixWorld(true);
-    toes.forEach((b, k) => { b.getWorldPosition(v); track[k].push([v.y, v.z]); });
-  }
-  const speeds = [];
-  for (const t of track) {
-    const low = Math.min(...t.map(([y]) => y));
-    for (let i = 1; i < t.length; i++) {
-      if (t[i][0] < low + 0.015 && t[i - 1][0] < low + 0.015) speeds.push(Math.abs(t[i][1] - t[i - 1][1]) / dt);
-    }
-  }
-  speeds.sort((a, b) => a - b);
-  const median = speeds[Math.floor(speeds.length / 2)] || 1.2;
-  return THREE.MathUtils.clamp(median, 0.5, 2);
 }
