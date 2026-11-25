@@ -24,8 +24,18 @@ export function createControls(dom) {
     const el = document.getElementById(id);
     if (el) el.addEventListener('pointerdown', (e) => { state[key] = true; e.preventDefault(); e.stopPropagation(); });
   }
-  addEventListener('keyup', (e) => keys.delete(e.code));
-  addEventListener('blur', () => keys.clear());
+  addEventListener('keyup', (e) => {
+    keys.delete(e.code);
+    // Пока зажат Cmd/Win, браузер не присылает отпускание других клавиш — сбрасываем всё
+    if (e.key === 'Meta' || e.key === 'OS') keys.clear();
+  });
+  // «Залипание»: отпускание клавиши может потеряться (ушёл фокус, контекстное меню,
+  // автопрокрутка средней кнопкой, Alt на Windows). Тогда героиня шла бы сама — сбрасываем.
+  const releaseAll = () => { keys.clear(); dropJoy(); camId = null; pinch.clear(); };
+  addEventListener('blur', releaseAll);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) releaseAll(); });
+  addEventListener('contextmenu', (e) => { keys.clear(); if (e.target === dom) e.preventDefault(); });
+  addEventListener('keydown', (e) => { if (e.key === 'Alt' || e.key === 'Meta') keys.clear(); }, true);
 
   // ── Джойстик ──────────────────────────────────────────────
   const base = document.getElementById('joy-base');
@@ -37,8 +47,15 @@ export function createControls(dom) {
   let camId = null, lastX = 0, lastY = 0;
   const pinch = new Map(); let pinchDist = 0;
 
+  function dropJoy() {
+    joyId = null; jx = jy = 0; joyRun = false;
+    if (base) base.style.display = 'none';
+  }
+  let joyRun = false;
+
   dom.addEventListener('pointerdown', (e) => {
-    dom.setPointerCapture(e.pointerId);
+    if (e.pointerType === 'mouse') e.preventDefault();   // без выделения, перетаскивания и автопрокрутки
+    try { dom.setPointerCapture(e.pointerId); } catch { /* не страшно */ }
     const leftHalf = e.clientX < innerWidth / 2;
     if (e.pointerType === 'touch' && leftHalf && joyId === null) {
       joyId = e.pointerId; joyX = e.clientX; joyY = e.clientY; jx = jy = 0;
@@ -72,6 +89,7 @@ export function createControls(dom) {
       }
     }
     if (e.pointerId === camId) {
+      if (e.pointerType === 'mouse' && e.buttons === 0) { camId = null; return; }   // кнопку отпустили за окном
       state.camYaw -= (e.clientX - lastX) * 0.006;
       state.camPitch = clamp(state.camPitch + (e.clientY - lastY) * 0.004, -0.22, 1.1);
       lastX = e.clientX; lastY = e.clientY;
@@ -79,12 +97,13 @@ export function createControls(dom) {
   });
 
   const up = (e) => {
-    if (e.pointerId === joyId) { joyId = null; jx = jy = 0; base.style.display = 'none'; }
+    if (e.pointerId === joyId) dropJoy();
     if (e.pointerId === camId) camId = null;
     pinch.delete(e.pointerId);
   };
   dom.addEventListener('pointerup', up);
   dom.addEventListener('pointercancel', up);
+  dom.addEventListener('lostpointercapture', up);
   dom.addEventListener('wheel', (e) => {
     state.camDist = clamp(state.camDist * (1 + Math.sign(e.deltaY) * 0.1), 2.2, 9);
   }, { passive: true });
@@ -104,7 +123,9 @@ export function createControls(dom) {
     if (x || y) { const l = Math.hypot(x, y); x /= l; y /= l; }
     if (joyId !== null) {
       const l = Math.hypot(jx, jy);
-      if (l > 0.15) { x = jx; y = jy; run = l > 0.85; } // дотянул до края — бег
+      // мёртвая зона в центре, дальше скорость плавно растёт; у края — бег (с запасом, чтобы не дёргалось)
+      joyRun = joyRun ? l > 0.78 : l > 0.9;
+      if (l > 0.12) { const k = Math.min(1, (l - 0.12) / 0.7) / l; x = jx * k; y = jy * k; run = joyRun; }
     }
     state.move.x = x; state.move.y = y; state.run = run;
     return state;

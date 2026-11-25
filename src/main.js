@@ -127,6 +127,10 @@ window.__game = { evening, ambient, rain, talk, passport, heroine, passersby, ge
 // ── Движение ─────────────────────────────────────────────────
 const MAX_WALK = 1.45, MAX_RUN = 3.8, MAX_BACK = 0.95; // м/с
 let speed = 0, facing = Math.PI, streetTick = 0, lastStreet = '';
+// Камера: плавно догоняет поворот мыши/пальца и героиню (сферические координаты, без «срезания» углов)
+let viewYaw = controls.state.camYaw, viewPitch = controls.state.camPitch, viewDist = controls.state.camDist, camHit = Infinity;
+const look = new THREE.Vector3(sx, world.heightAt(sx, sz) + 1.4, sz);
+const angDiff = (a, b) => Math.atan2(Math.sin(a - b), Math.cos(a - b));
 const moveDir = new THREE.Vector3(), camTarget = new THREE.Vector3(), want = new THREE.Vector3();
 const clock = new THREE.Clock(), shadowCasters = [];
 camera.position.set(sx, world.heightAt(sx, sz) + 3, sz + 5);
@@ -135,8 +139,11 @@ renderer.setAnimationLoop(() => {
   const dt = Math.min(clock.getDelta(), 0.05);
   const c = controls.update();
 
-  // Направление относительно камеры
-  const yaw = c.camYaw;
+  // Направление относительно камеры (той, что видна на экране)
+  viewYaw += angDiff(c.camYaw, viewYaw) * (1 - Math.exp(-dt * 24));
+  viewPitch += (c.camPitch - viewPitch) * (1 - Math.exp(-dt * 20));
+  viewDist += (c.camDist - viewDist) * (1 - Math.exp(-dt * 12));
+  const yaw = viewYaw;
   const fx = -Math.sin(yaw), fz = -Math.cos(yaw), rx = Math.cos(yaw), rz = -Math.sin(yaw);
   moveDir.set(rx * c.move.x + fx * c.move.y, 0, rz * c.move.x + fz * c.move.y);
   const input = Math.min(1, moveDir.length());
@@ -151,40 +158,56 @@ renderer.setAnimationLoop(() => {
   let target = input < 0.05 ? 0 : (c.run ? MAX_RUN : MAX_WALK * Math.max(input, 0.6));
   if (backstep) target = -MAX_BACK;
   if (punching) target = 0;
-  speed += (target - speed) * (1 - Math.exp(-dt * 6));
 
   const p = heroine.root.position;
   if (input > 0.05 && !punching) {
     if (backstep) moveDir.set(fx, 0, fz); else moveDir.normalize();
-    let d = Math.atan2(moveDir.x, moveDir.z) - facing;
-    d = Math.atan2(Math.sin(d), Math.cos(d));
-    facing += d * (1 - Math.exp(-dt * 10));
+    const d = angDiff(Math.atan2(moveDir.x, moveDir.z), facing);
+    facing += d * (1 - Math.exp(-dt * 12));
+    // Крутой разворот — сначала притормаживает, а не описывает широкую дугу
+    if (!backstep) target *= 0.45 + 0.55 * Math.max(0, Math.cos(d));
   }
+  // Разгон мягкий, остановка быстрее — отпустил клавишу и она стоит
+  const rate = Math.abs(target) > Math.abs(speed) && Math.sign(target || 1) === Math.sign(speed || 1) ? 7 : 11;
+  speed += (target - speed) * (1 - Math.exp(-dt * rate));
+  if (target === 0 && Math.abs(speed) < 0.03) speed = 0;
   heroine.root.rotation.y = facing;
 
   // Шаг со скольжением вдоль стен
   const stepX = Math.sin(facing) * speed * dt, stepZ = Math.cos(facing) * speed * dt;
   if (!blocked(p.x + stepX, p.z + stepZ)) { p.x += stepX; p.z += stepZ; }
-  else if (!blocked(p.x + stepX, p.z)) { p.x += stepX; speed *= 0.9; }
-  else if (!blocked(p.x, p.z + stepZ)) { p.z += stepZ; speed *= 0.9; }
-  else speed *= 0.5;
+  else {
+    // Скользим вдоль стены по более длинной составляющей шага; уткнулась прямо — останавливается
+    const tryX = Math.abs(stepX) >= Math.abs(stepZ);
+    if (tryX && !blocked(p.x + stepX, p.z)) p.x += stepX;
+    else if (!blocked(p.x, p.z + stepZ)) p.z += stepZ;
+    else if (!tryX && !blocked(p.x + stepX, p.z)) p.x += stepX;
+    else speed *= 0.5;
+  }
 
   p.y = world.heightAt(p.x, p.z);
   heroine.setState(speed < -0.2 ? 'back' : speed < 0.25 ? 'idle' : speed > (MAX_WALK + MAX_RUN) / 2 ? 'run' : 'walk');
   heroine.update(dt, speed);
 
   // Камера сзади-сверху; если между ней и героиней стена — придвигаем
+  // Точка взгляда догоняет героиню: по горизонтали быстро, по высоте мягче (ступеньки не трясут кадр)
   camTarget.set(p.x, p.y + 1.4, p.z);
-  const cp = Math.cos(c.camPitch), sp = Math.sin(c.camPitch);
-  let dist = c.camDist;
-  for (let i = 1; i <= 8; i++) {
-    const t = (i / 8) * c.camDist;
-    if (world.inside(p.x + Math.sin(yaw) * cp * t, p.z + Math.cos(yaw) * cp * t)) { dist = Math.max(0.6, t - c.camDist / 8 - 0.25); break; }
+  const kXZ = 1 - Math.exp(-dt * 16), kY = 1 - Math.exp(-dt * 8);
+  if (look.distanceToSquared(camTarget) > 25) look.copy(camTarget);   // телепорт — без пролёта через город
+  look.x += (camTarget.x - look.x) * kXZ; look.z += (camTarget.z - look.z) * kXZ; look.y += (camTarget.y - look.y) * kY;
+  const cp = Math.cos(viewPitch), sp = Math.sin(viewPitch);
+  let hit = viewDist;
+  for (let i = 1; i <= 10; i++) {
+    const t = (i / 10) * viewDist;
+    if (world.inside(look.x + Math.sin(yaw) * cp * t, look.z + Math.cos(yaw) * cp * t)) { hit = Math.max(0.6, t - viewDist / 10 - 0.25); break; }
   }
-  want.set(p.x + Math.sin(yaw) * cp * dist, 0, p.z + Math.cos(yaw) * cp * dist);
-  want.y = Math.max(world.heightAt(want.x, want.z) + 0.45, p.y + 1.4 + sp * dist);   // камера не уходит под склон
-  camera.position.lerp(want, 1 - Math.exp(-dt * 10));
-  camera.lookAt(camTarget);
+  // К стене придвигаемся сразу, отъезжаем обратно плавно
+  camHit = hit < camHit ? hit : camHit + (hit - camHit) * (1 - Math.exp(-dt * 4));
+  const dist = Math.min(camHit, viewDist);
+  want.set(look.x + Math.sin(yaw) * cp * dist, 0, look.z + Math.cos(yaw) * cp * dist);
+  want.y = Math.max(world.heightAt(want.x, want.z) + 0.45, look.y + sp * dist);   // камера не уходит под склон
+  camera.position.copy(want);
+  camera.lookAt(look);
 
   world.update(dt, p.x, p.z, camera);
   if (!distantRequested && Math.hypot(p.x - sacreX, p.z - sacreZ - 60) < 100) {
