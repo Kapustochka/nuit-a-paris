@@ -1,6 +1,7 @@
 // falling-star.js — падающая звезда со случайным французским словом, фразой или историей.
 // Примерно каждые десять шагов звезда падает перед героиней и ждёт двойного нажатия.
 // Пока её не открыли, новая не появляется; если звезда пропала из виду, может упасть следующая.
+import { CITY_PREFIX } from './city.js';
 import * as THREE from 'three';
 import { starKeys } from './entries.js';
 import { deed } from './evening.js';
@@ -13,7 +14,7 @@ const FALL_TIME = 1.7, HOVER = 0.55;
 const KIND_ODDS = [['word', 0.62], ['phrase', 0.2], ['story', 0.12], ['song', 0.06]];   // фиолетовые — редкие
 // Для отладки: ?star=song (или word, phrase, story) — падают звёзды только этого вида.
 const FORCED_KIND = new URLSearchParams(location.search).get('star');
-const seenKey = 'nuit-a-paris:stars:v1';
+const seenKey = CITY_PREFIX + 'stars:v1';
 
 export function createFallingStars(scene, camera, world, inspector, review) {
   const seen = new Set();

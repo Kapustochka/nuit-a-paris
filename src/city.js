@@ -41,3 +41,5 @@ export const CITIES = {
 
 export const CITY = CITIES[wanted] || CITIES.paris;
 export const isParis = CITY.id === 'paris';
+// Progress in the browser (notebook, passport, evening…) is kept per city
+export const CITY_PREFIX = isParis ? 'nuit-a-paris:' : `nuit-a-paris:${CITY.id}:`;

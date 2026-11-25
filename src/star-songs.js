@@ -2,7 +2,9 @@
 // Слова и мелодии народные (XVIII век и старше) — общественное достояние, лицензия не нужна.
 // Строка: [французский текст, перевод, мелодия]. Мелодия — «нота:доли», 1 доля = четверть;
 // нота — буква, октава, # для диеза.
-export const starSongs = [
+import { isParis } from './city.js';
+import * as london from './content/london.js';
+const parisSongs = [
   {
     title: ['Frère Jacques', 'Братец Жак'],
     tempo: 112,
@@ -57,3 +59,5 @@ export const starSongs = [
     ],
   },
 ];
+
+export const starSongs = isParis ? parisSongs : london.starSongs;

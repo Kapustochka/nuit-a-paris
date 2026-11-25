@@ -5,9 +5,12 @@
 // (assets/voice/evening/, scripts/build-evening-voice.py).
 // Модули сообщают о сделанном одной строкой: deed('talk'). Новый список — каждый день
 // (вечер считается до 5 утра), прогресс хранится в браузере.
+import { CITY_PREFIX } from './city.js';
+import { isParis } from './city.js';
+import * as london from './content/london.js';
 
 // [id, фраза, перевод, сколько раз, что нужно, чтобы дело было в списке]
-export const TASKS = [
+const PARIS_TASKS = [
   ['talk', 'Parler avec deux passants.', 'Поговорить с двумя прохожими.', 2],
   ['place', 'Trouver un nouveau lieu.', 'Найти новое место для паспорта.', 1, 'place'],
   ['star', 'Attraper une étoile filante.', 'Поймать падающую звезду.', 1, 'star'],
@@ -16,8 +19,8 @@ export const TASKS = [
   ['sacre', 'Monter jusqu’au Sacré-Cœur.', 'Подняться к Сакре-Кёр.', 1],
   ['cafe', 'Commander quelque chose au café.', 'Заказать что-нибудь в кафе.', 1, 'cafe'],
 ];
-export const BRAVO = ['Belle soirée ! Tout est fait.', 'Прекрасный вечер! Всё сделано.'];
-const KEY = 'nuit-a-paris:evening:v1';
+const PARIS_BRAVO = ['Belle soirée ! Tout est fait.', 'Прекрасный вечер! Всё сделано.'];
+const KEY = CITY_PREFIX + 'evening:v1';
 const PER_EVENING = 4;
 
 export const deed = (kind) => dispatchEvent(new CustomEvent('nuit:deed', { detail: { kind } }));
@@ -59,7 +62,7 @@ export function createEvening({ audio, player, available, sacre, storage = () =>
   const panel = document.createElement('aside');
   panel.id = 'evening'; panel.lang = 'ru'; panel.hidden = true; panel.setAttribute('aria-label', 'Дела на этот вечер');
   panel.innerHTML = `<button type="button" data-close aria-label="Закрыть">×</button>
-    <h2 lang="fr">Ce soir…</h2><p class="evening-sub">Дела на этот вечер. Завтра будет новый список.</p><ul></ul>
+    <h2 lang="fr">${TITLE}…</h2><p class="evening-sub">Дела на этот вечер. Завтра будет новый список.</p><ul></ul>
     <p class="evening-bravo" lang="fr" hidden></p>`;
   const toast = document.createElement('div');
   toast.id = 'evening-toast'; toast.hidden = true; toast.setAttribute('role', 'status');
@@ -68,7 +71,7 @@ export function createEvening({ audio, player, available, sacre, storage = () =>
 
   function draw() {
     const total = state.plan.length, ok = finished();
-    button.textContent = ok === total ? 'Ce soir ✓' : `Ce soir · ${ok}/${total}`;
+    button.textContent = ok === total ? `${TITLE} ✓` : `${TITLE} · ${ok}/${total}`;
     button.classList.toggle('all-done', ok === total);
     list.replaceChildren(...state.plan.map((id) => {
       const t = byId[id], c = count(id), done = c >= t.n;
@@ -131,3 +134,7 @@ export function createEvening({ audio, player, available, sacre, storage = () =>
     },
   };
 }
+
+export const TASKS = isParis ? PARIS_TASKS : london.TASKS;
+export const BRAVO = isParis ? PARIS_BRAVO : london.BRAVO;
+const TITLE = isParis ? 'Ce soir' : 'Tonight';

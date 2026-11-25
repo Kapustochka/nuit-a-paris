@@ -1,6 +1,7 @@
+import { CITY_PREFIX } from './city.js';
 import { entryFor } from './entries.js';
 
-const STORAGE_KEY = 'nuit-a-paris:review:v1';
+const STORAGE_KEY = CITY_PREFIX + 'review:v1';
 const MINUTE = 60_000, DAY = 24 * 60 * MINUTE;
 const INTERVALS = [10 * MINUTE, DAY, 3 * DAY, 7 * DAY, 14 * DAY, 30 * DAY];
 

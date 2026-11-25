@@ -126,7 +126,7 @@ const controls = createControls(renderer.domElement);
 controls.state.camDist = 3.6;
 const minimap = createMinimap(document.getElementById('minimap'), mapData);
 
-loading.textContent = 'Bonsoir…';
+loading.textContent = isParis ? 'Bonsoir…' : 'Good evening…';
 const loadedHeroine = await heroineLoad;
 if (loadedHeroine.error) fail(loadedHeroine.error);
 const heroine = loadedHeroine.heroine;

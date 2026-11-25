@@ -4,7 +4,9 @@
 // choices: первый вариант — правильный (на экране варианты перемешиваются).
 // Голос: assets/voice/talk/<id>-n<шаг>-f|m.mp3 (прохожие), <id>-p<шаг>-<вариант>.mp3 (героиня),
 // собирает scripts/build-talk-voice.py. Удачные ответы героини попадают в блокнот как «talk:<id>:<шаг>».
-export const talks = {
+import { isParis } from './city.js';
+import * as london from './content/london.js';
+const parisTalks = {
   chemin: {
     title: 'Спросить дорогу',
     steps: [
@@ -89,8 +91,11 @@ export const talks = {
 };
 
 // Что прохожий говорит на неподходящий ответ (голос: talk/huh-<n>-f|m.mp3)
-export const puzzled = [
+const parisPuzzled = [
   ['Pardon ? Je ne comprends pas.', 'Простите? Я не понимаю.'],
   ['Euh… comment ?', 'Э-э… что-что?'],
   ['Hein ? Vous êtes sûre ?', 'А? Вы уверены?'],
 ];
+
+export const talks = isParis ? parisTalks : london.talks;
+export const puzzled = isParis ? parisPuzzled : london.puzzled;

@@ -1,5 +1,7 @@
 // Артикль входит в слово: так запоминаются род и написание.
-export const words = {
+import { isParis } from './city.js';
+import * as london from './content/london.js';
+const parisWords = {
   door: ['la porte', 'la pɔʁt', 'ла порт', 'дверь', 'La porte est fermée.', 'Дверь закрыта.'],
   window: ['la fenêtre', 'la fənɛtʁ', 'ла фёнэтр', 'окно', 'La lumière passe par la fenêtre.', 'Свет проникает через окно.'],
   brick: ['la brique', 'la bʁik', 'ла брик', 'кирпич', 'Ce mur est fait de briques.', 'Эта стена сделана из кирпича.'],
@@ -64,3 +66,6 @@ export const words = {
   ilPleut: ['Il pleut !', 'il plø', 'иль плё', 'Идёт дождь!', 'Il pleut, prends ton parapluie !', 'Идёт дождь, возьми зонт!'],
   quelTemps: ['Quel temps !', 'kɛl tɑ̃', 'кэль та̃', 'Ну и погода!', 'Quel temps ! On rentre vite à la maison.', 'Ну и погода! Скорее домой.'],
 };
+
+// Night in London: English words with Ukrainian (content/london.js)
+export const words = isParis ? parisWords : london.words;
