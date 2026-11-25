@@ -27,6 +27,11 @@ export const CITIES = {
     landmark: { lat: 51.50073, lon: -0.12463 },           // Elizabeth Tower (Big Ben)
     maxHeight: 100,
     heroine: 'assets/london/heroine.glb',
+    palette: {                                            // ночь у Темзы: сине-бирюзовая, туманнее Парижа
+      uKeyCol: [0.46, 0.56, 0.74], uShadeCol: [0.12, 0.18, 0.32], uSkyCol: [0.28, 0.4, 0.6], uFogCol: [0.16, 0.22, 0.32],
+      fogDensity: 0.0095,
+      uZenith: 0x081a30, uMidSky: 0x163a5c, uHorizon: 0x7a6a72, uCloudColor: 0x4e6a8e,
+    },
     title: 'Night in London', mapName: 'Westminster',
     loading: 'Loading the map of Westminster…',
   },

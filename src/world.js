@@ -17,6 +17,7 @@ import { MAX_SHAFTS } from './paint/air.js';
 import { planFacades, buildFacades } from './paint/facades.js';
 import { Builder, K } from './paint/builder.js';
 import { foliage, leafTexture, basilicaMesh } from './paint/props.js';
+import { buildLondonLandmarks } from './london.js';
 
 const CELL = 24;              // ячейка сетки для столкновений
 
@@ -31,6 +32,15 @@ export function buildParis(scene, renderer, data, city, props = {}) {
   const b = data.bounds;
   const night = createNightLight(b, terrain);
   const look = createLook(night, sky.moonDirection);      // общий «живописный» свет (paint/paint.js)
+  // Своя палитра города (city.js): Лондон — глубокое сине-бирюзовое небо, туман над рекой, тёплый янтарь у горизонта
+  const pal = CITY.palette;
+  if (pal) {
+    const lin = (c) => new THREE.Color().setRGB(c[0], c[1], c[2], THREE.LinearSRGBColorSpace);
+    for (const k of ['uKeyCol', 'uShadeCol', 'uSkyCol', 'uFogCol']) if (pal[k]) look[k].value.copy(lin(pal[k]));
+    if (pal.fogDensity) look.uFogDensity.value = pal.fogDensity;
+    for (const k of ['uZenith', 'uMidSky', 'uHorizon', 'uCloudColor']) if (pal[k]) sky.uniforms[k].value.set(pal[k]);
+    if (pal.uFogCol) scene.fog.color.copy(lin(pal.uFogCol));
+  }
   const groundMat = groundMaterial(look);
   const ground = new THREE.Mesh(groundGeometry(terrain, b), groundMat);
   ground.userData.word = 'cobble';
@@ -79,6 +89,7 @@ export function buildParis(scene, renderer, data, city, props = {}) {
   const SACRE = toXZ(CITY.landmark.lat, CITY.landmark.lon);   // главная достопримечательность города
   const TINTS = [[1, 1, 1], [1.05, 0.98, 0.92], [0.94, 0.96, 1.04], [1.04, 1.0, 0.9], [0.97, 0.93, 0.97]];
   const pending = [];
+  const towerSpot = { x: SACRE[0], z: SACRE[1], angle: 0 };
 
   for (const bd of data.buildings) {
     let p = [];
@@ -98,6 +109,13 @@ export function buildParis(scene, renderer, data, city, props = {}) {
     cx /= n; cz /= n; area /= 2;
     if (Math.abs(area) < 6) continue;
     const nearSacre = Math.hypot(cx - SACRE[0], cz - SACRE[1]) < 55;
+    if (!isParis && /Elizabeth Tower/.test(bd.n)) {                   // Биг-Бен строится своей моделью (london.js)
+      polys.push(makePoly(p));
+      let best = 0;
+      for (let i = 0; i < n; i++) { const j = (i + 1) % n, L = Math.hypot(p[j * 2] - p[i * 2], p[j * 2 + 1] - p[i * 2 + 1]); if (L > best) { best = L; towerSpot.angle = Math.atan2(p[j * 2 + 1] - p[i * 2 + 1], p[j * 2] - p[i * 2]); } }
+      towerSpot.x = cx; towerSpot.z = cz;
+      continue;
+    }
     if (isParis && (/Sacr/i.test(bd.n) || (nearSacre && (Math.abs(area) > 900 || /church|cathedral|basilica/.test(bd.k))))) { polys.push(makePoly(p)); continue; }
     if (area > 0) { const q = []; for (let i = n - 1; i >= 0; i--) q.push(p[i * 2], p[i * 2 + 1]); p = q; }
     const A = Math.abs(area);
@@ -229,6 +247,12 @@ export function buildParis(scene, renderer, data, city, props = {}) {
 
   // ── Сакре-Кёр, Эйфелева башня и огни вдали ─────────────────
   if (isParis) buildBasilica(scene, look, SACRE[0], SACRE[1]);
+  let landmarks = null;
+  if (CITY.id === 'london') {
+    const [ex, ez] = toXZ(51.5033, -0.1196);                       // London Eye, за рекой
+    landmarks = buildLondonLandmarks(scene, look, { tower: towerSpot, eye: { x: ex, z: ez, angle: Math.atan2(-ex, -ez) },
+      glow: glowTexture('rgba(255,228,170,0.22)', 'rgba(255,200,130,0.06)') });
+  }
   const drop = terrain.flat ? 0 : terrain.heightAt(1e4, 1e4);
   if (isParis) buildFarParis(scene, drop);
 
@@ -278,7 +302,7 @@ export function buildParis(scene, renderer, data, city, props = {}) {
   // Воздух для пост-прохода (paint/air.js): ближайшие фонари дают лучи, базилика светит сквозь дымку
   const air = {
     shaftPos: Array.from({ length: MAX_SHAFTS }, () => new THREE.Vector4(0, -100, 0, 0)),
-    beacon: new THREE.Vector4(SACRE[0], standAt(SACRE[0], SACRE[1]) + 46, SACRE[1], isParis ? 0.5 : 0),
+    beacon: isParis ? new THREE.Vector4(SACRE[0], standAt(SACRE[0], SACRE[1]) + 46, SACRE[1], 0.5) : new THREE.Vector4(towerSpot.x, 58, towerSpot.z, 0.3),
     tower: new THREE.Vector4(-1050, drop + 158, 1050, terrain.flat ? 0 : 1),     // верх Эйфелевой башни (buildFarParis)
     groundY: 0, started: false,
   };
@@ -297,6 +321,7 @@ export function buildParis(scene, renderer, data, city, props = {}) {
   }
   function update(dt, hx, hz, camera) {
     sky.update(dt);
+    landmarks?.update(dt, hx, hz);
     look.uLookTime.value += dt;
     const gy = standAt(hx, hz);
     air.groundY = air.started ? air.groundY + (gy - air.groundY) * (1 - Math.exp(-dt * 2)) : gy;
